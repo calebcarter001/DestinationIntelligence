@@ -1,0 +1,46 @@
+# Environment variables (contains secrets)
+.env
+
+# Ignore configuration files with sensitive information
+config.yaml
+
+# Python virtual environment
+demo_env/
+
+# Ignore Python bytecode and caches
+__pycache__/
+src/__pycache__/
+src/core/__pycache__/
+src/tools/__pycache__/
+src/agents/__pycache__/
+src/schemas/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignore IDE and editor specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore macOS specific files
+.DS_Store
+
+# Cache directory
+cache/
+
+# Output directories
+outputs/
+
+# Log directory
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# ChromaDB data
+chroma_db/ 
