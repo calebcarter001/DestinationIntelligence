@@ -1,0 +1,77 @@
+# Example configuration file for Destination Intelligence Discovery
+# Copy this file to config.yaml and update with your settings
+
+# Database configuration
+database:
+  path: "real_destination_intelligence.db"
+  chroma_db_path: "./chroma_db"
+
+# LLM settings (can be overridden by .env)
+llm_settings:
+  gemini_model_name: "gemini-1.5-flash-latest"  # or gemini-2.0-flash
+
+# Processing settings
+processing_settings:
+  max_destinations_to_process: 1  # Set to 0 for all destinations
+  
+  web_discovery:
+    max_urls_per_destination: 10
+    timeout_seconds: 30
+    max_content_length: 2000000  # 2MB
+    vectorize_api_endpoint: ""  # Optional: Vectorize API endpoint
+    vectorize_api_key: ""       # Optional: Vectorize API key
+  
+  content_intelligence:
+    min_validated_theme_confidence: 0.60
+    min_discovered_theme_confidence: 0.60
+    max_discovered_themes_per_destination: 5
+    
+    seed_themes:
+      - culture
+      - history
+      - nature
+      - food
+      - adventure
+      - art
+      - architecture
+      - romance
+      - family
+      - luxury
+      - budget
+      - nightlife
+      - museums
+      - shopping
+      - beaches
+      - mountains
+      - festivals
+      - traditional
+      - modern
+      - authentic
+      - dining
+      - entertainment
+      - relaxation
+      - scenic
+      - urban
+      - coastal
+      - historical
+      - contemporary
+      - activities
+      - experiences
+      - atmosphere
+      - wellness
+      - spirituality
+      - photography
+      - wildlife
+      - trekking
+      - hiking
+      - sustainability
+      - eco-tourism
+      - local life
+      - crafts
+      - markets
+      - music
+
+# Destinations to process
+destinations_to_process:
+  - "Bend, Oregon"
+  - "Ashland, Oregon" 
