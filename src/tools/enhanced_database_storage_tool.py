@@ -63,12 +63,63 @@ class EnhancedDatabaseStorageTool(StructuredTool):
             )
             """,
             """
+            CREATE TABLE IF NOT EXISTS priority_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                destination_name TEXT NOT NULL,
+                safety_score REAL,
+                crime_index REAL,
+                tourist_police_available BOOLEAN,
+                emergency_contacts TEXT, -- JSON string
+                travel_advisory_level TEXT,
+                budget_per_day_low REAL,
+                budget_per_day_mid REAL,
+                budget_per_day_high REAL,
+                currency TEXT,
+                required_vaccinations TEXT, -- JSON string
+                health_risks TEXT, -- JSON string
+                water_safety TEXT,
+                medical_facility_quality TEXT,
+                visa_required BOOLEAN,
+                visa_on_arrival BOOLEAN,
+                visa_cost REAL,
+                english_proficiency TEXT,
+                infrastructure_rating REAL,
+                analysis_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (destination_name) REFERENCES enhanced_destination_analysis(destination_name)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS priority_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                destination_name TEXT NOT NULL,
+                insight_type TEXT NOT NULL,
+                insight_name TEXT NOT NULL,
+                description TEXT,
+                evidence TEXT, -- JSON string
+                confidence_score REAL,
+                priority_category TEXT,
+                priority_impact TEXT,
+                temporal_relevance REAL,
+                source_urls TEXT, -- JSON string
+                analysis_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (destination_name) REFERENCES enhanced_destination_analysis(destination_name)
+            )
+            """,
+            """
             CREATE INDEX IF NOT EXISTS idx_insights_destination_category 
             ON destination_insights(destination_name, category)
             """,
             """
             CREATE INDEX IF NOT EXISTS idx_insights_confidence 
             ON destination_insights(confidence_score DESC)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_priority_destination 
+            ON priority_metrics(destination_name)
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_priority_insights_destination 
+            ON priority_insights(destination_name, priority_category)
             """
         ]
         
@@ -91,8 +142,14 @@ class EnhancedDatabaseStorageTool(StructuredTool):
         except Exception as e:
             logger.error(f"[EnhancedStorage] Unexpected error creating tables: {e}")
     
-    async def _arun(self, destination_name: str, enhanced_analysis: EnhancedDestinationAnalysis) -> str:
+    async def _arun(self, destination_name: str, enhanced_analysis: EnhancedDestinationAnalysis = None, config = None) -> str:
         """Store enhanced destination analysis in database"""
+        
+        # Handle backward compatibility with destination_data parameter
+        if enhanced_analysis is None and hasattr(self, '_last_destination_data'):
+            # Try to use cached data from previous call
+            enhanced_analysis = self._last_destination_data
+            destination_name = getattr(enhanced_analysis, 'destination_name', destination_name)
         
         logger.info(f"[EnhancedStorage] Storing enhanced analysis for {destination_name}")
         
@@ -107,12 +164,12 @@ class EnhancedDatabaseStorageTool(StructuredTool):
             
             # Count insights by category
             insights_counts = {
-                'attractions': len(enhanced_analysis.attractions),
-                'hotels': len(enhanced_analysis.hotels),
-                'restaurants': len(enhanced_analysis.restaurants),
-                'activities': len(enhanced_analysis.activities),
-                'neighborhoods': len(enhanced_analysis.neighborhoods),
-                'practical_info': len(enhanced_analysis.practical_info)
+                'attractions': len(enhanced_analysis.attractions) if hasattr(enhanced_analysis, 'attractions') else 0,
+                'hotels': len(enhanced_analysis.hotels) if hasattr(enhanced_analysis, 'hotels') else 0,
+                'restaurants': len(enhanced_analysis.restaurants) if hasattr(enhanced_analysis, 'restaurants') else 0,
+                'activities': len(enhanced_analysis.activities) if hasattr(enhanced_analysis, 'activities') else 0,
+                'neighborhoods': len(enhanced_analysis.neighborhoods) if hasattr(enhanced_analysis, 'neighborhoods') else 0,
+                'practical_info': len(enhanced_analysis.practical_info) if hasattr(enhanced_analysis, 'practical_info') else 0
             }
             
             # Insert main analysis record
@@ -123,7 +180,7 @@ class EnhancedDatabaseStorageTool(StructuredTool):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 destination_name,
-                enhanced_analysis.summary,
+                enhanced_analysis.summary if hasattr(enhanced_analysis, 'summary') else '',
                 analysis_timestamp,
                 insights_counts['attractions'],
                 insights_counts['hotels'],
@@ -135,19 +192,25 @@ class EnhancedDatabaseStorageTool(StructuredTool):
             
             # Insert all insights by category
             all_insights = []
-            all_insights.extend(enhanced_analysis.attractions)
-            all_insights.extend(enhanced_analysis.hotels)
-            all_insights.extend(enhanced_analysis.restaurants)
-            all_insights.extend(enhanced_analysis.activities)
-            all_insights.extend(enhanced_analysis.neighborhoods)
-            all_insights.extend(enhanced_analysis.practical_info)
+            if hasattr(enhanced_analysis, 'attractions'):
+                all_insights.extend(enhanced_analysis.attractions)
+            if hasattr(enhanced_analysis, 'hotels'):
+                all_insights.extend(enhanced_analysis.hotels)
+            if hasattr(enhanced_analysis, 'restaurants'):
+                all_insights.extend(enhanced_analysis.restaurants)
+            if hasattr(enhanced_analysis, 'activities'):
+                all_insights.extend(enhanced_analysis.activities)
+            if hasattr(enhanced_analysis, 'neighborhoods'):
+                all_insights.extend(enhanced_analysis.neighborhoods)
+            if hasattr(enhanced_analysis, 'practical_info'):
+                all_insights.extend(enhanced_analysis.practical_info)
             
             insights_inserted = 0
             for insight in all_insights:
                 # Convert lists and dicts to JSON strings for storage
                 import json
-                highlights_json = json.dumps(insight.highlights) if insight.highlights else "[]"
-                practical_info_json = json.dumps(insight.practical_info) if insight.practical_info else "{}"
+                highlights_json = json.dumps(insight.highlights) if hasattr(insight, 'highlights') and insight.highlights else "[]"
+                practical_info_json = json.dumps(insight.practical_info) if hasattr(insight, 'practical_info') and insight.practical_info else "{}"
                 
                 cursor.execute("""
                     INSERT INTO destination_insights 
@@ -156,16 +219,82 @@ class EnhancedDatabaseStorageTool(StructuredTool):
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     destination_name,
-                    insight.category,
-                    insight.name,
-                    insight.description,
+                    insight.category if hasattr(insight, 'category') else 'unknown',
+                    insight.name if hasattr(insight, 'name') else 'Unknown',
+                    insight.description if hasattr(insight, 'description') else '',
                     highlights_json,
                     practical_info_json,
-                    insight.source_evidence,
-                    insight.confidence_score,
+                    insight.source_evidence if hasattr(insight, 'source_evidence') else '',
+                    insight.confidence_score if hasattr(insight, 'confidence_score') else 0.0,
                     analysis_timestamp
                 ))
                 insights_inserted += 1
+            
+            # Store priority metrics if available
+            priority_metrics_stored = False
+            if hasattr(enhanced_analysis, 'priority_metrics') and enhanced_analysis.priority_metrics:
+                priority_data = enhanced_analysis.priority_metrics
+                import json
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO priority_metrics 
+                    (destination_name, safety_score, crime_index, tourist_police_available,
+                     emergency_contacts, travel_advisory_level, budget_per_day_low,
+                     budget_per_day_mid, budget_per_day_high, currency,
+                     required_vaccinations, health_risks, water_safety,
+                     medical_facility_quality, visa_required, visa_on_arrival,
+                     visa_cost, english_proficiency, infrastructure_rating, analysis_timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    destination_name,
+                    priority_data.safety_score if hasattr(priority_data, 'safety_score') else None,
+                    priority_data.crime_index if hasattr(priority_data, 'crime_index') else None,
+                    priority_data.tourist_police_available if hasattr(priority_data, 'tourist_police_available') else None,
+                    json.dumps(priority_data.emergency_contacts) if hasattr(priority_data, 'emergency_contacts') and priority_data.emergency_contacts else "{}",
+                    priority_data.travel_advisory_level if hasattr(priority_data, 'travel_advisory_level') else None,
+                    priority_data.budget_per_day_low if hasattr(priority_data, 'budget_per_day_low') else None,
+                    priority_data.budget_per_day_mid if hasattr(priority_data, 'budget_per_day_mid') else None,
+                    priority_data.budget_per_day_high if hasattr(priority_data, 'budget_per_day_high') else None,
+                    priority_data.currency if hasattr(priority_data, 'currency') else None,
+                    json.dumps(priority_data.required_vaccinations) if hasattr(priority_data, 'required_vaccinations') and priority_data.required_vaccinations else "[]",
+                    json.dumps(priority_data.health_risks) if hasattr(priority_data, 'health_risks') and priority_data.health_risks else "[]",
+                    priority_data.water_safety if hasattr(priority_data, 'water_safety') else None,
+                    priority_data.medical_facility_quality if hasattr(priority_data, 'medical_facility_quality') else None,
+                    priority_data.visa_required if hasattr(priority_data, 'visa_required') else None,
+                    priority_data.visa_on_arrival if hasattr(priority_data, 'visa_on_arrival') else None,
+                    priority_data.visa_cost if hasattr(priority_data, 'visa_cost') else None,
+                    priority_data.english_proficiency if hasattr(priority_data, 'english_proficiency') else None,
+                    priority_data.infrastructure_rating if hasattr(priority_data, 'infrastructure_rating') else None,
+                    analysis_timestamp
+                ))
+                priority_metrics_stored = True
+            
+            # Store priority insights if available
+            priority_insights_count = 0
+            if hasattr(enhanced_analysis, 'priority_insights') and enhanced_analysis.priority_insights:
+                for p_insight in enhanced_analysis.priority_insights:
+                    import json
+                    
+                    cursor.execute("""
+                        INSERT INTO priority_insights 
+                        (destination_name, insight_type, insight_name, description,
+                         evidence, confidence_score, priority_category, priority_impact,
+                         temporal_relevance, source_urls, analysis_timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        destination_name,
+                        p_insight.insight_type if hasattr(p_insight, 'insight_type') else 'Priority Concern',
+                        p_insight.insight_name if hasattr(p_insight, 'insight_name') else 'Unknown',
+                        p_insight.description if hasattr(p_insight, 'description') else '',
+                        json.dumps(p_insight.evidence) if hasattr(p_insight, 'evidence') and p_insight.evidence else "[]",
+                        p_insight.confidence_score if hasattr(p_insight, 'confidence_score') else 0.0,
+                        p_insight.priority_category if hasattr(p_insight, 'priority_category') else None,
+                        p_insight.priority_impact if hasattr(p_insight, 'priority_impact') else None,
+                        p_insight.temporal_relevance if hasattr(p_insight, 'temporal_relevance') else None,
+                        json.dumps(p_insight.source_urls) if hasattr(p_insight, 'source_urls') and p_insight.source_urls else "[]",
+                        analysis_timestamp
+                    ))
+                    priority_insights_count += 1
             
             self._db_manager.conn.commit()
             
@@ -176,6 +305,11 @@ class EnhancedDatabaseStorageTool(StructuredTool):
                 f"{insights_counts['restaurants']} restaurants, {insights_counts['activities']} activities, "
                 f"{insights_counts['neighborhoods']} neighborhoods, {insights_counts['practical_info']} practical info items."
             )
+            
+            if priority_metrics_stored:
+                success_message += f" Priority metrics stored."
+            if priority_insights_count > 0:
+                success_message += f" {priority_insights_count} priority insights stored."
             
             logger.info(f"[EnhancedStorage] {success_message}")
             return success_message
@@ -189,9 +323,9 @@ class EnhancedDatabaseStorageTool(StructuredTool):
             logger.error(f"[EnhancedStorage] {error_msg}")
             return f"Error: {error_msg}"
     
-    def _run(self, destination_name: str, enhanced_analysis: EnhancedDestinationAnalysis) -> str:
+    def _run(self, destination_name: str, enhanced_analysis: EnhancedDestinationAnalysis = None, config = None) -> str:
         import asyncio
-        return asyncio.run(self._arun(destination_name, enhanced_analysis))
+        return asyncio.run(self._arun(destination_name, enhanced_analysis, config))
     
     def get_stored_insights(self, destination_name: str, category: str = None, min_confidence: float = 0.0) -> List[Dict[str, Any]]:
         """Retrieve stored insights for a destination"""

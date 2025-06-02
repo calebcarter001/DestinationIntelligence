@@ -13,6 +13,7 @@ class DestinationInsight:
     content_snippets: List[str] = field(default_factory=list) # Actual content
     is_discovered_theme: bool = False
     created_date: str = None
+    tags: List[str] = field(default_factory=list)  # Tags for categorization
     
     def __post_init__(self):
         if self.created_date is None:

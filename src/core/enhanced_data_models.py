@@ -45,6 +45,7 @@ class Theme:
     tags: List[str] = field(default_factory=list)
     created_date: datetime = field(default_factory=datetime.now)
     last_validated: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
     
     def add_evidence(self, evidence: Evidence):
         """Add evidence and update confidence"""

@@ -20,6 +20,54 @@ class PageContent(BaseModel):
     title: Optional[str] = Field(None, description="Title of the page, if available from initial search metadata.")
     content: str = Field(description="Extracted textual content from the page.")
     content_length: int = Field(description="Length of the extracted content.")
+    # Priority-related fields
+    priority_type: Optional[str] = Field(None, description="Type of priority content (e.g., 'safety', 'cost', 'health', 'accessibility', 'weather')")
+    priority_weight: Optional[float] = Field(1.0, description="Weight of priority content for ranking (higher is more important)")
+    priority_data: Optional[Dict[str, Any]] = Field(None, description="Extracted priority data (safety metrics, costs, health requirements, etc.)")
+
+class PriorityMetrics(BaseModel):
+    """Aggregated priority metrics for a destination"""
+    safety_score: Optional[float] = Field(None, description="Overall safety score (0-10)")
+    crime_index: Optional[float] = Field(None, description="Crime index value")
+    tourist_police_available: Optional[bool] = Field(None, description="Whether tourist police are available")
+    emergency_contacts: Optional[Dict[str, str]] = Field(None, description="Emergency contact numbers")
+    travel_advisory_level: Optional[str] = Field(None, description="Official travel advisory level")
+    
+    budget_per_day_low: Optional[float] = Field(None, description="Budget traveler daily cost estimate")
+    budget_per_day_mid: Optional[float] = Field(None, description="Mid-range traveler daily cost estimate")
+    budget_per_day_high: Optional[float] = Field(None, description="Luxury traveler daily cost estimate")
+    currency: Optional[str] = Field(None, description="Local currency code")
+    meal_cost_budget: Optional[float] = Field(None, description="Budget meal cost")
+    meal_cost_mid: Optional[float] = Field(None, description="Mid-range meal cost")
+    meal_cost_luxury: Optional[float] = Field(None, description="Luxury meal cost")
+    coffee_price: Optional[float] = Field(None, description="Average coffee price")
+    beer_price: Optional[float] = Field(None, description="Average beer price")
+    public_transport_ticket: Optional[float] = Field(None, description="Public transport ticket price")
+    taxi_start: Optional[float] = Field(None, description="Taxi starting fare")
+    hotel_budget: Optional[float] = Field(None, description="Budget hotel price per night")
+    hotel_mid: Optional[float] = Field(None, description="Mid-range hotel price per night")
+    hotel_luxury: Optional[float] = Field(None, description="Luxury hotel price per night")
+    
+    required_vaccinations: Optional[List[str]] = Field(None, description="List of required vaccinations")
+    health_risks: Optional[List[str]] = Field(None, description="List of health risks")
+    water_safety: Optional[str] = Field(None, description="Water safety status")
+    medical_facility_quality: Optional[str] = Field(None, description="Quality of medical facilities")
+    
+    visa_required: Optional[bool] = Field(None, description="Whether visa is required")
+    visa_on_arrival: Optional[bool] = Field(None, description="Whether visa on arrival is available")
+    visa_cost: Optional[float] = Field(None, description="Cost of visa if required")
+    english_proficiency: Optional[str] = Field(None, description="Level of English proficiency")
+    primary_language: Optional[str] = Field(None, description="Primary language spoken")
+    infrastructure_rating: Optional[float] = Field(None, description="Infrastructure quality rating (1-5)")
+    
+    avg_temp_summer: Optional[float] = Field(None, description="Average summer temperature")
+    avg_temp_winter: Optional[float] = Field(None, description="Average winter temperature")
+    avg_high_summer: Optional[float] = Field(None, description="Average high in summer")
+    avg_high_winter: Optional[float] = Field(None, description="Average high in winter")
+    avg_low_summer: Optional[float] = Field(None, description="Average low in summer")
+    avg_low_winter: Optional[float] = Field(None, description="Average low in winter")
+    rainfall_mm_annual: Optional[float] = Field(None, description="Annual rainfall in mm")
+    best_visit_seasons: Optional[List[str]] = Field(None, description="Best seasons to visit")
 
 class AnalyzeThemesInput(BaseModel):
     destination_name: str = Field(description="Name of the destination being analyzed.")
@@ -28,14 +76,20 @@ class AnalyzeThemesInput(BaseModel):
 
 class DestinationInsight(BaseModel):
     destination_name: str
-    insight_type: str = Field(description="Type of insight, e.g., 'Validated Theme', 'Discovered Theme', 'Unique Characteristic'")
-    insight_name: str = Field(description="Name of the theme or characteristic, e.g., 'Outdoor Activities', 'Historic Architecture'")
+    insight_type: str = Field(description="Type of insight, e.g., 'Validated Theme', 'Discovered Theme', 'Unique Characteristic', 'Priority Concern'")
+    insight_name: str = Field(description="Name of the theme or characteristic, e.g., 'Outdoor Activities', 'Historic Architecture', 'Safety Warning'")
     description: Optional[str] = Field(None, description="Detailed description or explanation of the insight.")
     evidence: List[str] = Field(default_factory=list, description="List of text snippets or URLs supporting the insight.")
     confidence_score: Optional[float] = Field(None, description="Confidence score from 0.0 to 1.0 for the insight's validity.")
     sentiment_score: Optional[float] = Field(None, description="Sentiment score from -1.0 (negative) to 1.0 (positive) related to the insight.")
     sentiment_label: Optional[str] = Field(None, description="Label for sentiment (e.g., POSITIVE, NEGATIVE, NEUTRAL)")
     source_urls: List[str] = Field(default_factory=list, description="List of source URLs from which this insight was derived.")
+    # Priority-related fields
+    priority_category: Optional[str] = Field(None, description="Priority category this insight relates to (safety, cost, health, etc.)")
+    priority_impact: Optional[str] = Field(None, description="Impact level: 'high', 'medium', 'low'")
+    temporal_relevance: Optional[float] = Field(None, description="How recent/relevant this information is (0-1)")
+    # Additional fields to maintain compatibility with Theme objects
+    tags: List[str] = Field(default_factory=list, description="List of tags associated with this insight")
     # discovery_method: Optional[str] = Field(None, description="How was this discovered? e.g. 'Seed Theme Validation', 'LLM Discovery', 'Content Analysis'")
     # created_at: Optional[datetime] = Field(default_factory=datetime.now)
 
@@ -44,6 +98,8 @@ class ThemeInsightOutput(BaseModel):
     destination_name: str
     validated_themes: List[DestinationInsight] = Field(default_factory=list, description="List of themes that were validated based on seed themes.")
     discovered_themes: List[DestinationInsight] = Field(default_factory=list, description="List of new themes discovered from the content.")
+    priority_insights: List[DestinationInsight] = Field(default_factory=list, description="List of priority-related insights (safety, cost, health concerns).")
+    priority_metrics: Optional[PriorityMetrics] = Field(None, description="Aggregated priority metrics for the destination")
     # raw_analysis_summary: Optional[str] = Field(None, description="A brief textual summary of the analysis process or overall findings.")
 
 class StoreInsightsInput(BaseModel):

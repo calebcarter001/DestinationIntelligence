@@ -218,8 +218,9 @@ class EnhancedCrewAIDestinationAnalyst:
             
             validated_themes = len(theme_analysis_result.validated_themes) if hasattr(theme_analysis_result, 'validated_themes') else 0
             discovered_themes = len(theme_analysis_result.discovered_themes) if hasattr(theme_analysis_result, 'discovered_themes') else 0
+            priority_insights = len(theme_analysis_result.priority_insights) if hasattr(theme_analysis_result, 'priority_insights') else 0
             
-            self.logger.info(f"Step 6 completed: Generated {validated_themes} validated themes and {discovered_themes} discovered themes")
+            self.logger.info(f"Step 6 completed: Generated {validated_themes} validated themes, {discovered_themes} discovered themes, and {priority_insights} priority insights")
             
             # Step 7: Store enhanced results
             self.logger.info("Step 7: Storing enhanced analysis results in database")
@@ -227,22 +228,27 @@ class EnhancedCrewAIDestinationAnalyst:
             storage_tool = self.tools_dict.get(storage_tool_name)
             
             if storage_tool:
-                # Prepare enhanced destination data
-                destination_data = {
-                    "destination_name": destination_name,
-                    "country_code": country_code,
-                    "themes": theme_analysis_result,
-                    "enhanced_insights": enhanced_analysis_result,
-                    "pages_processed": pages_processed,
-                    "chunks_created": chunks_created,
-                    "validated_themes": validated_themes,
-                    "discovered_themes": discovered_themes
-                }
+                # Pass the theme analysis result which contains the themes
+                # The enhanced analysis result contains POIs (attractions, hotels, restaurants)
+                # We need to pass themes from theme_analysis_result
                 
-                storage_result = await storage_tool._arun(
-                    destination_data=destination_data,
-                    config=processing_settings
-                )
+                # Check if theme_analysis_result has raw themes data
+                if hasattr(theme_analysis_result, 'themes'):
+                    # It's the raw result dict from analyze_themes - pass it directly
+                    logger.info("Passing raw theme analysis result with 'themes' attribute")
+                    storage_result = await storage_tool._arun(
+                        destination_name=destination_name,
+                        insights=[theme_analysis_result],  # Pass as insights list for legacy format
+                        config=processing_settings
+                    )
+                else:
+                    # It's a ThemeInsightOutput - pass it as before
+                    logger.info("Passing ThemeInsightOutput format")
+                    storage_result = await storage_tool._arun(
+                        destination_name=destination_name,
+                        insights=[theme_analysis_result],  # Pass as insights list for legacy format
+                        config=processing_settings
+                    )
                 
                 self.logger.info(f"Step 7 completed: {storage_result}")
             else:
@@ -251,6 +257,19 @@ class EnhancedCrewAIDestinationAnalyst:
             # Calculate execution time
             end_time = datetime.now()
             duration_seconds = (end_time - start_time).total_seconds()
+            
+            # Extract priority metrics for summary
+            priority_summary = {}
+            if hasattr(theme_analysis_result, 'priority_metrics') and theme_analysis_result.priority_metrics:
+                pm = theme_analysis_result.priority_metrics
+                priority_summary = {
+                    "safety_score": getattr(pm, 'safety_score', None),
+                    "crime_index": getattr(pm, 'crime_index', None),
+                    "budget_per_day_low": getattr(pm, 'budget_per_day_low', None),
+                    "budget_per_day_mid": getattr(pm, 'budget_per_day_mid', None),
+                    "visa_required": getattr(pm, 'visa_required', None),
+                    "required_vaccinations": getattr(pm, 'required_vaccinations', [])
+                }
             
             # Build result
             result = {
@@ -262,12 +281,14 @@ class EnhancedCrewAIDestinationAnalyst:
                 "total_themes": validated_themes + discovered_themes,
                 "validated_themes": validated_themes,
                 "discovered_themes": discovered_themes,
+                "priority_insights": priority_insights,
                 "attractions_found": attractions_found,
                 "hotels_found": hotels_found,
                 "restaurants_found": restaurants_found,
                 "execution_duration_seconds": duration_seconds,
                 "enhanced_insights": enhanced_analysis_result,
-                "theme_analysis": theme_analysis_result
+                "theme_analysis": theme_analysis_result,
+                "priority_summary": priority_summary
             }
             
             self.logger.info(f"✅ Enhanced analysis completed successfully for {destination_name}")
@@ -289,7 +310,8 @@ class EnhancedCrewAIDestinationAnalyst:
                 "chunks_created": 0,
                 "total_themes": 0,
                 "validated_themes": 0,
-                "discovered_themes": 0
+                "discovered_themes": 0,
+                "priority_insights": 0
             }
 
 def create_enhanced_crewai_destination_analyst(llm, tools: List) -> EnhancedCrewAIDestinationAnalyst:

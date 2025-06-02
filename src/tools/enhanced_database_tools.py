@@ -189,24 +189,190 @@ class StoreEnhancedDestinationInsightsTool(Tool):
                     for insight_item in insights:
                         if hasattr(insight_item, 'validated_themes'):
                             # It's a ThemeInsightOutput object
-                            for theme_insight in insight_item.validated_themes + insight_item.discovered_themes:
+                            logger.info(f"Processing ThemeInsightOutput with {len(insight_item.validated_themes)} validated themes and {len(insight_item.discovered_themes)} discovered themes")
+                            
+                            # Process validated themes
+                            for theme_insight in insight_item.validated_themes:
+                                # Import required models
+                                from ..core.enhanced_data_models import Evidence
+                                from ..core.evidence_hierarchy import SourceCategory, EvidenceType
+                                from ..core.confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
+                                
+                                # Extract evidence data from the DestinationInsight
+                                evidence_list = []
+                                if hasattr(theme_insight, 'evidence') and theme_insight.evidence:
+                                    for idx, evidence_text in enumerate(theme_insight.evidence):
+                                        # Create Evidence objects from the evidence strings
+                                        source_url = theme_insight.source_urls[idx] if hasattr(theme_insight, 'source_urls') and idx < len(theme_insight.source_urls) else ""
+                                        evidence = Evidence(
+                                            id=f"evidence_{idx}_{datetime.now().timestamp()}",
+                                            source_url=source_url,
+                                            source_category=SourceCategory.NEWS,  # Default to NEWS instead of GENERAL_MEDIA
+                                            evidence_type=EvidenceType.PRIMARY,
+                                            authority_weight=0.7,  # Default authority
+                                            text_snippet=evidence_text,
+                                            timestamp=datetime.now(),
+                                            confidence=0.7,
+                                            cultural_context={}
+                                        )
+                                        evidence_list.append(evidence)
+                                
+                                # Create confidence breakdown from the single confidence score
+                                confidence_breakdown = None
+                                if hasattr(theme_insight, 'confidence_score') and theme_insight.confidence_score is not None:
+                                    # Create a simplified confidence breakdown
+                                    conf_score = theme_insight.confidence_score
+                                    confidence_breakdown = ConfidenceBreakdown(
+                                        source_authority=conf_score,
+                                        evidence_diversity=conf_score,
+                                        consistency=conf_score,
+                                        recency=conf_score,
+                                        evidence_quantity=conf_score,
+                                        cultural_perspective=conf_score,
+                                        total_confidence=conf_score,
+                                        confidence_level=ConfidenceLevel.VERIFIED if conf_score > 0.9 else 
+                                                        ConfidenceLevel.STRONGLY_SUPPORTED if conf_score > 0.8 else
+                                                        ConfidenceLevel.WELL_SUPPORTED if conf_score > 0.7 else
+                                                        ConfidenceLevel.PARTIALLY_SUPPORTED if conf_score > 0.5 else
+                                                        ConfidenceLevel.EMERGING if conf_score > 0.3 else
+                                                        ConfidenceLevel.INSUFFICIENT
+                                    )
+                                
                                 theme = Theme(
                                     theme_id=f"{theme_insight.insight_name.lower().replace(' ', '_')}_{datetime.now().timestamp()}",
                                     macro_category=theme_insight.insight_type,
-                                    micro_category=theme_insight.insight_type,
+                                    micro_category=theme_insight.insight_name,  # Use insight_name as micro_category for now
                                     name=theme_insight.insight_name,
                                     description=theme_insight.description or "",
                                     fit_score=theme_insight.confidence_score or 0.5,
-                                    tags=[]
+                                    evidence=evidence_list,  # Now properly populated
+                                    confidence_breakdown=confidence_breakdown,  # Now properly populated
+                                    tags=getattr(theme_insight, 'tags', [])
+                                )
+                                destination.add_theme(theme)
+                                themes_added += 1
+                            
+                            # Process discovered themes
+                            for theme_insight in insight_item.discovered_themes:
+                                # Import required models (already imported above)
+                                
+                                # Extract evidence data from the DestinationInsight
+                                evidence_list = []
+                                if hasattr(theme_insight, 'evidence') and theme_insight.evidence:
+                                    for idx, evidence_text in enumerate(theme_insight.evidence):
+                                        # Create Evidence objects from the evidence strings
+                                        source_url = theme_insight.source_urls[idx] if hasattr(theme_insight, 'source_urls') and idx < len(theme_insight.source_urls) else ""
+                                        evidence = Evidence(
+                                            id=f"evidence_{idx}_{datetime.now().timestamp()}",
+                                            source_url=source_url,
+                                            source_category=SourceCategory.NEWS,  # Default to NEWS instead of GENERAL_MEDIA
+                                            evidence_type=EvidenceType.PRIMARY,
+                                            authority_weight=0.7,  # Default authority
+                                            text_snippet=evidence_text,
+                                            timestamp=datetime.now(),
+                                            confidence=0.7,
+                                            cultural_context={}
+                                        )
+                                        evidence_list.append(evidence)
+                                
+                                # Create confidence breakdown from the single confidence score
+                                confidence_breakdown = None
+                                if hasattr(theme_insight, 'confidence_score') and theme_insight.confidence_score is not None:
+                                    # Create a simplified confidence breakdown
+                                    conf_score = theme_insight.confidence_score
+                                    confidence_breakdown = ConfidenceBreakdown(
+                                        source_authority=conf_score,
+                                        evidence_diversity=conf_score,
+                                        consistency=conf_score,
+                                        recency=conf_score,
+                                        evidence_quantity=conf_score,
+                                        cultural_perspective=conf_score,
+                                        total_confidence=conf_score,
+                                        confidence_level=ConfidenceLevel.VERIFIED if conf_score > 0.9 else 
+                                                        ConfidenceLevel.STRONGLY_SUPPORTED if conf_score > 0.8 else
+                                                        ConfidenceLevel.WELL_SUPPORTED if conf_score > 0.7 else
+                                                        ConfidenceLevel.PARTIALLY_SUPPORTED if conf_score > 0.5 else
+                                                        ConfidenceLevel.EMERGING if conf_score > 0.3 else
+                                                        ConfidenceLevel.INSUFFICIENT
+                                    )
+                                
+                                theme = Theme(
+                                    theme_id=f"{theme_insight.insight_name.lower().replace(' ', '_')}_{datetime.now().timestamp()}",
+                                    macro_category=theme_insight.insight_type,
+                                    micro_category=theme_insight.insight_name,  # Use insight_name as micro_category for now
+                                    name=theme_insight.insight_name,
+                                    description=theme_insight.description or "",
+                                    fit_score=theme_insight.confidence_score or 0.5,
+                                    evidence=evidence_list,  # Now properly populated
+                                    confidence_breakdown=confidence_breakdown,  # Now properly populated
+                                    tags=getattr(theme_insight, 'tags', [])
+                                )
+                                destination.add_theme(theme)
+                                themes_added += 1
+                        elif hasattr(insight_item, 'themes'):
+                            # It's the result from enhanced theme analysis with 'themes' attribute
+                            logger.info(f"Processing enhanced theme analysis result with {len(insight_item.themes)} themes")
+                            
+                            for theme_dict in insight_item.themes:
+                                # Import required models
+                                from ..core.enhanced_data_models import Evidence
+                                from ..core.evidence_hierarchy import SourceCategory, EvidenceType
+                                from ..core.confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
+                                
+                                # Extract evidence data
+                                evidence_list = []
+                                evidence_summary = theme_dict.get('evidence_summary', [])
+                                
+                                # Convert evidence summary to Evidence objects
+                                for idx, ev_data in enumerate(evidence_summary):
+                                    evidence = Evidence(
+                                        id=ev_data.get('id', f"ev_{idx}_{datetime.now().timestamp()}"),
+                                        source_url=ev_data.get('source_url', ''),
+                                        source_category=SourceCategory[ev_data.get('source_category', 'GENERAL_MEDIA')],
+                                        evidence_type=EvidenceType.PRIMARY,  # Default
+                                        authority_weight=ev_data.get('authority_weight', 0.5),
+                                        text_snippet=ev_data.get('text_snippet', ''),
+                                        timestamp=datetime.now(),
+                                        confidence=ev_data.get('authority_weight', 0.5),
+                                        cultural_context=ev_data.get('cultural_context')
+                                    )
+                                    evidence_list.append(evidence)
+                                
+                                # Create confidence breakdown if available
+                                confidence_breakdown = None
+                                breakdown_data = theme_dict.get('confidence_breakdown')
+                                if breakdown_data and isinstance(breakdown_data, dict):
+                                    confidence_breakdown = ConfidenceBreakdown(
+                                        source_authority=breakdown_data.get('source_authority', 0.0),
+                                        evidence_diversity=breakdown_data.get('evidence_diversity', 0.0),
+                                        consistency=breakdown_data.get('consistency', 0.0),
+                                        recency=breakdown_data.get('recency', 0.0),
+                                        evidence_quantity=breakdown_data.get('evidence_quantity', 0.0),
+                                        cultural_perspective=breakdown_data.get('cultural_perspective', 0.0),
+                                        total_confidence=breakdown_data.get('total_confidence', 0.0),
+                                        confidence_level=ConfidenceLevel(breakdown_data.get('confidence_level', 'insufficient'))
+                                    )
+                                
+                                theme = Theme(
+                                    theme_id=theme_dict.get('theme_id', f"{theme_dict.get('name', 'unknown').lower().replace(' ', '_')}_{datetime.now().timestamp()}"),
+                                    macro_category=theme_dict.get('macro_category', 'Other'),
+                                    micro_category=theme_dict.get('micro_category', theme_dict.get('name', 'Other')),
+                                    name=theme_dict.get('name', 'Unknown'),
+                                    description=theme_dict.get('description', ''),
+                                    fit_score=theme_dict.get('fit_score', theme_dict.get('confidence_score', 0.5)),
+                                    evidence=evidence_list,  # Now properly populated
+                                    confidence_breakdown=confidence_breakdown,
+                                    tags=theme_dict.get('tags', []),
+                                    metadata=theme_dict.get('metadata', {})
                                 )
                                 destination.add_theme(theme)
                                 themes_added += 1
                         elif isinstance(insight_item, dict):
-                            # Handle dict format
+                            # Handle plain dict format (backward compatibility)
                             theme = Theme(
                                 theme_id=f"{insight_item.get('name', 'unknown').lower().replace(' ', '_')}_{datetime.now().timestamp()}",
                                 macro_category=insight_item.get('category', 'Other'),
-                                micro_category=insight_item.get('subcategory', 'Other'),
+                                micro_category=insight_item.get('subcategory', insight_item.get('name', 'Other')),
                                 name=insight_item.get('name', 'Unknown'),
                                 description=insight_item.get('description', ''),
                                 fit_score=insight_item.get('confidence', 0.5),

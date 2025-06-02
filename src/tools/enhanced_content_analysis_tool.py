@@ -1,10 +1,10 @@
 import logging
-from typing import List, Dict, Any, Type
+from typing import List, Dict, Any, Type, Optional
 from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from src.schemas import PageContent
+from src.schemas import PageContent, PriorityMetrics, DestinationInsight
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,8 @@ class EnhancedDestinationAnalysis(BaseModel):
     neighborhoods: List[StructuredDestinationInsight] = Field(default_factory=list)
     practical_info: List[StructuredDestinationInsight] = Field(default_factory=list)
     summary: str = Field(default="", description="Rich summary of what makes this destination special")
+    priority_metrics: Optional[PriorityMetrics] = Field(default=None, description="Priority metrics for the destination")
+    priority_insights: List[DestinationInsight] = Field(default_factory=list, description="Priority-related insights")
 
 class EnhancedContentAnalysisTool(StructuredTool):
     name: str = "enhanced_destination_analysis"

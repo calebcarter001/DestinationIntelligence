@@ -200,7 +200,8 @@ class ContentIntelligenceLogic:
                     confidence_score=round(final_confidence,2),
                     evidence_sources=list(data["source_urls"])[:3],
                     content_snippets=data["all_snippets"][:3],
-                    is_discovered_theme=False
+                    is_discovered_theme=False,
+                    tags=[theme.lower().replace(" ", "-"), "validated", "theme"]
                 )
                 final_insights.append(insight)
         
@@ -315,7 +316,8 @@ class ContentIntelligenceLogic:
                     confidence_score=confidence,
                     evidence_sources=list(data["source_urls"])[:3],
                     content_snippets=data["snippets"][:2],
-                    is_discovered_theme=True
+                    is_discovered_theme=True,
+                    tags=[theme.lower().replace(" ", "-"), "discovered", "theme", "new"]
                 )
                  discovered_insights.append(insight)
         
@@ -403,7 +405,8 @@ class ContentIntelligenceLogic:
                         evidence_sources=list(theme_source_urls),
                         content_snippets=theme_evidence_snippets[:3], # Max 3 snippets
                         confidence_score=confidence,
-                        is_discovered_theme=False
+                        is_discovered_theme=False,
+                        tags=[theme_name.lower().replace(" ", "-"), "validated", "theme"]
                     ))
                     self.logger.debug(f"Theme '{theme_name}' validated with confidence {confidence:.2f}.")
                 else:
@@ -454,7 +457,8 @@ class ContentIntelligenceLogic:
                             evidence_sources=list(disc_source_urls),
                             content_snippets=disc_evidence_snippets[:2],
                             confidence_score=confidence,
-                            is_discovered_theme=True
+                            is_discovered_theme=True,
+                            tags=[potential_theme.lower().replace(" ", "-"), "discovered", "theme", "new"]
                         ))
                         self.logger.info(f"Discovered theme: {potential_theme} with confidence {confidence:.2f}")
 
@@ -468,7 +472,8 @@ class ContentIntelligenceLogic:
                 description=theme.description,
                 evidence=theme.content_snippets,  # Map content_snippets to evidence
                 confidence_score=theme.confidence_score,
-                source_urls=theme.evidence_sources
+                source_urls=theme.evidence_sources,
+                tags=getattr(theme, 'tags', [])  # Include tags if available
             )
             pydantic_validated_themes.append(pydantic_theme)
         
@@ -481,7 +486,8 @@ class ContentIntelligenceLogic:
                 description=theme.description,
                 evidence=theme.content_snippets,  # Map content_snippets to evidence
                 confidence_score=theme.confidence_score,
-                source_urls=theme.evidence_sources
+                source_urls=theme.evidence_sources,
+                tags=getattr(theme, 'tags', [])  # Include tags if available
             )
             pydantic_discovered_themes.append(pydantic_theme)
 

@@ -28,6 +28,46 @@ class WebDiscoveryLogic:
             "{destination} vs similar destinations comparison",
             "why visit {destination} travel guide highlights"
         ]
+        
+        # Priority-focused query templates
+        self.priority_query_templates = {
+            "safety": [
+                "{destination} crime rate tourist areas safety",
+                "{destination} travel advisory warnings dangerous areas avoid",
+                "{destination} tourist police emergency contacts safety tips",
+                "{destination} safe neighborhoods recommended areas tourists",
+                "{destination} scams tourist safety concerns warnings"
+            ],
+            "cost": [
+                "{destination} daily budget cost breakdown travelers",
+                "{destination} cheap eats budget accommodation backpacker",
+                "{destination} price comparison neighboring countries costs",
+                "{destination} seasonal prices peak off-season costs",
+                "{destination} free activities budget travel tips money"
+            ],
+            "health": [
+                "{destination} vaccination requirements health risks travelers",
+                "{destination} hospitals medical facilities quality healthcare",
+                "{destination} water safety food hygiene stomach problems",
+                "{destination} disease outbreaks health warnings CDC",
+                "{destination} travel insurance medical emergency costs"
+            ],
+            "weather": [
+                "{destination} best time visit weather monthly climate",
+                "{destination} rainy season hurricane monsoon weather patterns",
+                "{destination} temperature rainfall sunshine hours monthly",
+                "{destination} weather affect travel plans activities",
+                "{destination} climate change extreme weather events"
+            ],
+            "accessibility": [
+                "{destination} visa requirements entry process tourists",
+                "{destination} direct flights major cities connections",
+                "{destination} public transport infrastructure getting around",
+                "{destination} english spoken language barrier communication",
+                "{destination} disabled access wheelchair friendly facilities"
+            ]
+        }
+        
         self.search_results_count = wd_config.get("search_results_per_query", 5)
         self.min_content_length = wd_config.get("min_content_length_chars", 200) # Updated default
         # Use the new byte limit config key
@@ -35,6 +75,17 @@ class WebDiscoveryLogic:
         self.brave_cache_expiry = self.cache_settings.get("brave_search_expiry_days", 7)
         self.page_cache_expiry = self.cache_settings.get("page_content_expiry_days", 30)
         self.max_sources_for_agent = wd_config.get("max_sources_for_agent_processing", 5)
+        
+        # Priority settings
+        self.priority_settings = config.get("priority_settings", {})
+        self.enable_priority_discovery = self.priority_settings.get("enable_priority_discovery", True)
+        self.priority_weights = self.priority_settings.get("priority_weights", {
+            "safety": 1.5,
+            "cost": 1.3,
+            "health": 1.2,
+            "accessibility": 1.1,
+            "weather": 1.0
+        })
     
     async def __aenter__(self):
         self.session = aiohttp.ClientSession(
@@ -221,11 +272,91 @@ class WebDiscoveryLogic:
             self.logger.error(f"Generic error fetching/parsing content from {url}: {e}", exc_info=True)
             return ""
     
+    def generate_priority_focused_queries(self, destination: str) -> Dict[str, List[str]]:
+        """Generate priority-focused queries for critical traveler concerns"""
+        priority_queries = {}
+        
+        for priority_type, templates in self.priority_query_templates.items():
+            priority_queries[priority_type] = [
+                template.format(destination=destination) 
+                for template in templates
+            ]
+        
+        return priority_queries
+    
+    async def discover_priority_content(self, destination: str, priority_types: List[str] = None) -> Dict[str, List[Dict]]:
+        """Discover content focused on specific traveler priorities"""
+        if priority_types is None:
+            priority_types = list(self.priority_query_templates.keys())
+        
+        self.logger.info(f"🎯 Starting priority content discovery for: {destination}")
+        priority_results = {}
+        
+        # Generate priority queries
+        all_priority_queries = self.generate_priority_focused_queries(destination)
+        
+        for priority_type in priority_types:
+            if priority_type not in all_priority_queries:
+                continue
+                
+            self.logger.info(f"Searching for {priority_type} information...")
+            type_results = []
+            
+            # Search for each query in this priority category
+            for query in all_priority_queries[priority_type]:
+                search_results = await self._fetch_brave_search(query)
+                type_results.extend(search_results)
+            
+            # Fetch content for unique URLs
+            processed_urls = set()
+            content_tasks = []
+            metadata_list = []
+            
+            for result in type_results:
+                url = result["url"]
+                if url not in processed_urls:
+                    content_tasks.append(self._fetch_page_content(url))
+                    metadata_list.append(result)
+                    processed_urls.add(url)
+            
+            if content_tasks:
+                fetched_contents = await asyncio.gather(*content_tasks)
+                
+                sources_with_content = []
+                for i, content in enumerate(fetched_contents):
+                    if content and len(content) >= self.min_content_length:
+                        source = metadata_list[i].copy()
+                        source["content"] = content
+                        source["content_length"] = len(content)
+                        source["priority_type"] = priority_type
+                        source["priority_weight"] = self.priority_weights.get(priority_type, 1.0)
+                        sources_with_content.append(source)
+                
+                # Sort by content length and limit
+                sources_with_content.sort(key=lambda x: x["content_length"], reverse=True)
+                priority_results[priority_type] = sources_with_content[:self.max_sources_for_agent]
+            else:
+                priority_results[priority_type] = []
+            
+            self.logger.info(f"✅ Found {len(priority_results[priority_type])} sources for {priority_type}")
+        
+        return priority_results
+    
     async def discover_real_content(self, destination: str) -> List[Dict]:
-        """Discover real web content about destination - sequentially for searches."""
+        """Discover real web content about destination - now includes priority content if enabled"""
         self.logger.info(f"🌐 Starting real content discovery for: {destination}")
         all_sources_with_content = []
         
+        # First, get priority-focused content if enabled
+        if self.enable_priority_discovery:
+            priority_results = await self.discover_priority_content(destination)
+            
+            # Add priority sources with their weights
+            for priority_type, sources in priority_results.items():
+                for source in sources:
+                    all_sources_with_content.append(source)
+        
+        # Then, get general content using existing templates
         list_of_search_results_lists = []
         # Wrap query_templates with tqdm for search progress
         for template in tqdm(self.query_templates, desc=f"Brave Search Queries for {destination}", unit="query"):
@@ -234,6 +365,10 @@ class WebDiscoveryLogic:
             list_of_search_results_lists.append(search_results)
 
         processed_urls = set()
+        # Collect URLs already processed from priority searches
+        for source in all_sources_with_content:
+            processed_urls.add(source["url"])
+        
         content_fetch_tasks = []
         search_results_for_metadata = []
 
@@ -245,7 +380,7 @@ class WebDiscoveryLogic:
                     search_results_for_metadata.append(result) 
                     processed_urls.add(url)
 
-        self.logger.info(f"Fetching content for {len(content_fetch_tasks)} unique URLs for {destination}...")
+        self.logger.info(f"Fetching content for {len(content_fetch_tasks)} additional URLs for {destination}...")
         if content_fetch_tasks:
             fetched_contents = await asyncio_tqdm.gather(
                 *content_fetch_tasks, 
@@ -259,14 +394,24 @@ class WebDiscoveryLogic:
             if content and len(content) >= self.min_content_length: 
                 source_metadata["content"] = content
                 source_metadata["content_length"] = len(content)
+                source_metadata["priority_weight"] = 1.0  # Default weight for non-priority content
                 all_sources_with_content.append(source_metadata)
         
         unique_sources_dict = {source["url"]: source for source in all_sources_with_content}
-        # Sort by content length (descending) to get the most substantial ones first
-        sorted_sources = sorted(list(unique_sources_dict.values()), key=lambda x: x.get("content_length", 0), reverse=True)
+        # Sort by priority weight first, then by content length
+        sorted_sources = sorted(
+            list(unique_sources_dict.values()), 
+            key=lambda x: (x.get("priority_weight", 1.0), x.get("content_length", 0)), 
+            reverse=True
+        )
         
-        # Limit the number of sources returned using the new config key
-        final_sources_to_return = sorted_sources[:self.max_sources_for_agent]
+        # Limit the number of sources returned, but ensure we have a good mix
+        # Take more sources if priority discovery is enabled
+        max_sources = self.max_sources_for_agent
+        if self.enable_priority_discovery:
+            max_sources = min(max_sources * 2, 10)  # Double the sources but cap at 10
+        
+        final_sources_to_return = sorted_sources[:max_sources]
         
         self.logger.info(f"✅ Discovered {len(sorted_sources)} unique sources with substantial content for {destination}. Returning top {len(final_sources_to_return)} to agent.")
         return final_sources_to_return 

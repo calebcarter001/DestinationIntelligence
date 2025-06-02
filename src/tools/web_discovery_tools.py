@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from src.core.web_discovery_logic import WebDiscoveryLogic # For fallback
 from src.schemas import PageContent # For structuring final output
 from .jina_reader_tool import JinaReaderTool # Import the new tool
+from .priority_data_extraction_tool import PriorityDataExtractor  # Import the priority extractor
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,8 @@ class DiscoverAndFetchContentTool(StructuredTool):
     name: str = "discover_and_fetch_web_content_for_destination"
     description: str = (
         "USE THIS TOOL FIRST. Discovers relevant web pages for a given destination, "
-        "fetches their content (trying Jina Reader first, then fallback using BeautifulSoup), and extracts text. "
+        "fetches their content (trying Jina Reader first, then fallback using BeautifulSoup), "
+        "extracts text, and includes priority-focused content for traveler concerns. "
         "Input should be the name of the destination (e.g., 'Paris, France')."
     )
     args_schema: Type[BaseModel] = DiscoverAndFetchContentToolInput
@@ -36,6 +38,8 @@ class DiscoverAndFetchContentTool(StructuredTool):
         source_title = source_metadata.get("title", url)
         min_len = self.config.get("web_discovery", {}).get("min_content_length_chars", 200)
         jina_reader_endpoint = self.config.get("web_discovery", {}).get("jina_reader_endpoint_template", "https://r.jina.ai/{url}")
+        priority_type = source_metadata.get("priority_type", None)
+        priority_weight = source_metadata.get("priority_weight", 1.0)
 
         # Try Jina Reader first
         try:
@@ -46,7 +50,17 @@ class DiscoverAndFetchContentTool(StructuredTool):
             
             if page_content_str and not page_content_str.startswith("Error:") and len(page_content_str) >= min_len:
                 logger.info(f"[Tool] Jina Reader successful for {url}, length {len(page_content_str)}.")
-                return PageContent(url=url, title=source_title, content=page_content_str, content_length=len(page_content_str))
+                page_content = PageContent(
+                    url=url, 
+                    title=source_title, 
+                    content=page_content_str, 
+                    content_length=len(page_content_str)
+                )
+                # Add priority metadata if available
+                if priority_type:
+                    page_content.priority_type = priority_type
+                    page_content.priority_weight = priority_weight
+                return page_content
             elif page_content_str and page_content_str.startswith("Error:"):
                 logger.warning(f"[Tool] Jina Reader reported an error for {url}: {page_content_str}")
             else:
@@ -65,7 +79,17 @@ class DiscoverAndFetchContentTool(StructuredTool):
             
             if page_content_str and len(page_content_str) >= min_len:
                 logger.info(f"[Tool] BeautifulSoup fallback successful for {url}, length {len(page_content_str)}.")
-                return PageContent(url=url, title=source_title, content=page_content_str, content_length=len(page_content_str))
+                page_content = PageContent(
+                    url=url, 
+                    title=source_title, 
+                    content=page_content_str, 
+                    content_length=len(page_content_str)
+                )
+                # Add priority metadata if available
+                if priority_type:
+                    page_content.priority_type = priority_type
+                    page_content.priority_weight = priority_weight
+                return page_content
             else:
                 logger.info(f"[Tool] BeautifulSoup fallback for {url} yielded content too short or empty (length {len(page_content_str or '')}).")
         return None
@@ -73,43 +97,46 @@ class DiscoverAndFetchContentTool(StructuredTool):
     async def _arun(self, destination_name: str) -> List[PageContent]:
         logger.info(f"[Tool] DiscoverAndFetch running for {destination_name}.")
         web_discovery_logic = WebDiscoveryLogic(api_key=self.brave_api_key, config=self.config)
-        search_results_lists = []
+        all_sources = []
+        
+        # Check if priority discovery is enabled
+        enable_priority_discovery = self.config.get("priority_settings", {}).get("enable_priority_discovery", True)
+        
         async with web_discovery_logic as wdl:
-            # Enhanced query templates for richer content discovery
-            query_templates = [
-                f"what makes {destination_name} special unique attractions",
-                f"hidden gems {destination_name} local recommendations", 
-                f"{destination_name} culture traditions authentic experiences",
-                f"{destination_name} vs similar destinations comparison",
-                f"why visit {destination_name} travel guide highlights",
-                # NEW: Travel-specific queries for richer content
-                f"best hotels {destination_name} where to stay recommendations",
-                f"top restaurants {destination_name} food scene dining guide",
-                f"things to do {destination_name} activities attractions itinerary",
-                f"{destination_name} neighborhoods areas districts guide",
-                f"{destination_name} weather best time to visit travel tips",
-                f"{destination_name} transportation airport getting around",
-                f"{destination_name} shopping markets local crafts",
-                f"{destination_name} nightlife entertainment venues",
-                f"{destination_name} outdoor activities adventure sports",
-                f"travel guide {destination_name} complete visitor information"
-            ]
-            for template in query_templates:
-                query = template.format(destination=destination_name)
-                search_results = await wdl._fetch_brave_search(query) 
-                if search_results:
-                    search_results_lists.extend(search_results)
+            # Get sources from web discovery (includes priority content if enabled)
+            sources_with_metadata = await wdl.discover_real_content(destination_name)
+            all_sources.extend(sources_with_metadata)
         
-        unique_search_results_by_url: Dict[str, Dict[str, Any]] = {}
-        for res in search_results_lists:
-            if res.get("url") and res["url"] not in unique_search_results_by_url: # Added get() for safety
-                unique_search_results_by_url[res["url"]] = res
+        # Deduplicate by URL
+        unique_sources_by_url: Dict[str, Dict[str, Any]] = {}
+        for source in all_sources:
+            if source.get("url") and source["url"] not in unique_sources_by_url:
+                unique_sources_by_url[source["url"]] = source
         
+        # Sort by priority weight first, then by content length
+        sorted_sources = sorted(
+            list(unique_sources_by_url.values()),
+            key=lambda x: (x.get("priority_weight", 1.0), x.get("content_length", 0)),
+            reverse=True
+        )
+        
+        # Limit sources to fetch
         top_n_unique_urls_to_fetch = self.config.get("web_discovery", {}).get("max_urls_to_fetch_content_for", 15)
-        urls_to_fetch_metadata = list(unique_search_results_by_url.values())[:top_n_unique_urls_to_fetch]
+        if enable_priority_discovery:
+            top_n_unique_urls_to_fetch = min(top_n_unique_urls_to_fetch * 2, 20)  # Increase limit when priority is enabled
+        
+        urls_to_fetch_metadata = sorted_sources[:top_n_unique_urls_to_fetch]
 
         logger.info(f"[Tool] Will attempt to fetch content for up to {len(urls_to_fetch_metadata)} unique URLs for {destination_name}.")
-        content_fetch_tasks = [self._fetch_content_for_single_url(search_meta["url"], search_meta) for search_meta in urls_to_fetch_metadata]
+        
+        # Log priority type distribution
+        priority_types = {}
+        for source in urls_to_fetch_metadata:
+            ptype = source.get("priority_type", "general")
+            priority_types[ptype] = priority_types.get(ptype, 0) + 1
+        logger.info(f"[Tool] Priority type distribution: {priority_types}")
+        
+        content_fetch_tasks = [self._fetch_content_for_single_url(source["url"], source) for source in urls_to_fetch_metadata]
         
         fetched_page_data_list: List[Optional[PageContent]] = []
         if content_fetch_tasks:
@@ -118,10 +145,50 @@ class DiscoverAndFetchContentTool(StructuredTool):
                 desc=f"Fetching URL Contents for {destination_name} (Jina/BS4)",
                 unit="url"
             )
-        successful_fetches = [item for item in fetched_page_data_list if item is not None]
-        sorted_sources = sorted(successful_fetches, key=lambda x: x.content_length, reverse=True)
+        
+        # Filter successful fetches and extract priority data
+        successful_fetches = []
+        priority_extractor = PriorityDataExtractor()
+        
+        for page_content in fetched_page_data_list:
+            if page_content is not None:
+                # Extract priority data from content
+                try:
+                    priority_data = priority_extractor.extract_all_priority_data(
+                        page_content.content,
+                        page_content.url
+                    )
+                    # Add priority data to page content (will need to update PageContent schema)
+                    if hasattr(page_content, '__dict__'):
+                        page_content.__dict__['priority_data'] = priority_data
+                except Exception as e:
+                    logger.warning(f"Failed to extract priority data from {page_content.url}: {e}")
+                
+                successful_fetches.append(page_content)
+        
+        # Sort by priority weight and content length
+        sorted_sources = sorted(
+            successful_fetches, 
+            key=lambda x: (
+                getattr(x, 'priority_weight', 1.0),
+                x.content_length
+            ), 
+            reverse=True
+        )
+        
         max_sources_to_return_to_agent = self.config.get("web_discovery", {}).get("max_sources_for_agent_processing", 5)
+        if enable_priority_discovery:
+            max_sources_to_return_to_agent = min(max_sources_to_return_to_agent * 2, 10)
+        
         final_sources_to_return = sorted_sources[:max_sources_to_return_to_agent]
+        
+        # Log final distribution
+        final_priority_types = {}
+        for source in final_sources_to_return:
+            ptype = getattr(source, 'priority_type', 'general')
+            final_priority_types[ptype] = final_priority_types.get(ptype, 0) + 1
+        logger.info(f"[Tool] Final priority type distribution: {final_priority_types}")
+        
         logger.info(f"[Tool] Successfully fetched content for {len(successful_fetches)} URLs. Returning top {len(final_sources_to_return)} to agent.")
         return final_sources_to_return
 
