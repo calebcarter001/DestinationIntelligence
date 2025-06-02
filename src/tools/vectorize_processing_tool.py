@@ -42,7 +42,7 @@ class ProcessContentWithVectorizeTool(StructuredTool):
         logger.info(f"[VectorizeTool-SIM] Simulated Vectorize returned {len(simulated_chunks)} chunks.")
         return simulated_chunks
 
-    async def _arun(self, page_content_list: List[PageContent], chunk_size: int = 1000, overlap: int = 100) -> List[ProcessedPageChunk]:
+    async def _arun(self, page_content_list: List[PageContent], chunk_size: int = 1000, overlap: int = 100) -> Dict[str, Any]:
         logger.info(f"[VectorizeTool] Received {len(page_content_list)} PageContent objects for processing.")
         all_processed_chunks: List[ProcessedPageChunk] = []
         
@@ -83,9 +83,16 @@ class ProcessContentWithVectorizeTool(StructuredTool):
                 # Optionally return partial results or an error structure
 
         logger.info(f"[VectorizeTool] Total processed chunks: {len(all_processed_chunks)} from {len(page_content_list)} pages.")
-        return all_processed_chunks
+        
+        # Return dictionary format expected by enhanced analyst
+        return {
+            "total_chunks": len(all_processed_chunks),
+            "chunks": all_processed_chunks,
+            "pages_processed": len(page_content_list),
+            "processing_method": "vectorize_simulation"
+        }
 
-    def _run(self, page_content_list: List[PageContent], chunk_size: int = 1000, overlap: int = 100) -> List[ProcessedPageChunk]:
+    def _run(self, page_content_list: List[PageContent], chunk_size: int = 1000, overlap: int = 100) -> Dict[str, Any]:
         # Basic sync wrapper for async, not ideal for production if loop is running
         try:
             loop = asyncio.get_event_loop()
@@ -100,4 +107,4 @@ class ProcessContentWithVectorizeTool(StructuredTool):
                 return loop.run_until_complete(self._arun(page_content_list, chunk_size, overlap))
         except RuntimeError as e:
             logger.error(f"[VectorizeTool] RuntimeError in _run: {e}. This tool is async-first.")
-            return [] 
+            return {} 

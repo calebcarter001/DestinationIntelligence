@@ -1,0 +1,15 @@
+{
+  "export_metadata": {
+    "version": "2.0",
+    "export_timestamp": "2025-06-01T22:30:47.104027",
+    "export_type": "themes_detailed",
+    "destination_id": "legacy_bend_oregon"
+  },
+  "themes_by_category": {},
+  "theme_statistics": {
+    "total_themes": 0,
+    "themes_by_confidence": {},
+    "categories": [],
+    "average_evidence_per_theme": 0
+  }
+}
