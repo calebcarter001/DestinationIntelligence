@@ -256,7 +256,7 @@ async def main_agent_orchestration():
         insights_export_dir = os.path.join(PROJECT_ROOT, "destination_insights")
         logger.info(f"Initializing Enhanced Database Manager with JSON export to: {insights_export_dir}")
         
-        db_path = app_config.get("database", {}).get("path", "real_destination_intelligence.db")
+        db_path = app_config.get("database", {}).get("path", "enhanced_destination_intelligence.db")
         db_manager = EnhancedDatabaseManager(
             db_path=db_path,
             json_export_path=insights_export_dir

@@ -1,18 +1,23 @@
 """
 Priority Data Extraction Tool
-Extracts structured data for critical traveler concerns from various sources
+Uses LLM-based semantic understanding to extract structured travel data
+from various sources with high accuracy and robustness.
 """
-import re
 import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional
+from datetime import datetime
 from dataclasses import dataclass
-from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
 
 
+# Legacy dataclass structures for backward compatibility
 @dataclass
 class SafetyMetrics:
     """Safety metrics for a destination"""
@@ -94,473 +99,469 @@ class AccessibilityInfo:
             self.direct_flights_from_major_hubs = []
 
 
+# Pydantic models for LLM structured output
+class SafetyMetricsPydantic(BaseModel):
+    """Pydantic model for safety metrics"""
+    crime_index: Optional[float] = Field(None, description="Crime index value (0-100 scale)")
+    safety_rating: Optional[float] = Field(None, description="Safety rating (typically 1-10 scale)")
+    tourist_police_available: Optional[bool] = Field(None, description="Whether tourist police are available")
+    emergency_contacts: Dict[str, str] = Field(default_factory=dict, description="Emergency contact numbers")
+    travel_advisory_level: Optional[str] = Field(None, description="Official travel advisory level")
+    safe_areas: List[str] = Field(default_factory=list, description="Areas considered safe for tourists")
+    areas_to_avoid: List[str] = Field(default_factory=list, description="Areas to avoid or exercise caution")
+
+
+class CostIndicatorsPydantic(BaseModel):
+    """Pydantic model for cost indicators"""
+    budget_per_day_low: Optional[float] = Field(None, description="Low-budget daily cost in USD")
+    budget_per_day_mid: Optional[float] = Field(None, description="Mid-range daily cost in USD")
+    budget_per_day_high: Optional[float] = Field(None, description="High-end daily cost in USD")
+    meal_cost_average: Optional[float] = Field(None, description="Average meal cost in USD")
+    accommodation_cost_average: Optional[float] = Field(None, description="Average accommodation cost per night in USD")
+    transport_cost_average: Optional[float] = Field(None, description="Average local transport cost in USD")
+    currency: Optional[str] = Field(None, description="Local currency code (e.g., USD, EUR, THB)")
+    exchange_rate_info: Optional[str] = Field(None, description="Currency exchange rate information")
+    seasonal_price_variation: Dict[str, float] = Field(default_factory=dict, description="Seasonal price changes as percentages")
+
+
+class HealthRequirementsPydantic(BaseModel):
+    """Pydantic model for health requirements"""
+    required_vaccinations: List[str] = Field(default_factory=list, description="Mandatory vaccinations")
+    recommended_vaccinations: List[str] = Field(default_factory=list, description="Recommended vaccinations")
+    health_risks: List[str] = Field(default_factory=list, description="Health risks present in the destination")
+    water_safety: Optional[str] = Field(None, description="Water safety information")
+    food_safety_rating: Optional[str] = Field(None, description="Food safety rating or information")
+    medical_facility_quality: Optional[str] = Field(None, description="Quality of medical facilities")
+    health_insurance_required: Optional[bool] = Field(None, description="Whether health insurance is required/recommended")
+    common_health_issues: List[str] = Field(default_factory=list, description="Common health issues for travelers")
+
+
+class AccessibilityInfoPydantic(BaseModel):
+    """Pydantic model for accessibility information"""
+    visa_required: Optional[bool] = Field(None, description="Whether a visa is required")
+    visa_on_arrival: Optional[bool] = Field(None, description="Whether visa on arrival is available")
+    visa_cost: Optional[float] = Field(None, description="Visa cost in USD")
+    direct_flights_from_major_hubs: List[str] = Field(default_factory=list, description="Cities with direct flights")
+    average_flight_time: Optional[float] = Field(None, description="Average flight time in hours")
+    local_transport_quality: Optional[str] = Field(None, description="Quality of local transportation")
+    english_proficiency: Optional[str] = Field(None, description="English proficiency level (High/Moderate/Low)")
+    infrastructure_rating: Optional[float] = Field(None, description="Infrastructure quality rating (1-5 scale)")
+
+
+class ComprehensiveTravelData(BaseModel):
+    """Complete travel data extraction result"""
+    safety: SafetyMetricsPydantic
+    cost: CostIndicatorsPydantic
+    health: HealthRequirementsPydantic
+    accessibility: AccessibilityInfoPydantic
+    extraction_confidence: Optional[float] = Field(None, description="Confidence in extraction quality (0-1)")
+    data_completeness: Optional[float] = Field(None, description="Percentage of fields populated")
+
+
 class PriorityDataExtractor:
-    """Extracts priority data from text content"""
+    """Semantic-based priority data extractor using LLM understanding"""
     
-    def __init__(self):
+    def __init__(self, llm: Optional[ChatGoogleGenerativeAI] = None):
         self.logger = logging.getLogger(__name__)
         
+        try:
+            self.llm = llm or self._create_default_llm()
+            self.parser = PydanticOutputParser(pydantic_object=ComprehensiveTravelData)
+            
+            # Create the extraction prompt template
+            self.extraction_prompt = ChatPromptTemplate.from_messages([
+                ("system", self._get_system_prompt()),
+                ("human", self._get_human_prompt())
+            ])
+            
+            # Create the extraction chain
+            self.extraction_chain = self.extraction_prompt | self.llm | self.parser
+            self.semantic_enabled = True
+            
+        except Exception as e:
+            self.logger.warning(f"Could not initialize semantic LLM extraction: {e}. Using fallback mode.")
+            self.llm = None
+            self.parser = None
+            self.extraction_prompt = None
+            self.extraction_chain = None
+            self.semantic_enabled = False
+    
+    def _create_default_llm(self) -> ChatGoogleGenerativeAI:
+        """Create default LLM if none provided"""
+        try:
+            return ChatGoogleGenerativeAI(
+                model="gemini-1.5-flash",
+                temperature=0.1,  # Low temperature for consistency
+                max_tokens=4000
+            )
+        except Exception as e:
+            # If we can't create the LLM (no API key, etc.), we'll use fallback mode
+            raise e
+    
+    def _get_system_prompt(self) -> str:
+        """Get the system prompt for extraction"""
+        return """You are an expert travel data analyst with deep knowledge of international travel requirements, safety conditions, costs, and accessibility information.
+
+Your task is to extract comprehensive, accurate travel information from text content and structure it according to the specified schema.
+
+Key Guidelines:
+1. **Accuracy**: Only extract information explicitly mentioned or clearly implied in the text
+2. **Context Awareness**: Understand what numbers refer to (e.g., distinguish visa cost from meal cost)
+3. **Semantic Understanding**: Recognize synonyms and varied expressions (e.g., "tourist police" = "tourism police" = "tourist assistance officers")
+4. **Data Validation**: Ensure extracted values make logical sense (e.g., safety ratings within reasonable ranges)
+5. **Completeness**: Extract as much relevant information as possible while maintaining accuracy
+
+For missing information:
+- Use null/None for optional fields with no information
+- Use empty lists/dicts for collection fields with no data
+- Do not make up or guess information not present in the text
+
+For ambiguous information:
+- Choose the most reasonable interpretation based on context
+- For numerical ranges, extract specific values when possible or use midpoint for averages
+
+Currency and Cost Guidelines:
+- Convert costs to USD when possible and reasonable
+- If original currency is mentioned, note it in the currency field
+- For daily budgets, extract low/mid/high ranges when available
+
+Safety Guidelines:
+- Extract numerical safety/crime indices when mentioned
+- Recognize various travel advisory formats (Level 1-4, color codes, text descriptions)
+- Distinguish between tourist police and regular police
+- Identify specific safe areas and areas to avoid
+
+Health Guidelines:
+- Distinguish between required and recommended vaccinations
+- Identify specific disease risks and health concerns
+- Categorize water safety clearly (safe/unsafe/bottled recommended)
+- Assess medical facility quality from descriptive text
+
+Accessibility Guidelines:
+- Understand visa requirements vs. visa on arrival vs. visa-free
+- Extract specific visa costs
+- Identify major cities with direct flights
+- Assess English proficiency and infrastructure quality from context"""
+
+    def _get_human_prompt(self) -> str:
+        """Get the human prompt template"""
+        return """Extract comprehensive travel information from the following content about a destination.
+
+Content to analyze:
+{content}
+
+Source URL (for credibility assessment): {source_url}
+
+Please extract all relevant safety, cost, health, and accessibility information according to the schema. Focus on accuracy and semantic understanding rather than pattern matching.
+
+{format_instructions}"""
+
     def extract_all_priority_data(self, content: str, source_url: str = None) -> Dict[str, Any]:
-        """Extract all priority data from content"""
+        """Extract all priority data using semantic understanding"""
+        
+        # If semantic extraction is not available, use fallback mode
+        if not self.semantic_enabled:
+            return self._extract_all_priority_data_fallback(content, source_url)
+        
+        try:
+            # Prepare the input
+            format_instructions = self.parser.get_format_instructions()
+            
+            # Run the extraction
+            result = self.extraction_chain.invoke({
+                "content": content,
+                "source_url": source_url or "Unknown",
+                "format_instructions": format_instructions
+            })
+            
+            # Convert to dictionary and add metadata
+            result_dict = result.dict()
+            
+            # Add metadata
+            result_dict.update({
+                "source_url": source_url,
+                "extraction_timestamp": datetime.now().isoformat(),
+                "extraction_method": "semantic_llm",
+                "source_credibility": self.calculate_source_credibility(source_url),
+                "temporal_relevance": self.determine_temporal_relevance(content)
+            })
+            
+            # Calculate completeness and confidence
+            result_dict["data_completeness"] = self._calculate_data_completeness(result_dict)
+            result_dict["extraction_confidence"] = self._calculate_extraction_confidence(result_dict, content)
+            
+            return result_dict
+            
+        except Exception as e:
+            self.logger.error(f"Semantic extraction failed: {str(e)}")
+            # Fallback to empty structure
+            return self._create_empty_result(source_url)
+    
+    def _extract_all_priority_data_fallback(self, content: str, source_url: str = None) -> Dict[str, Any]:
+        """Fallback extraction method when LLM is not available"""
+        self.logger.info("Using fallback extraction method (no LLM available)")
+        
         return {
-            "safety": self.extract_safety_metrics(content),
-            "cost": self.extract_cost_indicators(content),
-            "health": self.extract_health_requirements(content),
-            "accessibility": self.extract_accessibility_info(content),
+            "safety": SafetyMetrics().__dict__,
+            "cost": CostIndicators().__dict__,
+            "health": HealthRequirements().__dict__,
+            "accessibility": AccessibilityInfo().__dict__,
             "source_url": source_url,
-            "extraction_timestamp": datetime.now().isoformat()
+            "extraction_timestamp": datetime.now().isoformat(),
+            "extraction_method": "fallback_basic",
+            "source_credibility": self.calculate_source_credibility(source_url),
+            "temporal_relevance": self.determine_temporal_relevance(content),
+            "data_completeness": 0.0,
+            "extraction_confidence": 0.3
         }
     
     def extract_safety_metrics(self, content: str) -> Dict[str, Any]:
-        """Extract safety-related metrics from content"""
-        metrics = SafetyMetrics()
-        content_lower = content.lower()
+        """Extract only safety metrics with focused semantic analysis"""
+        if not self.semantic_enabled:
+            return SafetyMetrics().__dict__
+            
+        safety_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a travel safety expert. Extract safety-related information from travel content.
+            Focus on: crime indices, safety ratings, police presence, emergency contacts, travel advisories, safe/unsafe areas.
+            Be precise and only extract explicitly mentioned information."""),
+            ("human", "Extract safety information from: {content}\n\n{format_instructions}")
+        ])
         
-        # Crime index/rate patterns
-        crime_patterns = [
-            r'crime\s+(?:index|rate)[\s:]+(\d+\.?\d*)',
-            r'(\d+\.?\d*)\s*(?:%|percent)\s+crime',
-            r'crime\s+statistics?[\s:]+(\d+\.?\d*)'
-        ]
+        parser = PydanticOutputParser(pydantic_object=SafetyMetricsPydantic)
+        chain = safety_prompt | self.llm | parser
         
-        for pattern in crime_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                try:
-                    metrics.crime_index = float(match.group(1))
-                    break
-                except:
-                    pass
-        
-        # Safety rating patterns
-        safety_patterns = [
-            r'safety\s+(?:rating|score)[\s:]+(\d+\.?\d*)',
-            r'rated\s+(\d+\.?\d*)\s+(?:out\s+of\s+\d+\s+)?for\s+safety',
-            r'(\d+\.?\d*)/(?:5|10)\s+safety'
-        ]
-        
-        for pattern in safety_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                try:
-                    metrics.safety_rating = float(match.group(1))
-                    break
-                except:
-                    pass
-        
-        # Tourist police
-        if any(phrase in content_lower for phrase in ['tourist police', 'tourism police', 'police turistico']):
-            metrics.tourist_police_available = True
-        
-        # Emergency contacts
-        emergency_patterns = [
-            r'emergency[\s:]+(\d{3,})',
-            r'police[\s:]+(\d{3,})',
-            r'ambulance[\s:]+(\d{3,})',
-            r'fire[\s:]+(\d{3,})'
-        ]
-        
-        for pattern in emergency_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                if 'emergency' in pattern:
-                    metrics.emergency_contacts['emergency'] = match
-                elif 'police' in pattern:
-                    metrics.emergency_contacts['police'] = match
-                elif 'ambulance' in pattern:
-                    metrics.emergency_contacts['ambulance'] = match
-                elif 'fire' in pattern:
-                    metrics.emergency_contacts['fire'] = match
-        
-        # Travel advisory levels
-        advisory_patterns = [
-            r'level\s+(\d)\s+(?:travel\s+)?advisory',
-            r'travel\s+advisory[\s:]+level\s+(\d)',
-            r'(?:exercise\s+)?(?:normal|increased|high|extreme)\s+caution'
-        ]
-        
-        for pattern in advisory_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                if match.lastindex:
-                    metrics.travel_advisory_level = f"Level {match.group(1)}"
-                else:
-                    if 'normal' in match.group(0):
-                        metrics.travel_advisory_level = "Level 1"
-                    elif 'increased' in match.group(0):
-                        metrics.travel_advisory_level = "Level 2"
-                    elif 'high' in match.group(0):
-                        metrics.travel_advisory_level = "Level 3"
-                    elif 'extreme' in match.group(0):
-                        metrics.travel_advisory_level = "Level 4"
-                break
-        
-        # Areas to avoid
-        avoid_patterns = [
-            r'avoid\s+(?:the\s+)?area[s]?\s+(?:of|around|near)\s+([^.]+)',
-            r'dangerous\s+(?:area[s]?|neighborhood[s]?|district[s]?)[\s:]+([^.]+)',
-            r'not\s+safe\s+(?:area[s]?|neighborhood[s]?)[\s:]+([^.]+)'
-        ]
-        
-        for pattern in avoid_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                areas = [area.strip() for area in match.split(',')]
-                metrics.areas_to_avoid.extend(areas)
-        
-        # Safe areas
-        safe_patterns = [
-            r'safe\s+(?:area[s]?|neighborhood[s]?|district[s]?)[\s:]+([^.]+)',
-            r'(?:tourist|touristy)\s+(?:area[s]?|zone[s]?)[\s:]+([^.]+)',
-            r'recommended\s+(?:area[s]?|neighborhood[s]?)[\s:]+([^.]+)'
-        ]
-        
-        for pattern in safe_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                areas = [area.strip() for area in match.split(',')]
-                metrics.safe_areas.extend(areas)
-        
-        return metrics.__dict__
+        try:
+            result = chain.invoke({
+                "content": content,
+                "format_instructions": parser.get_format_instructions()
+            })
+            return result.dict()
+        except Exception as e:
+            self.logger.error(f"Safety extraction failed: {str(e)}")
+            return SafetyMetrics().__dict__
     
     def extract_cost_indicators(self, content: str) -> Dict[str, Any]:
-        """Extract cost-related indicators from content"""
-        indicators = CostIndicators()
-        content_lower = content.lower()
+        """Extract only cost indicators with focused semantic analysis"""
+        if not self.semantic_enabled:
+            return CostIndicators().__dict__
+            
+        cost_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a travel cost expert. Extract cost and budget information from travel content.
+            Focus on: daily budgets, meal costs, accommodation prices, transport costs, currency, seasonal variations.
+            Convert to USD when possible and note original currency."""),
+            ("human", "Extract cost information from: {content}\n\n{format_instructions}")
+        ])
         
-        # Daily budget patterns
-        budget_patterns = [
-            r'budget\s+(?:traveler[s]?|backpacker[s]?)[\s:]+\$?(\d+)[-–]?\$?(\d*)\s*(?:per\s+day|/day)?',
-            r'(?:low|cheap|budget)\s+(?:budget|cost)[\s:]+\$?(\d+)\s*(?:per\s+day|/day)?',
-            r'mid[\s-]?range[\s:]+\$?(\d+)[-–]?\$?(\d*)\s*(?:per\s+day|/day)?',
-            r'(?:luxury|high[\s-]?end)[\s:]+\$?(\d+)[-–]?\$?(\d*)\s*(?:per\s+day|/day)?',
-            r'\$?(\d+)[-–]?\$?(\d*)\s*(?:per\s+day|/day)\s+(?:budget|low|cheap)',
-            r'\$?(\d+)[-–]?\$?(\d*)\s*(?:per\s+day|/day)\s+(?:mid|medium)',
-            r'\$?(\d+)[-–]?\$?(\d*)\s*(?:per\s+day|/day)\s+(?:luxury|high)'
-        ]
+        parser = PydanticOutputParser(pydantic_object=CostIndicatorsPydantic)
+        chain = cost_prompt | self.llm | parser
         
-        for pattern in budget_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                try:
-                    amount = float(match[0])
-                    if 'budget' in pattern or 'low' in pattern or 'cheap' in pattern:
-                        indicators.budget_per_day_low = amount
-                    elif 'mid' in pattern or 'medium' in pattern:
-                        indicators.budget_per_day_mid = amount
-                    elif 'luxury' in pattern or 'high' in pattern:
-                        indicators.budget_per_day_high = amount
-                except:
-                    pass
-        
-        # Meal costs
-        meal_patterns = [
-            r'meal[s]?\s+(?:cost[s]?|price[s]?)[\s:]+\$?(\d+\.?\d*)',
-            r'(?:lunch|dinner)\s+(?:cost[s]?|price[s]?)[\s:]+\$?(\d+\.?\d*)',
-            r'\$?(\d+\.?\d*)\s+(?:for\s+)?(?:a\s+)?meal',
-            r'food\s+(?:cost[s]?|budget)[\s:]+\$?(\d+\.?\d*)\s*(?:per\s+day)?'
-        ]
-        
-        meal_costs = []
-        for pattern in meal_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                try:
-                    meal_costs.append(float(match))
-                except:
-                    pass
-        
-        if meal_costs:
-            indicators.meal_cost_average = sum(meal_costs) / len(meal_costs)
-        
-        # Accommodation costs
-        accommodation_patterns = [
-            r'(?:hotel[s]?|accommodation[s]?|hostel[s]?)\s+(?:cost[s]?|price[s]?)[\s:]+\$?(\d+\.?\d*)',
-            r'\$?(\d+\.?\d*)\s+(?:per\s+)?night\s+(?:hotel|accommodation|hostel)',
-            r'(?:budget|cheap)\s+(?:hotel[s]?|accommodation[s]?)[\s:]+\$?(\d+\.?\d*)'
-        ]
-        
-        accommodation_costs = []
-        for pattern in accommodation_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                try:
-                    accommodation_costs.append(float(match))
-                except:
-                    pass
-        
-        if accommodation_costs:
-            indicators.accommodation_cost_average = sum(accommodation_costs) / len(accommodation_costs)
-        
-        # Currency detection
-        currency_patterns = [
-            r'currency[\s:]+([A-Z]{3})',
-            r'([A-Z]{3})\s+(?:is\s+)?the\s+(?:local\s+)?currency',
-            r'prices?\s+(?:are\s+)?in\s+([A-Z]{3})'
-        ]
-        
-        for pattern in currency_patterns:
-            match = re.search(pattern, content)
-            if match:
-                indicators.currency = match.group(1)
-                break
-        
-        # Seasonal variations
-        seasonal_patterns = [
-            r'(?:high|peak)\s+season[\s:]+(\d+)%?\s+(?:more|higher|increase)',
-            r'(?:low|off)\s+season[\s:]+(\d+)%?\s+(?:less|lower|cheaper|decrease)',
-            r'prices?\s+(?:increase|rise)\s+(\d+)%?\s+(?:during|in)\s+(?:high|peak)\s+season',
-            r'prices?\s+(?:decrease|drop)\s+(\d+)%?\s+(?:during|in)\s+(?:low|off)\s+season'
-        ]
-        
-        for pattern in seasonal_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                try:
-                    percentage = float(match)
-                    if 'high' in pattern or 'peak' in pattern:
-                        indicators.seasonal_price_variation['high_season'] = percentage
-                    else:
-                        indicators.seasonal_price_variation['low_season'] = -percentage
-                except:
-                    pass
-        
-        return indicators.__dict__
+        try:
+            result = chain.invoke({
+                "content": content,
+                "format_instructions": parser.get_format_instructions()
+            })
+            return result.dict()
+        except Exception as e:
+            self.logger.error(f"Cost extraction failed: {str(e)}")
+            return CostIndicators().__dict__
     
     def extract_health_requirements(self, content: str) -> Dict[str, Any]:
-        """Extract health-related requirements from content"""
-        requirements = HealthRequirements()
-        content_lower = content.lower()
+        """Extract only health requirements with focused semantic analysis"""
+        if not self.semantic_enabled:
+            return HealthRequirements().__dict__
+            
+        health_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a travel health expert. Extract health and medical information from travel content.
+            Focus on: vaccinations (required vs recommended), health risks, water/food safety, medical facilities.
+            Distinguish clearly between mandatory and optional health measures."""),
+            ("human", "Extract health information from: {content}\n\n{format_instructions}")
+        ])
         
-        # Vaccination patterns
-        vaccination_patterns = [
-            r'(?:required|mandatory)\s+vaccination[s]?[\s:]+([^.]+)',
-            r'vaccination[s]?\s+(?:required|mandatory)[\s:]+([^.]+)',
-            r'(?:recommended|suggested)\s+vaccination[s]?[\s:]+([^.]+)',
-            r'vaccination[s]?\s+(?:recommended|suggested)[\s:]+([^.]+)'
-        ]
+        parser = PydanticOutputParser(pydantic_object=HealthRequirementsPydantic)
+        chain = health_prompt | self.llm | parser
         
-        for pattern in vaccination_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                vaccines = [v.strip() for v in match.split(',')]
-                if 'required' in pattern or 'mandatory' in pattern:
-                    requirements.required_vaccinations.extend(vaccines)
-                else:
-                    requirements.recommended_vaccinations.extend(vaccines)
-        
-        # Health risks
-        health_risk_patterns = [
-            r'health\s+risk[s]?[\s:]+([^.]+)',
-            r'(?:malaria|dengue|zika|yellow fever|typhoid)\s+(?:risk|present|found)',
-            r'(?:disease[s]?|illness[es]?)\s+(?:to\s+)?(?:watch|be aware|careful)[\s:]+([^.]+)'
-        ]
-        
-        for pattern in health_risk_patterns:
-            if 'malaria|dengue' in pattern:
-                for disease in ['malaria', 'dengue', 'zika', 'yellow fever', 'typhoid']:
-                    if disease in content_lower:
-                        requirements.health_risks.append(disease.title())
-            else:
-                matches = re.findall(pattern, content_lower)
-                for match in matches:
-                    risks = [r.strip() for r in match.split(',')]
-                    requirements.health_risks.extend(risks)
-        
-        # Water safety
-        water_patterns = [
-            r'(?:tap\s+)?water\s+(?:is\s+)?(?:safe|unsafe|not safe|drinkable|not drinkable)',
-            r'(?:drink|drinking)\s+(?:tap\s+)?water\s+(?:is\s+)?(?:safe|unsafe|not safe)',
-            r'(?:bottled|filtered)\s+water\s+(?:recommended|only|advised)'
-        ]
-        
-        for pattern in water_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                if any(word in match.group(0) for word in ['safe', 'drinkable']):
-                    if 'not' not in match.group(0) and 'unsafe' not in match.group(0):
-                        requirements.water_safety = "Safe to drink"
-                    else:
-                        requirements.water_safety = "Not safe to drink"
-                elif 'bottled' in match.group(0) or 'filtered' in match.group(0):
-                    requirements.water_safety = "Bottled water recommended"
-                break
-        
-        # Medical facilities
-        medical_patterns = [
-            r'(?:hospital[s]?|medical facilit(?:y|ies)|healthcare)\s+(?:is\s+)?(?:excellent|good|adequate|poor|limited)',
-            r'(?:excellent|good|adequate|poor|limited)\s+(?:hospital[s]?|medical|healthcare)'
-        ]
-        
-        for pattern in medical_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                quality_words = ['excellent', 'good', 'adequate', 'poor', 'limited']
-                for word in quality_words:
-                    if word in match.group(0):
-                        requirements.medical_facility_quality = word.capitalize()
-                        break
-                break
-        
-        return requirements.__dict__
+        try:
+            result = chain.invoke({
+                "content": content,
+                "format_instructions": parser.get_format_instructions()
+            })
+            return result.dict()
+        except Exception as e:
+            self.logger.error(f"Health extraction failed: {str(e)}")
+            return HealthRequirements().__dict__
     
     def extract_accessibility_info(self, content: str) -> Dict[str, Any]:
-        """Extract accessibility-related information from content"""
-        info = AccessibilityInfo()
-        content_lower = content.lower()
+        """Extract only accessibility information with focused semantic analysis"""
+        if not self.semantic_enabled:
+            return AccessibilityInfo().__dict__
+            
+        access_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a travel accessibility expert. Extract entry requirements and accessibility information.
+            Focus on: visa requirements, flight connections, language barriers, infrastructure quality.
+            Distinguish between visa required, visa on arrival, and visa-free entry."""),
+            ("human", "Extract accessibility information from: {content}\n\n{format_instructions}")
+        ])
         
-        # Visa requirements
-        visa_patterns = [
-            r'visa\s+(?:is\s+)?(?:required|needed|necessary)',
-            r'(?:no\s+)?visa\s+(?:required|needed)',
-            r'visa[\s-]?(?:on[\s-]?arrival|free)',
-            r'(?:require[s]?|need[s]?)\s+(?:a\s+)?visa'
-        ]
+        parser = PydanticOutputParser(pydantic_object=AccessibilityInfoPydantic)
+        chain = access_prompt | self.llm | parser
         
-        for pattern in visa_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                if 'no visa' in match.group(0):
-                    info.visa_required = False
-                elif 'on arrival' in match.group(0) or 'on-arrival' in match.group(0):
-                    info.visa_on_arrival = True
-                    info.visa_required = True
-                elif 'free' in match.group(0):
-                    info.visa_required = False
-                else:
-                    info.visa_required = True
-                break
-        
-        # Visa cost
-        visa_cost_patterns = [
-            r'visa\s+(?:cost[s]?|fee[s]?|price)[\s:]+\$?(\d+)',
-            r'\$?(\d+)\s+(?:for\s+)?visa',
-            r'visa[\s:]+\$?(\d+)'
-        ]
-        
-        for pattern in visa_cost_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                try:
-                    info.visa_cost = float(match.group(1))
-                    break
-                except:
-                    pass
-        
-        # Direct flights
-        flight_patterns = [
-            r'direct\s+flight[s]?\s+(?:from|to)\s+([^,.]+)',
-            r'non[\s-]?stop\s+flight[s]?\s+(?:from|to)\s+([^,.]+)',
-            r'([^,.]+)\s+(?:has|have)\s+direct\s+flight[s]?'
-        ]
-        
-        for pattern in flight_patterns:
-            matches = re.findall(pattern, content_lower)
-            for match in matches:
-                cities = [c.strip() for c in match.split('and')]
-                info.direct_flights_from_major_hubs.extend(cities)
-        
-        # English proficiency
-        english_patterns = [
-            r'english\s+(?:is\s+)?(?:widely|commonly|rarely|not)\s+spoken',
-            r'(?:most|many|few|some)\s+(?:people|locals)\s+speak\s+english',
-            r'english\s+proficiency\s+(?:is\s+)?(?:high|good|moderate|low|poor)'
-        ]
-        
-        for pattern in english_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                if any(word in match.group(0) for word in ['widely', 'commonly', 'most', 'high', 'good']):
-                    info.english_proficiency = "High"
-                elif any(word in match.group(0) for word in ['some', 'moderate']):
-                    info.english_proficiency = "Moderate"
-                elif any(word in match.group(0) for word in ['rarely', 'not', 'few', 'low', 'poor']):
-                    info.english_proficiency = "Low"
-                break
-        
-        # Infrastructure rating
-        infrastructure_patterns = [
-            r'infrastructure\s+(?:is\s+)?(?:excellent|good|adequate|poor|limited)',
-            r'(?:excellent|good|adequate|poor|limited)\s+infrastructure',
-            r'(?:roads?|transport|public transport)\s+(?:is\s+)?(?:excellent|good|adequate|poor|limited)'
-        ]
-        
-        quality_map = {
-            'excellent': 5.0,
-            'good': 4.0,
-            'adequate': 3.0,
-            'poor': 2.0,
-            'limited': 1.0
-        }
-        
-        for pattern in infrastructure_patterns:
-            match = re.search(pattern, content_lower)
-            if match:
-                for quality, rating in quality_map.items():
-                    if quality in match.group(0):
-                        info.infrastructure_rating = rating
-                        break
-                break
-        
-        return info.__dict__
+        try:
+            result = chain.invoke({
+                "content": content,
+                "format_instructions": parser.get_format_instructions()
+            })
+            return result.dict()
+        except Exception as e:
+            self.logger.error(f"Accessibility extraction failed: {str(e)}")
+            return AccessibilityInfo().__dict__
     
     def calculate_source_credibility(self, source_url: str) -> float:
-        """Calculate credibility score based on source"""
+        """Calculate source credibility based on domain and authority"""
         if not source_url:
             return 0.5
         
-        # Government and official sources
-        if any(domain in source_url.lower() for domain in ['.gov', 'state.', 'embassy', 'consulate']):
+        url_lower = source_url.lower()
+        
+        # Government sources (highest credibility)
+        gov_domains = ['state.gov', 'gov.uk', 'embassy', 'consulate', 'dfa.ie', 'dfat.gov.au']
+        if any(domain in url_lower for domain in gov_domains):
+            return 0.95
+        
+        # International organizations
+        intl_orgs = ['who.int', 'cdc.gov', 'iata.org', 'unwto.org']
+        if any(org in url_lower for org in intl_orgs):
             return 0.9
         
-        # Major travel platforms
-        if any(domain in source_url.lower() for domain in ['tripadvisor', 'lonely planet', 'fodors', 'frommers']):
+        # Established travel platforms
+        travel_platforms = ['lonelyplanet', 'tripadvisor', 'fodors', 'frommers']
+        if any(platform in url_lower for platform in travel_platforms):
+            return 0.85
+        
+        # News sources
+        news_sources = ['bbc.com', 'cnn.com', 'reuters.com', 'associated press']
+        if any(news in url_lower for news in news_sources):
             return 0.8
         
-        # News and media
-        if any(domain in source_url.lower() for domain in ['cnn', 'bbc', 'reuters', 'ap news', 'guardian']):
-            return 0.75
-        
-        # Community sources
-        if any(domain in source_url.lower() for domain in ['reddit', 'forum', 'facebook', 'twitter']):
+        # Travel blogs and community
+        community_sources = ['reddit', 'forum', 'blog', 'travel.stack']
+        if any(community in url_lower for community in community_sources):
             return 0.7
         
         # Default for unknown sources
         return 0.6
     
     def determine_temporal_relevance(self, content: str, extraction_date: datetime = None) -> float:
-        """Determine temporal relevance of information"""
-        if not extraction_date:
+        """Determine temporal relevance using semantic analysis"""
+        if extraction_date is None:
             extraction_date = datetime.now()
         
-        # Look for date indicators in content
-        current_year = extraction_date.year
         content_lower = content.lower()
+        current_year = extraction_date.year
         
-        # Check for year mentions
-        year_pattern = r'20\d{2}'
-        years_found = re.findall(year_pattern, content)
-        
-        if years_found:
-            latest_year = max(int(year) for year in years_found)
-            years_old = current_year - latest_year
+        # Look for year mentions
+        import re
+        years = re.findall(r'\b(20\d{2})\b', content)
+        if years:
+            latest_year = max(int(year) for year in years)
+            year_diff = current_year - latest_year
             
-            if years_old == 0:
-                return 1.0
-            elif years_old <= 2:
-                return 0.8
-            elif years_old <= 5:
-                return 0.5
+            if year_diff == 0:
+                return 1.0  # Current year
+            elif year_diff <= 1:
+                return 0.9  # Last year
+            elif year_diff <= 2:
+                return 0.8  # Within 2 years
+            elif year_diff <= 5:
+                return 0.6  # Within 5 years
             else:
-                return 0.3
+                return 0.3  # Older than 5 years
         
-        # Check for recency indicators
-        if any(phrase in content_lower for phrase in ['recently', 'just', 'new', 'latest', 'current']):
+        # Look for recency indicators
+        recent_indicators = [
+            'recently updated', 'latest', 'current', 'new', 'just published',
+            'updated', 'revised', 'fresh', 'newest'
+        ]
+        if any(indicator in content_lower for indicator in recent_indicators):
             return 0.9
-        elif any(phrase in content_lower for phrase in ['last year', 'previous year']):
-            return 0.8
-        elif any(phrase in content_lower for phrase in ['few years', 'several years']):
-            return 0.6
         
-        # Default for undated content
-        return 0.7 
+        # Look for past indicators
+        past_indicators = ['last year', 'previous year', 'formerly', 'used to be']
+        if any(indicator in content_lower for indicator in past_indicators):
+            return 0.7
+        
+        # Default temporal relevance
+        return 0.75
+    
+    def _calculate_data_completeness(self, result_dict: Dict[str, Any]) -> float:
+        """Calculate how complete the extracted data is"""
+        total_fields = 0
+        populated_fields = 0
+        
+        for section in ['safety', 'cost', 'health', 'accessibility']:
+            if section in result_dict:
+                section_data = result_dict[section]
+                for key, value in section_data.items():
+                    total_fields += 1
+                    if value is not None:
+                        if isinstance(value, (list, dict)):
+                            if len(value) > 0:
+                                populated_fields += 1
+                        elif isinstance(value, str):
+                            if value.strip():
+                                populated_fields += 1
+                        else:
+                            populated_fields += 1
+        
+        return populated_fields / total_fields if total_fields > 0 else 0.0
+    
+    def _calculate_extraction_confidence(self, result_dict: Dict[str, Any], content: str) -> float:
+        """Calculate confidence in extraction quality"""
+        factors = []
+        
+        # Content length factor (more content = higher confidence potential)
+        content_length = len(content)
+        if content_length > 1000:
+            factors.append(0.9)
+        elif content_length > 500:
+            factors.append(0.8)
+        elif content_length > 200:
+            factors.append(0.7)
+        else:
+            factors.append(0.6)
+        
+        # Data completeness factor
+        completeness = self._calculate_data_completeness(result_dict)
+        factors.append(completeness)
+        
+        # Source credibility factor
+        credibility = result_dict.get('source_credibility', 0.6)
+        factors.append(credibility)
+        
+        # Temporal relevance factor  
+        temporal = result_dict.get('temporal_relevance', 0.75)
+        factors.append(temporal)
+        
+        # Return weighted average
+        return sum(factors) / len(factors)
+    
+    def _create_empty_result(self, source_url: str = None) -> Dict[str, Any]:
+        """Create empty result structure for fallback"""
+        return {
+            "safety": SafetyMetrics().__dict__,
+            "cost": CostIndicators().__dict__,
+            "health": HealthRequirements().__dict__,
+            "accessibility": AccessibilityInfo().__dict__,
+            "source_url": source_url,
+            "extraction_timestamp": datetime.now().isoformat(),
+            "extraction_method": "semantic_llm_fallback",
+            "source_credibility": self.calculate_source_credibility(source_url),
+            "temporal_relevance": 0.5,
+            "data_completeness": 0.0,
+            "extraction_confidence": 0.3
+        }
+
+
+# Factory function for easy instantiation
+def create_priority_extractor(llm: Optional[ChatGoogleGenerativeAI] = None) -> PriorityDataExtractor:
+    """Create a priority data extractor instance"""
+    return PriorityDataExtractor(llm=llm) 

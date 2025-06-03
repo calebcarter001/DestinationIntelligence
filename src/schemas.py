@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from enum import Enum
 
 class SearchQueryInput(BaseModel):
     destination_name: str = Field(description="The name of the destination to search for, e.g., 'Paris, France'.")
@@ -24,6 +25,20 @@ class PageContent(BaseModel):
     priority_type: Optional[str] = Field(None, description="Type of priority content (e.g., 'safety', 'cost', 'health', 'accessibility', 'weather')")
     priority_weight: Optional[float] = Field(1.0, description="Weight of priority content for ranking (higher is more important)")
     priority_data: Optional[Dict[str, Any]] = Field(None, description="Extracted priority data (safety metrics, costs, health requirements, etc.)")
+
+class EnhancedEvidence(BaseModel):
+    """Enhanced evidence object with all analytical fields"""
+    source_url: str = Field(description="Source URL of the evidence")
+    source_category: str = Field(description="Category of the source")
+    authority_weight: float = Field(description="Authority weight of the source")
+    text_snippet: str = Field(description="Text snippet of the evidence")
+    cultural_context: Dict[str, Any] = Field(default_factory=dict, description="Cultural context analysis")
+    sentiment: Optional[float] = Field(None, description="Sentiment score")
+    relationships: List[Dict[str, Any]] = Field(default_factory=list, description="Relationships with other evidence")
+    agent_id: Optional[str] = Field(None, description="ID of the agent that processed this evidence")
+    published_date: Optional[str] = Field(None, description="Published date of the content")
+    confidence: float = Field(description="Confidence score")
+    timestamp: str = Field(description="Processing timestamp")
 
 class PriorityMetrics(BaseModel):
     """Aggregated priority metrics for a destination"""
@@ -79,7 +94,7 @@ class DestinationInsight(BaseModel):
     insight_type: str = Field(description="Type of insight, e.g., 'Validated Theme', 'Discovered Theme', 'Unique Characteristic', 'Priority Concern'")
     insight_name: str = Field(description="Name of the theme or characteristic, e.g., 'Outdoor Activities', 'Historic Architecture', 'Safety Warning'")
     description: Optional[str] = Field(None, description="Detailed description or explanation of the insight.")
-    evidence: List[str] = Field(default_factory=list, description="List of text snippets or URLs supporting the insight.")
+    evidence: List[EnhancedEvidence] = Field(default_factory=list, description="List of enhanced evidence objects supporting the insight.")
     confidence_score: Optional[float] = Field(None, description="Confidence score from 0.0 to 1.0 for the insight's validity.")
     sentiment_score: Optional[float] = Field(None, description="Sentiment score from -1.0 (negative) to 1.0 (positive) related to the insight.")
     sentiment_label: Optional[str] = Field(None, description="Label for sentiment (e.g., POSITIVE, NEGATIVE, NEUTRAL)")
@@ -92,6 +107,11 @@ class DestinationInsight(BaseModel):
     tags: List[str] = Field(default_factory=list, description="List of tags associated with this insight")
     # discovery_method: Optional[str] = Field(None, description="How was this discovered? e.g. 'Seed Theme Validation', 'LLM Discovery', 'Content Analysis'")
     # created_at: Optional[datetime] = Field(default_factory=datetime.now)
+    # Enhanced analytical fields
+    factors: Optional[Dict[str, Any]] = Field(None, description="Theme factors analysis")
+    cultural_summary: Optional[Dict[str, Any]] = Field(None, description="Cultural analysis summary")
+    sentiment_analysis: Optional[Dict[str, Any]] = Field(None, description="Detailed sentiment analysis")
+    temporal_analysis: Optional[Dict[str, Any]] = Field(None, description="Temporal analysis results")
 
 class ThemeInsightOutput(BaseModel):
     """Output schema for theme analysis, containing lists of validated and discovered themes."""
@@ -108,6 +128,28 @@ class StoreInsightsInput(BaseModel):
 
 class FullDestinationAnalysisInput(BaseModel):
     destination_name: str = Field(description="The full name of the destination to analyze, e.g., 'Paris, France'.")
+
+# --- New Enums for Enhanced Data Models ---
+
+class InsightType(Enum):
+    SEASONAL = "seasonal"
+    SPECIALTY = "specialty"
+    INSIDER = "insider"
+    CULTURAL = "cultural"
+    PRACTICAL = "practical"
+
+class AuthorityType(Enum):
+    PRODUCER = "producer"  # maple farmers, distillers
+    RESIDENT = "long_term_resident"
+    PROFESSIONAL = "industry_professional"
+    CULTURAL = "cultural_institution"
+    SEASONAL_WORKER = "seasonal_worker"
+
+class LocationExclusivity(Enum):
+    EXCLUSIVE = "exclusive"  # only here
+    SIGNATURE = "signature"  # best known for
+    REGIONAL = "regional"   # common in region
+    COMMON = "common"       # found elsewhere
 
 # --- New Schemas for Vectorize and Chroma ---
 

@@ -1,12 +1,16 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, TYPE_CHECKING
 from datetime import datetime, date
 from enum import Enum
 import hashlib
 import json
 
-from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
+# Forward references for type hints to avoid circular imports
+if TYPE_CHECKING:
+    from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
+
 from .evidence_hierarchy import EvidenceType, SourceCategory
+from src.schemas import InsightType, AuthorityType, LocationExclusivity
 
 @dataclass
 class Evidence:
@@ -24,6 +28,7 @@ class Evidence:
     relationships: List[Dict[str, str]] = field(default_factory=list)  # target_id, rel_type
     agent_id: Optional[str] = None
     published_date: Optional[datetime] = None
+    factors: Optional[Dict[str, Any]] = None  # Additional analytical factors
     
     def __post_init__(self):
         if not self.id:
@@ -31,7 +36,84 @@ class Evidence:
             content = f"{self.source_url}:{self.text_snippet[:100]}"
             self.id = hashlib.md5(content.encode()).hexdigest()[:12]
 
-@dataclass 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage/serialization"""
+        return {
+            "id": self.id,
+            "source_url": self.source_url,
+            "source_category": self.source_category.value,
+            "evidence_type": self.evidence_type.value,
+            "authority_weight": self.authority_weight,
+            "text_snippet": self.text_snippet,
+            "timestamp": self.timestamp.isoformat(),
+            "confidence": self.confidence,
+            "sentiment": self.sentiment,
+            "cultural_context": self.cultural_context,
+            "relationships": self.relationships,
+            "agent_id": self.agent_id,
+            "published_date": self.published_date.isoformat() if self.published_date else None,
+            "factors": self.factors
+        }
+
+@dataclass
+class SeasonalWindow:
+    """Time-sensitive availability"""
+    start_month: int
+    end_month: int
+    peak_weeks: List[int]
+    booking_lead_time: Optional[str]
+    specific_dates: Optional[List[str]]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "start_month": self.start_month,
+            "end_month": self.end_month,
+            "peak_weeks": self.peak_weeks,
+            "booking_lead_time": self.booking_lead_time,
+            "specific_dates": self.specific_dates
+        }
+
+@dataclass
+class LocalAuthority:
+    """Enhanced authority for local sources"""
+    authority_type: AuthorityType  # PRODUCER, RESIDENT, PROFESSIONAL, CULTURAL
+    local_tenure: Optional[int]  # years in location
+    expertise_domain: str
+    community_validation: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "authority_type": self.authority_type.value,
+            "local_tenure": self.local_tenure,
+            "expertise_domain": self.expertise_domain,
+            "community_validation": self.community_validation
+        }
+
+@dataclass
+class AuthenticInsight:
+    """Enhanced insight with multi-dimensional scoring"""
+    insight_type: InsightType  # SEASONAL, SPECIALTY, INSIDER, CULTURAL
+    authenticity_score: float
+    uniqueness_score: float
+    actionability_score: float
+    temporal_relevance: float
+    location_exclusivity: LocationExclusivity  # EXCLUSIVE, SIGNATURE, REGIONAL, COMMON
+    seasonal_window: Optional[SeasonalWindow]
+    local_validation_count: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "insight_type": self.insight_type.value,
+            "authenticity_score": self.authenticity_score,
+            "uniqueness_score": self.uniqueness_score,
+            "actionability_score": self.actionability_score,
+            "temporal_relevance": self.temporal_relevance,
+            "location_exclusivity": self.location_exclusivity.value,
+            "seasonal_window": self.seasonal_window.to_dict() if self.seasonal_window else None,
+            "local_validation_count": self.local_validation_count
+        }
+
+@dataclass
 class Theme:
     """Enhanced theme with taxonomy, evidence, and confidence"""
     theme_id: str
@@ -41,22 +123,64 @@ class Theme:
     description: str
     fit_score: float  # 0.0-1.0 relevance to destination
     evidence: List[Evidence] = field(default_factory=list)
-    confidence_breakdown: Optional[ConfidenceBreakdown] = None
+    confidence_breakdown: Optional['ConfidenceBreakdown'] = None  # Forward reference
     tags: List[str] = field(default_factory=list)
     created_date: datetime = field(default_factory=datetime.now)
     last_validated: Optional[datetime] = None
-    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # New fields for enhanced insights
+    authentic_insights: List[AuthenticInsight] = field(default_factory=list)
+    local_authorities: List[LocalAuthority] = field(default_factory=list)
+    seasonal_relevance: Dict[str, float] = field(default_factory=dict)  # month -> relevance
+    regional_uniqueness: float = 0.0
+    insider_tips: List[str] = field(default_factory=list)
+    
+    # New fields for analytical data
+    factors: Dict[str, Any] = field(default_factory=dict)  # Theme strength factors
+    cultural_summary: Dict[str, Any] = field(default_factory=dict)  # Cultural analysis
+    sentiment_analysis: Dict[str, Any] = field(default_factory=dict)  # Sentiment patterns
+    temporal_analysis: Dict[str, Any] = field(default_factory=dict)  # Temporal patterns
     
     def add_evidence(self, evidence: Evidence):
         """Add evidence and update confidence"""
         self.evidence.append(evidence)
         # Confidence recalculation would happen here
         
-    def get_confidence_level(self) -> ConfidenceLevel:
-        """Get confidence level for this theme"""
+    def get_confidence_level(self):
+        """Get the confidence level from the confidence breakdown"""
         if self.confidence_breakdown:
             return self.confidence_breakdown.confidence_level
-        return ConfidenceLevel.INSUFFICIENT
+        else:
+            # Import here to avoid circular import
+            from .confidence_scoring import ConfidenceLevel
+            return ConfidenceLevel.INSUFFICIENT
+        
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage/serialization"""
+        return {
+            "theme_id": self.theme_id,
+            "macro_category": self.macro_category,
+            "micro_category": self.micro_category,
+            "name": self.name,
+            "description": self.description,
+            "fit_score": self.fit_score,
+            "evidence": [e.to_dict() for e in self.evidence],
+            "confidence_breakdown": self.confidence_breakdown.to_dict() if self.confidence_breakdown else None,
+            "tags": self.tags,
+            "created_date": self.created_date.isoformat(),
+            "last_validated": self.last_validated.isoformat() if self.last_validated else None,
+            "metadata": self.metadata,
+            "authentic_insights": [ai.to_dict() for ai in self.authentic_insights],
+            "local_authorities": [la.to_dict() for la in self.local_authorities],
+            "seasonal_relevance": self.seasonal_relevance,
+            "regional_uniqueness": self.regional_uniqueness,
+            "insider_tips": self.insider_tips,
+            "factors": self.factors,
+            "cultural_summary": self.cultural_summary,
+            "sentiment_analysis": self.sentiment_analysis,
+            "temporal_analysis": self.temporal_analysis
+        }
 
 @dataclass
 class PointOfInterest:
@@ -117,6 +241,10 @@ class Destination:
     
     # Themes with full evidence
     themes: List[Theme] = field(default_factory=list)
+    
+    # New fields for destination-level aggregation of insights and authorities
+    authentic_insights: List[AuthenticInsight] = field(default_factory=list)
+    local_authorities: List[LocalAuthority] = field(default_factory=list)
     
     # 60-dimension attribute matrix
     dimensions: Dict[str, DimensionValue] = field(default_factory=dict)
@@ -206,7 +334,7 @@ class Destination:
         """Get themes above confidence threshold for current time slice"""
         current_themes = []
         for theme in self.themes:
-            if theme.confidence_breakdown and theme.confidence_breakdown.total_confidence >= min_confidence:
+            if theme.confidence_breakdown and theme.confidence_breakdown.overall_confidence >= min_confidence:
                 current_themes.append(theme)
         return current_themes
     
@@ -280,6 +408,8 @@ class Destination:
             },
             "poi_count": len(self.pois),
             "temporal_slices": len(self.temporal_slices),
+            "authentic_insights": [ai.to_dict() for ai in self.authentic_insights],
+            "local_authorities": [la.to_dict() for la in self.local_authorities],
             "last_updated": self.last_updated.isoformat(),
             "destination_revision": self.destination_revision
         } 

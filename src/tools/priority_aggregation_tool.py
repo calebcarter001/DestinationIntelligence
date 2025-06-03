@@ -6,12 +6,14 @@ import logging
 from typing import List, Dict, Any, Optional, Type
 from statistics import median, mean
 from collections import defaultdict
+from datetime import datetime
 
 from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from src.schemas import PageContent, PriorityMetrics, DestinationInsight
+from src.schemas import PageContent, PriorityMetrics, DestinationInsight, EnhancedEvidence
 from .priority_data_extraction_tool import PriorityDataExtractor
+from src.core.llm_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +37,21 @@ class PriorityAggregationTool(StructuredTool):
     
     extractor: PriorityDataExtractor = None
     
-    def __init__(self, **kwargs):
+    def __init__(self, config: Dict[str, Any] = None, **kwargs):
         super().__init__(**kwargs)
-        self.extractor = PriorityDataExtractor()
+        
+        # Create LLM using factory if config provided
+        llm = None
+        if config:
+            try:
+                llm = LLMFactory.create_llm(
+                    provider=config.get("llm_settings", {}).get("provider", "gemini"),
+                    config=config
+                )
+            except Exception as e:
+                logger.warning(f"Could not create LLM for priority aggregation: {e}")
+        
+        self.extractor = PriorityDataExtractor(llm=llm)
     
     async def _arun(
         self, 
@@ -90,12 +104,27 @@ class PriorityAggregationTool(StructuredTool):
             
             # Create safety insights
             if safety_data.get("areas_to_avoid"):
+                evidence_objects = []
+                for i, ev_str in enumerate(safety_data.get("evidence", [])):
+                    source_url = safety_data.get("source_urls", [])[i] if i < len(safety_data.get("source_urls", [])) else "unknown_priority_source"
+                    evidence_objects.append(EnhancedEvidence(
+                        source_url=source_url,
+                        source_category="priority_aggregation",
+                        authority_weight=safety_data.get("confidence", 0.7),
+                        text_snippet=ev_str,
+                        confidence=safety_data.get("confidence", 0.7),
+                        timestamp=datetime.now().isoformat(),
+                        cultural_context=None,
+                        relationships=None,
+                        agent_id="priority_aggregation_tool",
+                        published_date=None
+                    ))
                 priority_insights.append(DestinationInsight(
                     destination_name=destination_name,
                     insight_type="Priority Concern",
                     insight_name="Areas to Avoid",
                     description=f"Areas reported as potentially unsafe: {', '.join(safety_data['areas_to_avoid'])}",
-                    evidence=safety_data.get("evidence", []),
+                    evidence=evidence_objects,
                     confidence_score=safety_data.get("confidence", 0.7),
                     priority_category="safety",
                     priority_impact="high",
@@ -114,12 +143,27 @@ class PriorityAggregationTool(StructuredTool):
             
             # Create cost insights
             if cost_data.get("seasonal_variations"):
+                evidence_objects = []
+                for i, ev_str in enumerate(cost_data.get("evidence", [])):
+                    source_url = cost_data.get("source_urls", [])[i] if i < len(cost_data.get("source_urls", [])) else "unknown_priority_source"
+                    evidence_objects.append(EnhancedEvidence(
+                        source_url=source_url,
+                        source_category="priority_aggregation",
+                        authority_weight=cost_data.get("confidence", 0.7),
+                        text_snippet=ev_str,
+                        confidence=cost_data.get("confidence", 0.7),
+                        timestamp=datetime.now().isoformat(),
+                        cultural_context=None,
+                        relationships=None,
+                        agent_id="priority_aggregation_tool",
+                        published_date=None
+                    ))
                 priority_insights.append(DestinationInsight(
                     destination_name=destination_name,
                     insight_type="Priority Concern",
                     insight_name="Seasonal Price Variations",
                     description=f"Prices vary significantly by season: {cost_data['seasonal_variations']}",
-                    evidence=cost_data.get("evidence", []),
+                    evidence=evidence_objects,
                     confidence_score=cost_data.get("confidence", 0.7),
                     priority_category="cost",
                     priority_impact="medium",
@@ -138,12 +182,27 @@ class PriorityAggregationTool(StructuredTool):
             
             # Create health insights
             if health_data.get("required_vaccinations"):
+                evidence_objects = []
+                for i, ev_str in enumerate(health_data.get("evidence", [])):
+                    source_url = health_data.get("source_urls", [])[i] if i < len(health_data.get("source_urls", [])) else "unknown_priority_source"
+                    evidence_objects.append(EnhancedEvidence(
+                        source_url=source_url,
+                        source_category="priority_aggregation",
+                        authority_weight=health_data.get("confidence", 0.9),
+                        text_snippet=ev_str,
+                        confidence=health_data.get("confidence", 0.9),
+                        timestamp=datetime.now().isoformat(),
+                        cultural_context=None,
+                        relationships=None,
+                        agent_id="priority_aggregation_tool",
+                        published_date=None
+                    ))
                 priority_insights.append(DestinationInsight(
                     destination_name=destination_name,
                     insight_type="Priority Concern",
                     insight_name="Required Vaccinations",
                     description=f"Vaccinations required: {', '.join(health_data['required_vaccinations'])}",
-                    evidence=health_data.get("evidence", []),
+                    evidence=evidence_objects,
                     confidence_score=health_data.get("confidence", 0.9),
                     priority_category="health",
                     priority_impact="high",
@@ -162,13 +221,28 @@ class PriorityAggregationTool(StructuredTool):
             aggregated_metrics.infrastructure_rating = accessibility_data.get("infrastructure_rating")
             
             # Create accessibility insights
-            if accessibility_data.get("visa_required"):
+            if accessibility_data.get("visa_required") is not None:
+                evidence_objects = []
+                for i, ev_str in enumerate(accessibility_data.get("evidence", [])):
+                    source_url = accessibility_data.get("source_urls", [])[i] if i < len(accessibility_data.get("source_urls", [])) else "unknown_priority_source"
+                    evidence_objects.append(EnhancedEvidence(
+                        source_url=source_url,
+                        source_category="priority_aggregation",
+                        authority_weight=accessibility_data.get("confidence", 0.8),
+                        text_snippet=ev_str,
+                        confidence=accessibility_data.get("confidence", 0.8),
+                        timestamp=datetime.now().isoformat(),
+                        cultural_context=None,
+                        relationships=None,
+                        agent_id="priority_aggregation_tool",
+                        published_date=None
+                    ))
                 priority_insights.append(DestinationInsight(
                     destination_name=destination_name,
                     insight_type="Priority Concern",
                     insight_name="Visa Requirements",
-                    description=f"Visa required with cost: ${accessibility_data.get('visa_cost', 'Unknown')}",
-                    evidence=accessibility_data.get("evidence", []),
+                    description=f"Visa required: {'Yes' if accessibility_data.get('visa_required') else 'No'}. Cost: ${accessibility_data.get('visa_cost', 'N/A')}",
+                    evidence=evidence_objects,
                     confidence_score=accessibility_data.get("confidence", 0.8),
                     priority_category="accessibility",
                     priority_impact="high",

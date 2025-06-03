@@ -148,11 +148,26 @@ class DiscoverAndFetchContentTool(StructuredTool):
         
         # Filter successful fetches and extract priority data
         successful_fetches = []
-        priority_extractor = PriorityDataExtractor()
+        
+        # Create semantic priority extractor with LLM
+        try:
+            from src.core.llm_factory import LLMFactory
+            from src.config_loader import load_app_config
+            
+            config = load_app_config()
+            llm = LLMFactory.create_llm(
+                provider=config.get("llm_settings", {}).get("provider", "gemini"),
+                config=config
+            )
+            priority_extractor = PriorityDataExtractor(llm=llm)
+            logger.info("Semantic priority extractor initialized with configured LLM")
+        except Exception as e:
+            logger.warning(f"Failed to initialize semantic extractor, using default: {e}")
+            priority_extractor = PriorityDataExtractor()
         
         for page_content in fetched_page_data_list:
             if page_content is not None:
-                # Extract priority data from content
+                # Extract priority data from content using semantic approach
                 try:
                     priority_data = priority_extractor.extract_all_priority_data(
                         page_content.content,
@@ -161,6 +176,11 @@ class DiscoverAndFetchContentTool(StructuredTool):
                     # Add priority data to page content (will need to update PageContent schema)
                     if hasattr(page_content, '__dict__'):
                         page_content.__dict__['priority_data'] = priority_data
+                        
+                    logger.info(f"Semantic extraction completed for {page_content.url}: "
+                               f"confidence={priority_data.get('extraction_confidence', 0):.2f}, "
+                               f"completeness={priority_data.get('data_completeness', 0):.2f}")
+                               
                 except Exception as e:
                     logger.warning(f"Failed to extract priority data from {page_content.url}: {e}")
                 

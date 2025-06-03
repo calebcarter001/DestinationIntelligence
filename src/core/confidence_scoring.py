@@ -1,9 +1,14 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any, TYPE_CHECKING
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 import logging
 import numpy as np
+import re
+
+# Forward references for type hints to avoid circular imports
+if TYPE_CHECKING:
+    from .enhanced_data_models import LocalAuthority, AuthenticInsight
 
 from .evidence_hierarchy import EvidenceHierarchy, EvidenceType
 
@@ -11,323 +16,478 @@ logger = logging.getLogger(__name__)
 
 class ConfidenceLevel(Enum):
     """Confidence level classifications"""
-    VERIFIED = "verified"                    # > 0.90
-    STRONGLY_SUPPORTED = "strongly_supported" # 0.80 - 0.90
-    WELL_SUPPORTED = "well_supported"        # 0.70 - 0.80
-    PARTIALLY_SUPPORTED = "partially_supported" # 0.50 - 0.70
-    EMERGING = "emerging"                    # 0.30 - 0.50
-    INSUFFICIENT = "insufficient"            # < 0.30
+    INSUFFICIENT = "insufficient"  # < 0.3
+    LOW = "low"                    # 0.3-0.5
+    MODERATE = "moderate"          # 0.5-0.7
+    HIGH = "high"                  # 0.7-0.85
+    VERY_HIGH = "very_high"        # > 0.85
 
 @dataclass
 class ConfidenceBreakdown:
-    """Detailed breakdown of confidence score components"""
-    source_authority: float
-    evidence_diversity: float
-    consistency: float
-    recency: float
-    evidence_quantity: float
-    cultural_perspective: float
-    total_confidence: float
+    """Detailed confidence analysis"""
+    overall_confidence: float
     confidence_level: ConfidenceLevel
+    evidence_count: int
+    source_diversity: float
+    authority_score: float
+    recency_score: float
+    consistency_score: float
+    factors: Dict[str, float]
     
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage"""
         return {
-            "source_authority": self.source_authority,
-            "evidence_diversity": self.evidence_diversity,
-            "consistency": self.consistency,
-            "recency": self.recency,
-            "evidence_quantity": self.evidence_quantity,
-            "cultural_perspective": self.cultural_perspective,
-            "total_confidence": self.total_confidence,
+            "overall_confidence": self.overall_confidence,
+            "confidence_level": self.confidence_level.value,
+            "evidence_count": self.evidence_count,
+            "source_diversity": self.source_diversity,
+            "authority_score": self.authority_score,
+            "recency_score": self.recency_score,
+            "consistency_score": self.consistency_score,
+            "factors": self.factors,
             "confidence_level": self.confidence_level.value
         }
 
+@dataclass
+class MultiDimensionalScore:
+    authenticity: float     # 0-1
+    uniqueness: float      # 0-1  
+    actionability: float   # 0-1
+    temporal_relevance: float # 0-1
+
+    def weighted_average(self, weights: Optional[Dict[str, float]] = None) -> float:
+        """Calculate weighted average of all dimensions"""
+        if weights is None:
+            # Default equal weights
+            weights = {
+                "authenticity": 0.25,
+                "uniqueness": 0.25, 
+                "actionability": 0.25,
+                "temporal_relevance": 0.25
+            }
+        
+        return (
+            self.authenticity * weights.get("authenticity", 0.25) +
+            self.uniqueness * weights.get("uniqueness", 0.25) +
+            self.actionability * weights.get("actionability", 0.25) +
+            self.temporal_relevance * weights.get("temporal_relevance", 0.25)
+        )
+
+class AuthenticityScorer:
+    """Calculate authenticity scores based on local authorities and source diversity"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def calculate_local_authority_score(self, authorities: List['LocalAuthority']) -> float:
+        """Calculate score based on local authority credentials"""
+        if not authorities:
+            return 0.0
+        
+        total_score = 0.0
+        for authority in authorities:
+            # Base score from authority type
+            base_scores = {
+                'producer': 0.9,      # Highest for direct producers
+                'long_term_resident': 0.8,
+                'industry_professional': 0.85,
+                'cultural_institution': 0.9,
+                'seasonal_worker': 0.7
+            }
+            
+            authority_type_str = authority.authority_type.value
+            base_score = base_scores.get(authority_type_str, 0.5)
+            
+            # Adjust for local tenure
+            tenure_bonus = 0.0
+            if authority.local_tenure:
+                tenure_bonus = min(authority.local_tenure / 20.0, 0.2)  # Max 20% bonus for 20+ years
+            
+            # Community validation factor
+            validation_factor = authority.community_validation
+            
+            authority_score = (base_score + tenure_bonus) * validation_factor
+            total_score += min(authority_score, 1.0)
+        
+        # Average score, with bonus for multiple authorities
+        avg_score = total_score / len(authorities)
+        multi_authority_bonus = min(len(authorities) / 10.0, 0.2)  # Up to 20% bonus
+        
+        return min(avg_score + multi_authority_bonus, 1.0)
+    
+    def calculate_source_diversity_score(self, evidence_list: List[Any]) -> float:
+        """Calculate score based on source diversity"""
+        if not evidence_list:
+            return 0.0
+        
+        # Extract source URLs
+        source_urls = [evidence.source_url for evidence in evidence_list]
+        
+        # Calculate diversity using EvidenceHierarchy
+        diversity = EvidenceHierarchy.calculate_evidence_diversity(source_urls)
+        
+        return diversity
+    
+    def calculate_authenticity(self, authorities: List['LocalAuthority'], 
+                             evidence_list: List[Any], content: str) -> float:
+        """Calculate overall authenticity score"""
+        if not authorities and not evidence_list and not content:
+            return 0.0
+        
+        # Component scores
+        authority_score = self.calculate_local_authority_score(authorities)
+        diversity_score = self.calculate_source_diversity_score(evidence_list)
+        
+        # Content authenticity indicators
+        content_score = self._analyze_content_authenticity(content)
+        
+        # Weighted combination
+        weights = {
+            "authority": 0.5,
+            "diversity": 0.3,
+            "content": 0.2
+        }
+        
+        total_score = (
+            authority_score * weights["authority"] +
+            diversity_score * weights["diversity"] +
+            content_score * weights["content"]
+        )
+        
+        return min(total_score, 1.0)
+    
+    def _analyze_content_authenticity(self, content: str) -> float:
+        """Analyze content for authenticity indicators"""
+        if not content:
+            return 0.0
+        
+        content_lower = content.lower()
+        
+        # Authentic language indicators
+        authentic_indicators = [
+            'local', 'authentic', 'traditional', 'family-owned', 'artisan',
+            'handmade', 'locally-sourced', 'generations', 'heritage', 'original'
+        ]
+        
+        # Generic/tourist language (negative indicators)
+        generic_indicators = [
+            'world-class', 'must-see', 'tourist', 'popular', 'famous worldwide',
+            'internationally known', 'viral', 'trending'
+        ]
+        
+        authentic_count = sum(1 for indicator in authentic_indicators if indicator in content_lower)
+        generic_count = sum(1 for indicator in generic_indicators if indicator in content_lower)
+        
+        # Score based on ratio
+        if authentic_count + generic_count == 0:
+            return 0.5  # Neutral
+        
+        ratio = authentic_count / (authentic_count + generic_count)
+        return ratio
+
+class UniquenessScorer:
+    """Calculate uniqueness scores based on location exclusivity and rarity"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def calculate_uniqueness(self, insights: List['AuthenticInsight'], content: str) -> float:
+        """Calculate uniqueness score"""
+        if not insights and not content:
+            return 0.0
+        
+        # Base uniqueness from location exclusivity
+        exclusivity_score = 0.0
+        if insights:
+            exclusivity_values = {
+                'exclusive': 1.0,    # Only here
+                'signature': 0.8,    # Best known for
+                'regional': 0.5,     # Regional specialty  
+                'common': 0.2        # Common elsewhere
+            }
+            
+            exclusivity_scores = []
+            for insight in insights:
+                exclusivity_str = insight.location_exclusivity.value
+                score = exclusivity_values.get(exclusivity_str, 0.3)
+                exclusivity_scores.append(score)
+            
+            exclusivity_score = max(exclusivity_scores) if exclusivity_scores else 0.0
+        
+        # Content uniqueness indicators
+        content_score = self._analyze_content_uniqueness(content)
+        
+        # Weighted combination
+        if insights:
+            return exclusivity_score * 0.7 + content_score * 0.3
+        else:
+            return content_score
+    
+    def _analyze_content_uniqueness(self, content: str) -> float:
+        """Analyze content for uniqueness indicators"""
+        if not content:
+            return 0.0
+        
+        content_lower = content.lower()
+        
+        # Uniqueness indicators
+        unique_indicators = [
+            'only', 'unique', 'rare', 'exclusive', 'special', 'distinctive',
+            'one-of-a-kind', 'nowhere else', 'first of its kind', 'original'
+        ]
+        
+        # Common indicators (negative)
+        common_indicators = [
+            'typical', 'standard', 'common', 'usual', 'ordinary', 'regular',
+            'everywhere', 'anywhere', 'found throughout'
+        ]
+        
+        unique_count = sum(1 for indicator in unique_indicators if indicator in content_lower)
+        common_count = sum(1 for indicator in common_indicators if indicator in content_lower)
+        
+        if unique_count + common_count == 0:
+            return 0.5  # Neutral
+        
+        ratio = unique_count / (unique_count + common_count)
+        return ratio
+
+class ActionabilityScorer:
+    """Calculate actionability scores based on practical information availability"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def calculate_actionability(self, content: str) -> float:
+        """Calculate actionability based on practical details"""
+        if not content:
+            return 0.0
+        
+        # Extract actionable elements
+        actionable_elements = self.extract_actionable_elements(content)
+        
+        # Score based on presence of different types of actionable information
+        score_components = {
+            'location': 0.25,    # Address, directions
+            'timing': 0.25,      # Hours, seasons, best times
+            'contact': 0.20,     # Phone, website, booking
+            'pricing': 0.15,     # Cost information
+            'practical': 0.15    # What to bring, how to prepare
+        }
+        
+        total_score = 0.0
+        content_lower = content.lower()
+        
+        # Location information
+        if any(keyword in content_lower for keyword in ['address', 'located at', 'street', 'avenue', 'road']):
+            total_score += score_components['location']
+        
+        # Timing information  
+        if any(keyword in content_lower for keyword in ['hours', 'open', 'closed', 'am', 'pm', 'best time']):
+            total_score += score_components['timing']
+        
+        # Contact information
+        if any(keyword in content_lower for keyword in ['phone', 'call', 'website', 'book', 'reservation']):
+            total_score += score_components['contact']
+        
+        # Pricing information
+        if any(keyword in content_lower for keyword in ['$', 'cost', 'price', 'fee', 'free', 'admission']):
+            total_score += score_components['pricing']
+        
+        # Practical details
+        if any(keyword in content_lower for keyword in ['bring', 'wear', 'prepare', 'expect', 'tips']):
+            total_score += score_components['practical']
+        
+        # Bonus for having multiple actionable elements
+        if len(actionable_elements) > 3:
+            total_score *= 1.2
+        
+        return min(total_score, 1.0)
+    
+    def extract_actionable_elements(self, content: str) -> List[str]:
+        """Extract specific actionable elements from content"""
+        import re
+        
+        elements = []
+        
+        # Address patterns
+        address_patterns = [
+            r'\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd)',
+            r'located at [^.!?]+',
+            r'address[:\s]+[^.!?]+'
+        ]
+        
+        # Hours patterns
+        time_patterns = [
+            r'\d{1,2}(?::\d{2})?\s*(?:am|pm)\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)',
+            r'open [^.!?]+',
+            r'hours[:\s]+[^.!?]+'
+        ]
+        
+        # Contact patterns
+        contact_patterns = [
+            r'\(\d{3}\)\s*\d{3}-\d{4}',  # Phone numbers
+            r'\d{3}-\d{3}-\d{4}',
+            r'call [^.!?]+',
+            r'website[:\s]+[^.!?\s]+'
+        ]
+        
+        all_patterns = address_patterns + time_patterns + contact_patterns
+        
+        for pattern in all_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            elements.extend(matches)
+        
+        return elements
+
 class ConfidenceScorer:
-    """
-    Implements the 6-factor confidence scoring formula:
+    """Main confidence scoring system"""
     
-    confidence = 0.30·source_authority
-               + 0.20·evidence_diversity
-               + 0.15·consistency
-               + 0.10·recency
-               + 0.10·evidence_quantity
-               + 0.15·cultural_perspective
-    """
+    def __init__(self):
+        self.evidence_hierarchy = EvidenceHierarchy()
+        self.logger = logging.getLogger(self.__class__.__name__)
     
-    # Component weights
-    WEIGHTS = {
-        "source_authority": 0.30,
-        "evidence_diversity": 0.20,
-        "consistency": 0.15,
-        "recency": 0.10,
-        "evidence_quantity": 0.10,
-        "cultural_perspective": 0.15
-    }
-    
-    # Confidence level thresholds
-    CONFIDENCE_THRESHOLDS = {
-        ConfidenceLevel.VERIFIED: 0.90,
-        ConfidenceLevel.STRONGLY_SUPPORTED: 0.80,
-        ConfidenceLevel.WELL_SUPPORTED: 0.70,
-        ConfidenceLevel.PARTIALLY_SUPPORTED: 0.50,
-        ConfidenceLevel.EMERGING: 0.30,
-        ConfidenceLevel.INSUFFICIENT: 0.0
-    }
-    
-    @classmethod
-    def calculate_confidence(
-        cls,
-        evidence_sources: List[str],
-        evidence_texts: List[str],
-        published_dates: Optional[List[datetime]] = None,
-        destination_country_code: Optional[str] = None,
-        sentiment_scores: Optional[List[float]] = None
-    ) -> ConfidenceBreakdown:
-        """
-        Calculate comprehensive confidence score for a theme/insight
+    def calculate_confidence(self, evidence_list: List[Any]) -> ConfidenceBreakdown:
+        """Calculate comprehensive confidence breakdown"""
+        if not evidence_list:
+            return ConfidenceBreakdown(
+                overall_confidence=0.0,
+                confidence_level=ConfidenceLevel.INSUFFICIENT,
+                evidence_count=0,
+                source_diversity=0.0,
+                authority_score=0.0,
+                recency_score=0.0,
+                consistency_score=0.0,
+                factors={}
+            )
         
-        Args:
-            evidence_sources: List of source URLs
-            evidence_texts: List of evidence text snippets
-            published_dates: List of publication dates (if known)
-            destination_country_code: ISO code for cultural perspective
-            sentiment_scores: List of sentiment scores for consistency check
-            
-        Returns:
-            ConfidenceBreakdown with all component scores
-        """
-        if not evidence_sources:
-            return cls._empty_confidence()
+        # Calculate component scores
+        evidence_count = len(evidence_list)
+        source_diversity = self._calculate_source_diversity(evidence_list)
+        authority_score = self._calculate_authority_score(evidence_list)
+        recency_score = self._calculate_recency_score(evidence_list)
+        consistency_score = self._calculate_consistency_score(evidence_list)
         
-        # Ensure lists are same length
-        num_sources = len(evidence_sources)
-        if published_dates is None:
-            published_dates = [None] * num_sources
-        if sentiment_scores is None:
-            sentiment_scores = [0.0] * num_sources
-            
-        # 1. Calculate source authority
-        source_authority = cls._calculate_source_authority(
-            evidence_sources, published_dates
-        )
+        # Weight factors
+        weights = {
+            "evidence_count": 0.2,
+            "source_diversity": 0.25,
+            "authority": 0.25,
+            "recency": 0.15,
+            "consistency": 0.15
+        }
         
-        # 2. Calculate evidence diversity
-        evidence_diversity = EvidenceHierarchy.calculate_evidence_diversity(
-            evidence_sources
-        )
+        # Normalize evidence count (diminishing returns)
+        evidence_score = min(evidence_count / 10.0, 1.0)
         
-        # 3. Calculate consistency
-        consistency = cls._calculate_consistency(
-            evidence_texts, sentiment_scores
-        )
-        
-        # 4. Calculate recency
-        recency = cls._calculate_recency(published_dates)
-        
-        # 5. Calculate evidence quantity
-        evidence_quantity = cls._calculate_evidence_quantity(num_sources)
-        
-        # 6. Calculate cultural perspective
-        cultural_perspective = cls._calculate_cultural_perspective(
-            evidence_sources, destination_country_code
-        )
-        
-        # Calculate total confidence
-        total_confidence = (
-            cls.WEIGHTS["source_authority"] * source_authority +
-            cls.WEIGHTS["evidence_diversity"] * evidence_diversity +
-            cls.WEIGHTS["consistency"] * consistency +
-            cls.WEIGHTS["recency"] * recency +
-            cls.WEIGHTS["evidence_quantity"] * evidence_quantity +
-            cls.WEIGHTS["cultural_perspective"] * cultural_perspective
+        # Calculate overall confidence
+        overall_confidence = (
+            evidence_score * weights["evidence_count"] +
+            source_diversity * weights["source_diversity"] +
+            authority_score * weights["authority"] +
+            recency_score * weights["recency"] +
+            consistency_score * weights["consistency"]
         )
         
         # Determine confidence level
-        confidence_level = cls._determine_confidence_level(total_confidence)
+        confidence_level = self._determine_confidence_level(overall_confidence)
         
         return ConfidenceBreakdown(
-            source_authority=source_authority,
-            evidence_diversity=evidence_diversity,
-            consistency=consistency,
-            recency=recency,
-            evidence_quantity=evidence_quantity,
-            cultural_perspective=cultural_perspective,
-            total_confidence=total_confidence,
-            confidence_level=confidence_level
+            overall_confidence=overall_confidence,
+            confidence_level=confidence_level,
+            evidence_count=evidence_count,
+            source_diversity=source_diversity,
+            authority_score=authority_score,
+            recency_score=recency_score,
+            consistency_score=consistency_score,
+            factors={
+                "evidence_score": evidence_score,
+                "weights": weights
+            }
         )
     
-    @classmethod
-    def _calculate_source_authority(
-        cls,
-        sources: List[str],
-        published_dates: List[Optional[datetime]]
-    ) -> float:
-        """Calculate average source authority including decay"""
-        if not sources:
-            return 0.0
-            
-        authorities = []
-        for source, pub_date in zip(sources, published_dates):
-            weight, _ = EvidenceHierarchy.get_source_authority(source, pub_date)
-            authorities.append(weight)
-            
-        # Use weighted average, giving more weight to higher authority sources
-        weights = np.array(authorities)
-        normalized_weights = weights / weights.sum()
-        weighted_avg = np.sum(weights * normalized_weights)
-        
-        return float(weighted_avg)
+    def _calculate_source_diversity(self, evidence_list: List[Any]) -> float:
+        """Calculate diversity of evidence sources"""
+        source_urls = [evidence.source_url for evidence in evidence_list]
+        return EvidenceHierarchy.calculate_evidence_diversity(source_urls)
     
-    @classmethod
-    def _calculate_consistency(
-        cls,
-        evidence_texts: List[str],
-        sentiment_scores: List[float]
-    ) -> float:
-        """
-        Calculate consistency of evidence
+    def _calculate_authority_score(self, evidence_list: List[Any]) -> float:
+        """Calculate weighted authority score"""
+        if not evidence_list:
+            return 0.0
         
-        Based on:
-        - Sentiment consistency
-        - Text similarity (future enhancement)
-        - Contradiction detection (future enhancement)
-        """
-        if len(evidence_texts) < 2:
-            return 1.0  # Single source is consistent with itself
-            
-        # Calculate sentiment consistency
-        if sentiment_scores and len(sentiment_scores) > 1:
-            sentiment_std = np.std(sentiment_scores)
-            # Lower std = higher consistency
-            # Map std (0 to 2) to consistency (1 to 0)
-            sentiment_consistency = max(0, 1 - (sentiment_std / 2))
+        total_weighted_authority = sum(
+            evidence.authority_weight * self._evidence_quality_score(evidence)
+            for evidence in evidence_list
+        )
+        
+        return total_weighted_authority / len(evidence_list)
+    
+    def _evidence_quality_score(self, evidence: Any) -> float:
+        """Calculate quality score for individual evidence"""
+        # Base score from evidence type and source category
+        base_score = evidence.confidence
+        
+        # Adjust for source category
+        category_multipliers = {
+            'GOVERNMENT': 1.0,
+            'ACADEMIC': 0.95,
+            'BUSINESS': 0.8,
+            'GUIDEBOOK': 0.75,
+            'BLOG': 0.6,
+            'SOCIAL': 0.4,
+            'UNKNOWN': 0.3
+        }
+        
+        category_str = evidence.source_category.name if hasattr(evidence.source_category, 'name') else str(evidence.source_category)
+        multiplier = category_multipliers.get(category_str, 0.5)
+        
+        return base_score * multiplier
+    
+    def _calculate_recency_score(self, evidence_list: List[Any]) -> float:
+        """Calculate score based on recency of evidence"""
+        if not evidence_list:
+            return 0.0
+        
+        current_time = datetime.now()
+        recency_scores = []
+        
+        for evidence in evidence_list:
+            if evidence.timestamp:
+                days_old = (current_time - evidence.timestamp).days
+                # Score decreases with age (half-life of ~365 days)
+                recency_score = max(0.1, 0.5 ** (days_old / 365))
+                recency_scores.append(recency_score)
+            else:
+                recency_scores.append(0.3)  # Default for unknown age
+        
+        return sum(recency_scores) / len(recency_scores)
+    
+    def _calculate_consistency_score(self, evidence_list: List[Any]) -> float:
+        """Calculate consistency across evidence sources"""
+        if len(evidence_list) < 2:
+            return 1.0  # Single source is perfectly consistent
+        
+        # For now, use confidence variance as a proxy for consistency
+        confidences = [evidence.confidence for evidence in evidence_list]
+        
+        # Calculate variance
+        mean_confidence = sum(confidences) / len(confidences)
+        variance = sum((c - mean_confidence) ** 2 for c in confidences) / len(confidences)
+        
+        # Convert variance to consistency score (lower variance = higher consistency)
+        consistency_score = max(0.1, 1.0 - variance)
+        
+        return consistency_score
+    
+    def _determine_confidence_level(self, overall_confidence: float) -> ConfidenceLevel:
+        """Determine confidence level from overall score"""
+        if overall_confidence < 0.3:
+            return ConfidenceLevel.INSUFFICIENT
+        elif overall_confidence < 0.5:
+            return ConfidenceLevel.LOW
+        elif overall_confidence < 0.7:
+            return ConfidenceLevel.MODERATE
+        elif overall_confidence < 0.85:
+            return ConfidenceLevel.HIGH
         else:
-            sentiment_consistency = 0.5  # Neutral if no sentiment data
-            
-        # TODO: Add text similarity analysis
-        # TODO: Add contradiction detection
-        
-        return sentiment_consistency
-    
-    @classmethod
-    def _calculate_recency(cls, published_dates: List[Optional[datetime]]) -> float:
-        """
-        Calculate recency score based on publication dates
-        
-        Recent evidence scores higher
-        """
-        known_dates = [d for d in published_dates if d is not None]
-        
-        if not known_dates:
-            return 0.5  # Neutral if no dates known
-            
-        # Calculate average age in days
-        current_date = datetime.now()
-        ages = [(current_date - d).days for d in known_dates]
-        avg_age_days = np.mean(ages)
-        
-        # Map age to score using exponential decay
-        # 0 days = 1.0, 365 days = 0.5, 730 days = 0.25, etc.
-        recency_score = 0.5 ** (avg_age_days / 365)
-        
-        return float(recency_score)
-    
-    @classmethod
-    def _calculate_evidence_quantity(cls, num_sources: int) -> float:
-        """
-        Calculate score based on quantity of evidence
-        
-        Uses logarithmic scale with diminishing returns
-        """
-        if num_sources == 0:
-            return 0.0
-        
-        # Logarithmic scale: 1 source = 0.3, 5 sources = 0.7, 10+ sources = 1.0
-        quantity_score = min(1.0, 0.3 + (0.7 * np.log10(num_sources + 1)))
-        
-        return float(quantity_score)
-    
-    @classmethod
-    def _calculate_cultural_perspective(
-        cls,
-        sources: List[str],
-        destination_country_code: Optional[str]
-    ) -> float:
-        """
-        Calculate cultural perspective score
-        
-        Higher score for local sources and diverse perspectives
-        """
-        if not sources:
-            return 0.0
-            
-        local_sources = sum(
-            1 for source in sources 
-            if EvidenceHierarchy.is_local_source(source, destination_country_code)
-        )
-        
-        # Calculate local source ratio
-        local_ratio = local_sources / len(sources)
-        
-        # Ideal is mix of local and international (60% local, 40% international)
-        # Score peaks at 0.6 local ratio, decreases on either side
-        if local_ratio <= 0.6:
-            cultural_score = local_ratio / 0.6
-        else:
-            # Decrease score for too much local bias
-            cultural_score = 1.0 - ((local_ratio - 0.6) / 0.4) * 0.3
-            
-        return float(cultural_score)
-    
-    @classmethod
-    def _determine_confidence_level(cls, total_confidence: float) -> ConfidenceLevel:
-        """Determine confidence level based on total score"""
-        for level, threshold in cls.CONFIDENCE_THRESHOLDS.items():
-            if total_confidence >= threshold:
-                return level
-        return ConfidenceLevel.INSUFFICIENT
-    
-    @classmethod
-    def _empty_confidence(cls) -> ConfidenceBreakdown:
-        """Return empty confidence breakdown for no evidence"""
-        return ConfidenceBreakdown(
-            source_authority=0.0,
-            evidence_diversity=0.0,
-            consistency=0.0,
-            recency=0.0,
-            evidence_quantity=0.0,
-            cultural_perspective=0.0,
-            total_confidence=0.0,
-            confidence_level=ConfidenceLevel.INSUFFICIENT
-        )
-    
-    @classmethod
-    def explain_confidence(cls, breakdown: ConfidenceBreakdown) -> str:
-        """Generate human-readable explanation of confidence score"""
-        explanations = []
-        
-        # Overall assessment
-        explanations.append(
-            f"Overall Confidence: {breakdown.confidence_level.value.replace('_', ' ').title()} "
-            f"({breakdown.total_confidence:.2%})"
-        )
-        
-        # Component breakdown
-        explanations.append("\nComponent Scores:")
-        explanations.append(f"  • Source Authority: {breakdown.source_authority:.2%}")
-        explanations.append(f"  • Evidence Diversity: {breakdown.evidence_diversity:.2%}")
-        explanations.append(f"  • Consistency: {breakdown.consistency:.2%}")
-        explanations.append(f"  • Recency: {breakdown.recency:.2%}")
-        explanations.append(f"  • Evidence Quantity: {breakdown.evidence_quantity:.2%}")
-        explanations.append(f"  • Cultural Perspective: {breakdown.cultural_perspective:.2%}")
-        
-        # Recommendations
-        if breakdown.confidence_level == ConfidenceLevel.INSUFFICIENT:
-            explanations.append("\nRecommendation: Seek additional evidence from authoritative sources")
-        elif breakdown.confidence_level == ConfidenceLevel.EMERGING:
-            explanations.append("\nRecommendation: Monitor for additional supporting evidence")
-        elif breakdown.confidence_level in [ConfidenceLevel.VERIFIED, ConfidenceLevel.STRONGLY_SUPPORTED]:
-            explanations.append("\nRecommendation: High confidence - suitable for decision making")
-            
-        return "\n".join(explanations) 
+            return ConfidenceLevel.VERY_HIGH 

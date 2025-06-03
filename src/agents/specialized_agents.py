@@ -46,27 +46,40 @@ class ValidationAgent(BaseAgent):
             evidence_texts = theme_data.get("evidence_texts", [])
             sentiment_scores = theme_data.get("sentiment_scores")
             
-            # Calculate confidence
-            confidence_breakdown = ConfidenceScorer.calculate_confidence(
-                evidence_sources=evidence_sources,
-                evidence_texts=evidence_texts,
-                destination_country_code=destination_country_code,
-                sentiment_scores=sentiment_scores
-            )
+            # Create Evidence objects from the theme data
+            evidence_list = []
+            for i, (source, text) in enumerate(zip(evidence_sources, evidence_texts)):
+                evidence = Evidence(
+                    id=f"validation_{i}",
+                    source_url=source,
+                    source_category=EvidenceHierarchy.classify_source(source),
+                    evidence_type=EvidenceHierarchy.get_source_authority(source)[1],
+                    authority_weight=EvidenceHierarchy.get_source_authority(source)[0],
+                    text_snippet=text,
+                    timestamp=datetime.now(),
+                    confidence=0.5,
+                    cultural_context={},
+                    agent_id=self.agent_id
+                )
+                evidence_list.append(evidence)
+            
+            # Calculate confidence using the actual method signature
+            confidence_scorer = ConfidenceScorer()
+            confidence_breakdown = confidence_scorer.calculate_confidence(evidence_list)
             
             # Check for contradictions
-            if confidence_breakdown.consistency < 0.5:
+            if confidence_breakdown.consistency_score < 0.5:
                 contradictions.append({
                     "theme": theme_data.get("name"),
                     "reason": "Low consistency score indicates conflicting evidence",
-                    "consistency_score": confidence_breakdown.consistency,
+                    "consistency_score": confidence_breakdown.consistency_score,
                     "evidence_snippets": evidence_texts[:3]  # First 3 as examples
                 })
             
             # Add confidence to theme
             theme_data["confidence_breakdown"] = confidence_breakdown.to_dict()
             theme_data["confidence_level"] = confidence_breakdown.confidence_level.value
-            theme_data["is_validated"] = confidence_breakdown.total_confidence >= 0.2
+            theme_data["is_validated"] = confidence_breakdown.overall_confidence >= 0.2
             
             validated_themes.append(theme_data)
             

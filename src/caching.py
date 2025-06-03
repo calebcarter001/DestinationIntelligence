@@ -31,12 +31,16 @@ def read_from_cache(key_parts: List[str], expiry_days: int) -> Optional[Any]:
             
             timestamp_str = cached_data.get("timestamp")
             if timestamp_str:
-                timestamp = datetime.fromisoformat(timestamp_str)
-                if datetime.now() - timestamp < timedelta(days=expiry_days):
-                    logging.info(f"CACHE HIT: Using cached data for key {'_'.join(key_parts)}")
-                    return cached_data.get("data")
-                else:
-                    logging.info(f"CACHE EXPIRED: Cached data for key {'_'.join(key_parts)} is too old.")
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                    if datetime.now() - timestamp < timedelta(days=expiry_days):
+                        logging.info(f"CACHE HIT: Using cached data for key {'_'.join(key_parts)}")
+                        return cached_data.get("data")
+                    else:
+                        logging.info(f"CACHE EXPIRED: Cached data for key {'_'.join(key_parts)} is too old.")
+                except ValueError:
+                    logging.warning(f"CACHE ERROR: Invalid timestamp format in cache file {cache_file}")
+                    return None
             else: 
                  return cached_data 
         except (json.JSONDecodeError, IOError) as e:

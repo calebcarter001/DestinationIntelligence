@@ -5,14 +5,18 @@ from datetime import datetime
 import logging
 import hashlib
 import uuid
+import re
+from collections import Counter
 
-from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory
-from ..core.confidence_scoring import ConfidenceScorer
-from ..core.enhanced_data_models import Evidence, Theme, Destination, TemporalSlice
+from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory, EvidenceType
+from ..core.confidence_scoring import ConfidenceScorer, AuthenticityScorer, UniquenessScorer, ActionabilityScorer, MultiDimensionalScore
+from ..core.enhanced_data_models import Evidence, Theme, Destination, TemporalSlice, AuthenticInsight, SeasonalWindow, LocalAuthority
 from ..agents.specialized_agents import ValidationAgent, CulturalPerspectiveAgent, ContradictionDetectionAgent
-from ..schemas import DestinationInsight, PageContent, PriorityMetrics
+from ..schemas import DestinationInsight, PageContent, PriorityMetrics, InsightType, LocationExclusivity, AuthorityType
 from ..tools.priority_aggregation_tool import PriorityAggregationTool
 from ..tools.priority_data_extraction_tool import PriorityDataExtractor
+from ..core.insight_classifier import InsightClassifier
+from ..core.seasonal_intelligence import SeasonalIntelligence
 
 logger = logging.getLogger(__name__)
 
@@ -166,52 +170,133 @@ class EnhancedThemeAnalysisTool:
         if input_data.analyze_temporal:
             temporal_slices = self._analyze_temporal_aspects(enhanced_themes, all_evidence)
         
-        # Step 8: Calculate destination dimensions
+        # Initialize new components
+        insight_classifier = InsightClassifier()
+
+        # New processing steps
+        classified_insights = []
+        # Step 8: Classify insights by type, calculate multi-dimensional scores, extract seasonal and temporal data
+        for theme_data in enhanced_themes:
+            # Ensure theme_data is a dictionary 
+            if not isinstance(theme_data, dict):
+                self.logger.warning(f"Skipping invalid theme_data: {theme_data}")
+                continue
+
+            # Get theme description from available fields
+            theme_description = None
+            if 'description' in theme_data:
+                theme_description = theme_data['description']
+            elif 'name' in theme_data:
+                # Create description from theme name if description is missing
+                theme_description = f"{theme_data['name']} experiences in {input_data.destination_name}. {theme_data.get('micro_category', '')} category."
+            else:
+                self.logger.warning(f"Skipping theme without description or name: {theme_data}")
+                continue
+
+            insight_type = insight_classifier.classify_insight_type(theme_description)
+            seasonal_window = insight_classifier.extract_seasonal_window(theme_description)
+            location_exclusivity = insight_classifier.determine_location_exclusivity(theme_description)
+            actionable_details = insight_classifier.extract_actionable_details(theme_description)
+
+            # For simplicity, let's create an AuthenticInsight from the theme
+            # In a real scenario, this would involve more detailed parsing and LLM calls
+            # to generate authentic insights based on discovered themes and evidence.
+            
+            # Generate local authorities based on content analysis
+            evidence_hierarchy = EvidenceHierarchy()
+            local_authorities_for_theme = []
+            
+            # Analyze theme evidence for local authority indicators
+            theme_evidence = theme_data.get("evidence_summary", [])
+            for evidence_item in theme_evidence:
+                source_url = evidence_item.get("source_url", "")
+                text_snippet = evidence_item.get("text_snippet", "")
+                
+                # Check for local authority patterns
+                local_authority = evidence_hierarchy.classify_local_authority(source_url, text_snippet)
+                if local_authority.authority_type != AuthorityType.RESIDENT:  # If we found a specific authority type
+                    # Use the authority data from the classification
+                    local_authorities_for_theme.append(local_authority)
+            
+            # If no specific authorities found, create a default one based on source quality
+            if not local_authorities_for_theme and theme_evidence:
+                highest_authority_evidence = max(theme_evidence, key=lambda x: x.get("authority_weight", 0))
+                if highest_authority_evidence.get("authority_weight", 0) > 0.6:
+                    local_authority = LocalAuthority(
+                        authority_type=AuthorityType.PROFESSIONAL,
+                        local_tenure=2,  # Assume moderate tenure for professional sources
+                        expertise_domain=theme_data.get('name', ''),
+                        community_validation=highest_authority_evidence.get("authority_weight", 0.6)
+                    )
+                    local_authorities_for_theme.append(local_authority)
+            
+            # Calculate local validation count
+            local_validation_count = len([la for la in local_authorities_for_theme if la.community_validation > 0.7])
+            
+            # Enhanced seasonal intelligence
+            seasonal_intelligence = SeasonalIntelligence()
+            seasonal_patterns = seasonal_intelligence.extract_seasonal_patterns([theme_description])
+            current_relevance = seasonal_intelligence.calculate_current_relevance(seasonal_window) if seasonal_window else 0.5
+            
+            # Calculate temporal relevance score based on seasonal analysis
+            temporal_relevance_score = current_relevance
+            
+            # Enhanced calculation of authenticity, uniqueness, and actionability scores
+            authenticity_scorer = AuthenticityScorer()
+            uniqueness_scorer = UniquenessScorer()
+            actionability_scorer = ActionabilityScorer()
+            
+            # Use enhanced implementations with the available data
+            authenticity_score = authenticity_scorer.calculate_authenticity(
+                [authority for authority in local_authorities_for_theme],  # local authorities
+                [],  # evidence list - empty for now
+                theme_description  # content
+            )
+            uniqueness_score = uniqueness_scorer.calculate_uniqueness(
+                classified_insights,  # list of insights so far
+                theme_description  # content
+            )
+            actionability_score = actionability_scorer.calculate_actionability(theme_description)
+
+            authentic_insight = AuthenticInsight(
+                insight_type=insight_type,  # Pass the enum directly
+                authenticity_score=authenticity_score,
+                uniqueness_score=uniqueness_score,
+                actionability_score=actionability_score,
+                temporal_relevance=temporal_relevance_score,
+                location_exclusivity=location_exclusivity,  # Pass the enum directly
+                seasonal_window=seasonal_window,
+                local_validation_count=local_validation_count
+            )
+            classified_insights.append(authentic_insight)
+
+            # Update the original theme with the new authentic insights and other fields
+            if 'authentic_insights' not in theme_data: # Check if the list exists
+                theme_data['authentic_insights'] = []
+            theme_data['authentic_insights'].append(authentic_insight.to_dict())
+            
+            # Enhanced seasonal_relevance and regional_uniqueness in theme
+            theme_data['seasonal_relevance'] = self._extract_seasonal_relevance(theme_description, seasonal_patterns)
+            theme_data['regional_uniqueness'] = uniqueness_score
+            theme_data['insider_tips'] = self._extract_insider_tips(theme_description, actionable_details)
+            theme_data['local_authorities'] = [la.to_dict() for la in local_authorities_for_theme] # Convert to dict for theme
+
+
+        # Step 9: Calculate destination dimensions (already exists as Step 8)
         dimensions = self._calculate_dimensions(enhanced_themes, all_evidence)
+
+        # Step 10: Extract seasonal and temporal data (integrated into classification above)
+        # Step 11: Validate with local sources (will be done in Sprint 3 with dedicated agent)
         
-        # Aggregate priority data if enabled
+        # Initialize priority variables (will be enhanced in future sprints)
         priority_metrics = None
         priority_insights = []
-        
-        if input_data.config and input_data.config.get("priority_settings", {}).get("enable_priority_discovery"):
-            logger.info("Aggregating priority data from content sources")
-            aggregator = PriorityAggregationTool()
-            
-            # Ensure all page contents have priority data
-            enhanced_pages = []
-            extractor = PriorityDataExtractor()
-            
-            for page in input_data.text_content_list:
-                # Handle both dict and object types
-                if isinstance(page, dict):
-                    # For dictionary objects
-                    if 'priority_data' not in page or not page['priority_data']:
-                        page['priority_data'] = extractor.extract_all_priority_data(
-                            page.get("content", ""), page.get("url", "")
-                        )
-                else:
-                    # For objects with attributes
-                    if not hasattr(page, 'priority_data') or not page.priority_data:
-                        page.priority_data = extractor.extract_all_priority_data(
-                            getattr(page, "content", ""), getattr(page, "url", "")
-                        )
-                enhanced_pages.append(page)
-            
-            # Run aggregation
-            agg_result = aggregator._run(
-                destination_name=input_data.destination_name,
-                page_contents=enhanced_pages
-            )
-            
-            priority_metrics = agg_result.get("priority_metrics")
-            priority_insights = agg_result.get("priority_insights", [])
-            
-            logger.info(f"Aggregated priority data: {len(priority_insights)} priority insights generated")
-        
+
+        # Update the return result to include authentic insights
         return {
             "destination_name": input_data.destination_name,
             "country_code": input_data.country_code,
-            "themes": enhanced_themes,
+            "themes": enhanced_themes, # Now includes authentic_insights etc.
             "temporal_slices": temporal_slices,
             "dimensions": dimensions,
             "evidence_summary": {
@@ -227,7 +312,8 @@ class EnhancedThemeAnalysisTool:
             },
             "analysis_timestamp": datetime.now().isoformat(),
             "priority_metrics": priority_metrics,
-            "priority_insights": priority_insights
+            "priority_insights": priority_insights,
+            "authentic_insights": [ai.to_dict() for ai in classified_insights] # Include all generated authentic insights
         }
     
     async def _extract_evidence(
@@ -235,63 +321,54 @@ class EnhancedThemeAnalysisTool:
     ) -> List[Evidence]:
         """Extract and classify evidence from content with enhanced context awareness"""
         all_evidence = []
-        destination_entities = set()  # Track local entities
+        agent_id = f"enhanced_theme_analyzer_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        self.logger.info(f"Starting enhanced evidence extraction from {len(content_list)} content items")
+        self.logger.info(f"Extracting evidence from {len(content_list)} content sources")
         
-        # First pass: collect destination-specific entities
-        for content_item in content_list:
-            text = content_item.get("content", "")
-            if isinstance(text, str) and len(text.strip()) >= 50:
-                # Extract potential local entities (simplified - in production use NER)
-                local_entities = self._extract_local_entities(text, country_code)
-                destination_entities.update(local_entities)
-        
-        self.logger.info(f"Identified {len(destination_entities)} local entities")
-        
-        # Second pass: extract evidence with context
         for idx, content_item in enumerate(content_list):
-            url = content_item.get("url", "")
-            text = content_item.get("content", "")
+            url = content_item.get("url", f"unknown_source_{idx}")
+            raw_content = content_item.get("content", "")
             title = content_item.get("title", "")
             
-            if not isinstance(text, str) or len(text.strip()) < 50:
+            if not raw_content or len(raw_content) < 50:
+                self.logger.warning(f"Skipping content item {idx}: insufficient content ({len(raw_content)} chars)")
                 continue
-                
-            # Smart chunking based on content structure
-            chunks = self._smart_chunk_content(text)
-            self.logger.info(f"Split content item {idx} into {len(chunks)} smart chunks")
             
-            # Track relationships between chunks
-            chunk_relationships = self._analyze_chunk_relationships(chunks)
+            # Classify source category and evidence type
+            source_category = self._classify_source_category(url, title, raw_content)
+            evidence_type = self._classify_evidence_type(raw_content, source_category)
+            authority_weight = self._calculate_authority_weight(source_category, url, raw_content)
             
-            for chunk_idx, chunk_data in enumerate(chunks):
-                chunk_text = chunk_data["text"]
-                chunk_context = chunk_data.get("context", {})
+            # Extract published date with better heuristics
+            published_date = self._extract_published_date(raw_content, url)
+            
+            # Smart content chunking
+            chunks = self._smart_chunk_content(raw_content)
+            
+            self.logger.info(f"Processing source {idx}: {url[:80]}... -> {len(chunks)} chunks, category: {source_category.value}")
+            
+            for chunk_idx, chunk in enumerate(chunks):
+                chunk_text = chunk["text"]
+                if len(chunk_text) < 100:  # Skip very short chunks
+                    continue
                 
-                # Classify source with enhanced metadata
-                source_category = EvidenceHierarchy.classify_source(url)
-                authority_weight, evidence_type = EvidenceHierarchy.get_source_authority(url)
+                # Enhanced sentiment analysis
+                sentiment_score = self._analyze_enhanced_sentiment(chunk_text)
                 
-                # Identify local entities in this chunk
-                local_entities_in_chunk = [
-                    entity for entity in destination_entities
-                    if entity.lower() in chunk_text.lower()
-                ]
+                # Enhanced cultural context extraction
+                cultural_context = self._extract_enhanced_cultural_context(
+                    chunk_text, url, country_code, title
+                )
                 
-                # Enhanced cultural context
-                cultural_context = {
-                    "source_title": title,
-                    "chunk_index": chunk_idx,
-                    "is_local_source": EvidenceHierarchy.is_local_source(url, country_code),
-                    "local_entities": local_entities_in_chunk,
-                    "content_type": chunk_context.get("content_type", "general"),
-                    "related_chunks": chunk_relationships.get(chunk_idx, []),
-                    "semantic_topics": chunk_context.get("topics", []),
-                    "local_relevance_score": len(local_entities_in_chunk) / max(len(chunk_text.split()), 1),
-                    "context_relationships": chunk_relationships.get(chunk_idx, []),
-                    "content_structure": chunk_context
-                }
+                # Extract relationships with other content
+                relationships = self._extract_content_relationships(
+                    chunk_text, url, all_evidence, chunk_idx
+                )
+                
+                # Calculate additional factors for this evidence
+                evidence_factors = self._calculate_evidence_factors(
+                    chunk_text, url, source_category, authority_weight
+                )
                 
                 evidence = Evidence(
                     id=f"{idx}-{chunk_idx}",
@@ -302,14 +379,309 @@ class EnhancedThemeAnalysisTool:
                     text_snippet=chunk_text,
                     timestamp=datetime.now(),
                     confidence=authority_weight,
+                    sentiment=sentiment_score,
                     cultural_context=cultural_context,
-                    agent_id="enhanced_theme_analysis",
-                    published_date=content_item.get("published_date")
+                    relationships=relationships,
+                    agent_id=agent_id,
+                    published_date=published_date,
+                    factors=evidence_factors  # Add the factors field
                 )
                 
                 all_evidence.append(evidence)
         
+        self.logger.info(f"Extracted {len(all_evidence)} evidence pieces from {len(content_list)} sources")
         return all_evidence
+
+    def _analyze_enhanced_sentiment(self, text: str) -> float:
+        """Enhanced sentiment analysis with destination-specific context"""
+        # Basic sentiment indicators
+        positive_indicators = [
+            "amazing", "beautiful", "wonderful", "fantastic", "incredible", "stunning",
+            "breathtaking", "magnificent", "spectacular", "charming", "delightful",
+            "must-see", "highly recommend", "loved", "perfect", "excellent"
+        ]
+        
+        negative_indicators = [
+            "terrible", "awful", "horrible", "disappointing", "overrated", "crowded",
+            "expensive", "tourist trap", "avoid", "waste", "not worth", "dirty",
+            "unsafe", "scam", "rude", "poor"
+        ]
+        
+        neutral_indicators = [
+            "okay", "average", "decent", "standard", "typical", "normal", "fine"
+        ]
+        
+        text_lower = text.lower()
+        
+        positive_count = sum(1 for word in positive_indicators if word in text_lower)
+        negative_count = sum(1 for word in negative_indicators if word in text_lower)
+        neutral_count = sum(1 for word in neutral_indicators if word in text_lower)
+        
+        total_indicators = positive_count + negative_count + neutral_count
+        
+        if total_indicators == 0:
+            return 0.0  # Neutral if no indicators found
+        
+        # Calculate weighted sentiment
+        sentiment = (positive_count - negative_count) / total_indicators
+        
+        # Normalize to 0-1 scale (0 = very negative, 0.5 = neutral, 1 = very positive)
+        return max(0.0, min(1.0, (sentiment + 1) / 2))
+
+    def _extract_enhanced_cultural_context(
+        self, text: str, url: str, country_code: str, title: str = ""
+    ) -> Dict[str, Any]:
+        """Extract enhanced cultural context with comprehensive analysis"""
+        context = {
+            "is_local_source": False,
+            "local_entities": [],
+            "content_type": "general",
+            "language_indicators": [],
+            "cultural_markers": [],
+            "geographic_specificity": 0.0,
+            "content_quality_score": 0.0,
+            "author_perspective": "unknown",
+            "temporal_indicators": []
+        }
+        
+        text_lower = text.lower()
+        title_lower = title.lower()
+        
+        # Determine if source is local
+        local_indicators = [
+            "local", "native", "born here", "lived here", "from here",
+            "our city", "our town", "we locals", "as a local"
+        ]
+        context["is_local_source"] = any(indicator in text_lower for indicator in local_indicators)
+        
+        # Extract local entities (simplified - could use NER)
+        local_entity_patterns = [
+            r'\b[A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b',  # Proper nouns
+            r'\b[A-Z][a-z]+\s+(?:Street|Road|Avenue|Boulevard|Plaza|Square|Market|Temple|Museum|Beach|Park)\b'
+        ]
+        
+        import re
+        for pattern in local_entity_patterns:
+            matches = re.findall(pattern, text)
+            context["local_entities"].extend(matches[:5])  # Limit to 5 per pattern
+        
+        # Classify content type
+        if any(word in text_lower for word in ["restaurant", "food", "dining", "meal", "cuisine"]):
+            context["content_type"] = "culinary"
+        elif any(word in text_lower for word in ["hotel", "accommodation", "stay", "room", "booking"]):
+            context["content_type"] = "accommodation"
+        elif any(word in text_lower for word in ["activity", "tour", "experience", "adventure", "visit"]):
+            context["content_type"] = "activity"
+        elif any(word in text_lower for word in ["transport", "travel", "bus", "train", "flight", "taxi"]):
+            context["content_type"] = "transportation"
+        elif any(word in text_lower for word in ["culture", "history", "tradition", "heritage", "festival"]):
+            context["content_type"] = "cultural"
+        elif any(word in text_lower for word in ["price", "cost", "budget", "expensive", "cheap", "money"]):
+            context["content_type"] = "pricing"
+        elif any(word in text_lower for word in ["safety", "security", "danger", "crime", "safe"]):
+            context["content_type"] = "safety"
+        
+        # Detect language indicators
+        non_english_patterns = [
+            r'[àáâäçèéêëìíîïñòóôöùúûü]',  # Romance languages
+            r'[αβγδεζηθικλμνξοπρστυφχψω]',   # Greek
+            r'[абвгдежзийклмнопрстуфхцчшщъыьэюя]',  # Cyrillic
+            r'[一-龯]',  # Chinese characters
+            r'[ひらがなカタカナ]'  # Japanese
+        ]
+        
+        for pattern in non_english_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                context["language_indicators"].append("non_english_text")
+                break
+        
+        # Cultural markers
+        cultural_markers = [
+            "traditional", "authentic", "cultural", "heritage", "festival",
+            "ceremony", "ritual", "custom", "local way", "indigenous"
+        ]
+        context["cultural_markers"] = [marker for marker in cultural_markers if marker in text_lower]
+        
+        # Geographic specificity (0-1 scale)
+        geographic_terms = len(context["local_entities"])
+        specific_locations = len([e for e in context["local_entities"] if any(loc_type in e.lower() 
+                                 for loc_type in ["street", "road", "avenue", "plaza", "square"])])
+        context["geographic_specificity"] = min(1.0, (geographic_terms * 0.1) + (specific_locations * 0.2))
+        
+        # Content quality score based on various factors
+        quality_factors = [
+            len(text) > 200,  # Substantial content
+            len(context["local_entities"]) > 0,  # Specific references
+            any(word in text_lower for word in ["because", "since", "due to", "therefore"]),  # Explanatory
+            len(text.split('.')) > 3,  # Multiple sentences
+            context["is_local_source"],  # Local perspective
+            len(context["cultural_markers"]) > 0  # Cultural depth
+        ]
+        context["content_quality_score"] = sum(quality_factors) / len(quality_factors)
+        
+        # Author perspective
+        if context["is_local_source"]:
+            context["author_perspective"] = "local_resident"
+        elif any(word in text_lower for word in ["visited", "trip", "travel", "vacation"]):
+            context["author_perspective"] = "tourist"
+        elif any(word in text_lower for word in ["guide", "recommend", "should", "must"]):
+            context["author_perspective"] = "advisor"
+        
+        # Temporal indicators
+        temporal_words = ["seasonal", "summer", "winter", "spring", "fall", "holiday", "weekend", "daily"]
+        context["temporal_indicators"] = [word for word in temporal_words if word in text_lower]
+        
+        return context
+
+    def _extract_content_relationships(
+        self, text: str, url: str, existing_evidence: List[Evidence], chunk_idx: int
+    ) -> List[Dict[str, str]]:
+        """Extract relationships with other content pieces"""
+        relationships = []
+        
+        # Find thematic similarities with existing evidence
+        text_lower = text.lower()
+        key_terms = self._extract_key_terms(text_lower)
+        
+        for evidence in existing_evidence[-5:]:  # Check last 5 pieces for efficiency
+            evidence_terms = self._extract_key_terms(evidence.text_snippet.lower())
+            
+            # Calculate similarity
+            common_terms = set(key_terms) & set(evidence_terms)
+            if len(common_terms) >= 2:  # At least 2 common terms
+                similarity_strength = "high" if len(common_terms) >= 4 else "medium"
+                relationships.append({
+                    "target_id": evidence.id,
+                    "relationship_type": "thematic_similarity",
+                    "strength": similarity_strength,
+                    "common_terms": list(common_terms)[:3]  # Store up to 3 common terms
+                })
+        
+        return relationships
+
+    def _extract_key_terms(self, text: str) -> List[str]:
+        """Extract key terms from text for relationship analysis"""
+        # Simple keyword extraction - could be enhanced with NLP
+        important_words = []
+        
+        # Travel-specific important terms
+        travel_terms = [
+            "beach", "mountain", "city", "temple", "museum", "restaurant", "hotel",
+            "market", "festival", "culture", "food", "activity", "tour", "experience",
+            "shopping", "nightlife", "nature", "historic", "architecture", "art"
+        ]
+        
+        for term in travel_terms:
+            if term in text:
+                important_words.append(term)
+        
+        # Extract proper nouns (simplified)
+        import re
+        proper_nouns = re.findall(r'\b[A-Z][a-z]+\b', text)
+        important_words.extend(proper_nouns[:5])  # Limit to 5
+        
+        return important_words
+
+    def _calculate_evidence_factors(
+        self, text: str, url: str, source_category: SourceCategory, authority_weight: float
+    ) -> Dict[str, Any]:
+        """Calculate additional factors for evidence analysis"""
+        factors = {
+            "content_length": len(text),
+            "sentence_count": len(text.split('.')),
+            "readability_score": self._calculate_readability(text),
+            "specificity_score": self._calculate_specificity(text),
+            "actionability_score": self._calculate_actionability(text),
+            "recency_indicators": self._extract_recency_indicators(text),
+            "authority_signals": self._extract_authority_signals(text, url)
+        }
+        
+        return factors
+
+    def _calculate_readability(self, text: str) -> float:
+        """Simple readability score (0-1, higher = more readable)"""
+        words = text.split()
+        if not words:
+            return 0.0
+        
+        avg_word_length = sum(len(word) for word in words) / len(words)
+        sentence_count = len(text.split('.'))
+        avg_sentence_length = len(words) / max(sentence_count, 1)
+        
+        # Simple readability heuristic
+        readability = 1.0 - min(1.0, (avg_word_length - 4) / 10 + (avg_sentence_length - 15) / 20)
+        return max(0.0, readability)
+
+    def _calculate_specificity(self, text: str) -> float:
+        """Calculate how specific/detailed the content is (0-1)"""
+        specificity_indicators = [
+            "address", "phone", "hours", "price", "$", "€", "£", "¥",
+            "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+            "am", "pm", "open", "closed", "reservation", "booking"
+        ]
+        
+        text_lower = text.lower()
+        specific_count = sum(1 for indicator in specificity_indicators if indicator in text_lower)
+        
+        # Also count numbers as specificity indicators
+        import re
+        number_count = len(re.findall(r'\d+', text))
+        
+        total_specificity = specific_count + (number_count * 0.5)
+        return min(1.0, total_specificity / 10)
+
+    def _calculate_actionability(self, text: str) -> float:
+        """Calculate how actionable the content is (0-1)"""
+        actionable_words = [
+            "visit", "go", "try", "book", "reserve", "call", "check",
+            "avoid", "recommend", "should", "must", "need to", "make sure",
+            "remember", "bring", "wear", "take", "use"
+        ]
+        
+        text_lower = text.lower()
+        actionable_count = sum(1 for word in actionable_words if word in text_lower)
+        
+        return min(1.0, actionable_count / 5)
+
+    def _extract_recency_indicators(self, text: str) -> List[str]:
+        """Extract indicators of content recency"""
+        recency_indicators = []
+        
+        recent_terms = [
+            "recently", "latest", "new", "updated", "current", "now",
+            "2024", "2023", "this year", "last month", "recently opened"
+        ]
+        
+        text_lower = text.lower()
+        for term in recent_terms:
+            if term in text_lower:
+                recency_indicators.append(term)
+        
+        return recency_indicators
+
+    def _extract_authority_signals(self, text: str, url: str) -> List[str]:
+        """Extract signals indicating authoritative content"""
+        authority_signals = []
+        
+        # Check URL for authority signals
+        if any(domain in url.lower() for domain in [
+            "tripadvisor", "lonelyplanet", "fodors", "frommers", "timeout",
+            "official", "tourism", "gov", "city", "museum"
+        ]):
+            authority_signals.append("authoritative_domain")
+        
+        # Check text for authority signals
+        authority_terms = [
+            "official", "certified", "licensed", "expert", "professional",
+            "years of experience", "local guide", "tourism board", "verified"
+        ]
+        
+        text_lower = text.lower()
+        for term in authority_terms:
+            if term in text_lower:
+                authority_signals.append(f"authority_term_{term.replace(' ', '_')}")
+        
+        return authority_signals
     
     def _smart_chunk_content(self, text: str) -> List[Dict[str, Any]]:
         """Smart content chunking that preserves context and structure"""
@@ -606,13 +978,8 @@ class EnhancedThemeAnalysisTool:
             
             # Calculate confidence breakdown using the main ConfidenceScorer
             # Pass the country code if available
-            theme.confidence_breakdown = ConfidenceScorer.calculate_confidence(
-                evidence_sources=[ev.source_url for ev in evidence_list],
-                evidence_texts=[ev.text_snippet for ev in evidence_list],
-                published_dates=[ev.published_date for ev in evidence_list],
-                destination_country_code=country_code,
-                sentiment_scores=[ev.sentiment for ev in evidence_list if ev.sentiment is not None]
-            )
+            confidence_scorer = ConfidenceScorer()
+            theme.confidence_breakdown = confidence_scorer.calculate_confidence(evidence_list)
             
             discovered_themes.append(theme)
         
@@ -994,21 +1361,36 @@ class EnhancedThemeAnalysisTool:
                     evidence_matches += 1
                     self.logger.info(f"  Evidence match {evidence_matches} for '{theme_name}': {ev.text_snippet[:100]}...")
                     
-                    # Find cultural context for this source
-                    cultural_context = None
-                    for enhanced_source in cultural_result.get("enhanced_sources", []):
-                        if enhanced_source.get("url") == ev.source_url:
-                            cultural_context = enhanced_source.get("cultural_context")
-                            break
+                    # Use the rich cultural context from the evidence object itself
+                    # instead of trying to find it in cultural_result
+                    cultural_context = ev.cultural_context or {}
                     
-                    theme_evidence.append({
+                    # Add additional cultural metrics from the overall cultural analysis
+                    if cultural_result.get("cultural_metrics"):
+                        cultural_context.update({
+                            "cultural_diversity_score": cultural_result["cultural_metrics"].get("cultural_diversity_score", 0.0),
+                            "local_source_ratio": cultural_result["cultural_metrics"].get("local_source_ratio", 0.0),
+                            "language_distribution": cultural_result["cultural_metrics"].get("language_distribution", {}),
+                            "optimal_mix_score": cultural_result["cultural_metrics"].get("optimal_mix_score", 0.0)
+                        })
+                    
+                    # Create enhanced evidence summary with all populated fields
+                    evidence_summary = {
                         "id": ev.id,
                         "source_url": ev.source_url,
                         "source_category": ev.source_category.value,
                         "authority_weight": ev.authority_weight,
-                        "text_snippet": ev.text_snippet[:200] + "...",
-                        "cultural_context": cultural_context
-                    })
+                        "text_snippet": ev.text_snippet[:200] + "..." if len(ev.text_snippet) > 200 else ev.text_snippet,
+                        "cultural_context": cultural_context,
+                        "sentiment": ev.sentiment,
+                        "relationships": ev.relationships,
+                        "agent_id": ev.agent_id,
+                        "published_date": ev.published_date.isoformat() if ev.published_date else None,
+                        "confidence": ev.confidence,
+                        "timestamp": ev.timestamp.isoformat()
+                    }
+                    
+                    theme_evidence.append(evidence_summary)
             
             self.logger.info(f"  Theme '{theme_name}' matched {len(theme_evidence)} evidence pieces")
             
@@ -1033,27 +1415,265 @@ class EnhancedThemeAnalysisTool:
             if not micro_category:
                 micro_category = theme_name  # Use theme name as micro category
             
+            # Calculate theme-level factors for confidence
+            theme_factors = self._calculate_theme_factors(theme_evidence, theme_data)
+            
             enhanced_theme = {
                 "theme_id": hashlib.md5(theme_name.encode()).hexdigest()[:12],
                 "name": theme_name,
                 "macro_category": macro_category,
                 "micro_category": micro_category,  # Now including micro category
                 "confidence_level": theme_data.get("confidence_level", "unknown"),
-                "confidence_score": confidence_breakdown.get("total_confidence", 0.0),
+                "confidence_score": confidence_breakdown.get("overall_confidence", 0.0),
                 "confidence_breakdown": confidence_breakdown,
+                "factors": theme_factors,  # Add theme-level factors
                 "evidence_count": len(theme_evidence),
-                "evidence_summary": theme_evidence[:5],  # Top 5 evidence pieces
+                "evidence_summary": theme_evidence,  # Use enhanced evidence with all fields populated
                 "is_validated": theme_data.get("is_validated", False),
                 "contradiction_status": {
                     "has_contradictions": theme_data.get("contradiction_resolved", False),
                     "resolution": theme_data.get("winning_position", "none")
                 },
-                "tags": self._generate_tags(theme_name)
+                "tags": self._generate_tags(theme_name),
+                "cultural_summary": self._generate_cultural_summary(theme_evidence),
+                "sentiment_analysis": self._analyze_theme_sentiment(theme_evidence),
+                "temporal_analysis": self._analyze_theme_temporal_aspects(theme_evidence)
             }
             
             enhanced_themes.append(enhanced_theme)
             
         return enhanced_themes
+    
+    def _calculate_theme_factors(self, evidence_list: List[Dict], theme_data: Dict) -> Dict[str, Any]:
+        """Calculate various factors contributing to theme strength"""
+        if not evidence_list:
+            return {}
+        
+        factors = {
+            "source_diversity": len(set(ev.get("source_url", "") for ev in evidence_list)),
+            "authority_distribution": self._calculate_authority_distribution(evidence_list),
+            "sentiment_consistency": self._calculate_sentiment_consistency(evidence_list),
+            "cultural_breadth": self._calculate_cultural_breadth(evidence_list),
+            "temporal_freshness": self._calculate_temporal_freshness(evidence_list),
+            "geographic_specificity": self._calculate_geographic_specificity_avg(evidence_list),
+            "content_quality_avg": self._calculate_content_quality_avg(evidence_list)
+        }
+        
+        return factors
+    
+    def _calculate_authority_distribution(self, evidence_list: List[Dict]) -> Dict[str, float]:
+        """Calculate distribution of evidence by authority level"""
+        if not evidence_list:  # Handle empty evidence list
+            return {
+                "high_authority_ratio": 0.0,
+                "medium_authority_ratio": 0.0,
+                "low_authority_ratio": 0.0,
+                "authority_score": 0.0
+            }
+            
+        high_authority = sum(1 for ev in evidence_list if ev.get("authority_weight", 0) > 0.8)
+        medium_authority = sum(1 for ev in evidence_list if 0.5 < ev.get("authority_weight", 0) <= 0.8)
+        low_authority = sum(1 for ev in evidence_list if ev.get("authority_weight", 0) <= 0.5)
+        total = len(evidence_list)
+        
+        return {
+            "high_authority_ratio": high_authority / total,
+            "medium_authority_ratio": medium_authority / total,
+            "low_authority_ratio": low_authority / total,
+            "authority_score": sum(ev.get("authority_weight", 0) for ev in evidence_list) / total
+        }
+    
+    def _calculate_sentiment_consistency(self, evidence_list: List[Dict]) -> Dict[str, float]:
+        """Calculate sentiment consistency across evidence"""
+        sentiments = [ev.get("sentiment", 0) for ev in evidence_list if ev.get("sentiment") is not None]
+        
+        if not sentiments:
+            return {"consistency": 0.0, "average_sentiment": 0.0, "sentiment_range": 0.0, "positive_evidence_ratio": 0.0}
+        
+        avg_sentiment = sum(sentiments) / len(sentiments)
+        sentiment_variance = sum((s - avg_sentiment) ** 2 for s in sentiments) / len(sentiments)
+        sentiment_consistency = 1.0 - min(sentiment_variance, 1.0)  # High variance = low consistency
+        
+        return {
+            "consistency": sentiment_consistency,
+            "average_sentiment": avg_sentiment,
+            "sentiment_range": max(sentiments) - min(sentiments) if sentiments else 0,
+            "positive_evidence_ratio": sum(1 for s in sentiments if s > 0.1) / len(sentiments)
+        }
+    
+    def _calculate_cultural_breadth(self, evidence_list: List[Dict]) -> Dict[str, float]:
+        """Calculate cultural breadth of evidence sources"""
+        if not evidence_list:  # Handle empty evidence list
+            return {
+                "local_source_ratio": 0.0,
+                "language_diversity": 0,
+                "cultural_balance_score": 0.0
+            }
+            
+        local_sources = sum(1 for ev in evidence_list 
+                          if ev.get("cultural_context", {}).get("is_local_source", False))
+        total_sources = len(evidence_list)
+        
+        # Language diversity
+        languages = set()
+        for ev in evidence_list:
+            lang_indicators = ev.get("cultural_context", {}).get("language_indicators", [])
+            languages.update(lang_indicators)
+        
+        return {
+            "local_source_ratio": local_sources / total_sources,
+            "language_diversity": len(languages),
+            "cultural_balance_score": min(abs(0.6 - (local_sources / total_sources)) + 0.5, 1.0)
+        }
+    
+    def _calculate_temporal_freshness(self, evidence_list: List[Dict]) -> Dict[str, float]:
+        """Calculate temporal freshness of evidence"""
+        now = datetime.now()
+        freshness_scores = []
+        
+        for ev in evidence_list:
+            pub_date_str = ev.get("published_date")
+            if pub_date_str:
+                try:
+                    pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00'))
+                    days_old = (now - pub_date).days
+                    # Freshness decreases over time, with 50% at 1 year
+                    freshness = max(0, 1.0 - (days_old / 365))
+                    freshness_scores.append(freshness)
+                except:
+                    freshness_scores.append(0.5)  # Default for unparseable dates
+            else:
+                freshness_scores.append(0.3)  # Default for missing dates
+        
+        return {
+            "average_freshness": sum(freshness_scores) / len(freshness_scores) if freshness_scores else 0,
+            "freshest_content": max(freshness_scores) if freshness_scores else 0,
+            "oldest_content": min(freshness_scores) if freshness_scores else 0
+        }
+    
+    def _calculate_geographic_specificity_avg(self, evidence_list: List[Dict]) -> float:
+        """Calculate average geographic specificity"""
+        specificities = []
+        for ev in evidence_list:
+            geo_spec = ev.get("cultural_context", {}).get("geographic_specificity", 0)
+            if isinstance(geo_spec, (int, float)):
+                specificities.append(geo_spec)
+        
+        return sum(specificities) / len(specificities) if specificities else 0
+    
+    def _calculate_content_quality_avg(self, evidence_list: List[Dict]) -> float:
+        """Calculate average content quality"""
+        qualities = []
+        for ev in evidence_list:
+            quality = ev.get("cultural_context", {}).get("content_quality_score", 0)
+            if isinstance(quality, (int, float)):
+                qualities.append(quality)
+        
+        return sum(qualities) / len(qualities) if qualities else 0
+    
+    def _generate_cultural_summary(self, evidence_list: List[Dict]) -> Dict[str, Any]:
+        """Generate summary of cultural aspects of the theme"""
+        if not evidence_list:  # Handle empty evidence list
+            return {
+                "total_sources": 0,
+                "local_sources": 0,
+                "international_sources": 0,
+                "local_ratio": 0.0,
+                "primary_languages": {},
+                "cultural_balance": "no-data"
+            }
+            
+        local_count = sum(1 for ev in evidence_list 
+                         if ev.get("cultural_context", {}).get("is_local_source", False))
+        
+        # Collect language indicators
+        all_languages = []
+        for ev in evidence_list:
+            lang_indicators = ev.get("cultural_context", {}).get("language_indicators", [])
+            all_languages.extend(lang_indicators)
+        
+        from collections import Counter
+        language_freq = Counter(all_languages)
+        
+        return {
+            "total_sources": len(evidence_list),
+            "local_sources": local_count,
+            "international_sources": len(evidence_list) - local_count,
+            "local_ratio": local_count / len(evidence_list),
+            "primary_languages": dict(language_freq.most_common(3)),
+            "cultural_balance": "local-heavy" if local_count / len(evidence_list) > 0.7 else 
+                              "international-heavy" if local_count / len(evidence_list) < 0.3 else "balanced"
+        }
+    
+    def _analyze_theme_sentiment(self, evidence_list: List[Dict]) -> Dict[str, Any]:
+        """Analyze sentiment patterns across theme evidence"""
+        sentiments = [ev.get("sentiment", 0) for ev in evidence_list if ev.get("sentiment") is not None]
+        
+        if not sentiments:
+            return {"overall": "neutral", "confidence": 0.0, "distribution": {}}
+        
+        avg_sentiment = sum(sentiments) / len(sentiments)
+        positive_count = sum(1 for s in sentiments if s > 0.1)
+        negative_count = sum(1 for s in sentiments if s < -0.1)
+        neutral_count = len(sentiments) - positive_count - negative_count
+        
+        # Determine overall sentiment
+        if avg_sentiment > 0.2:
+            overall = "positive"
+        elif avg_sentiment < -0.2:
+            overall = "negative"
+        else:
+            overall = "neutral"
+        
+        return {
+            "overall": overall,
+            "average_score": avg_sentiment,
+            "confidence": abs(avg_sentiment),
+            "distribution": {
+                "positive": positive_count,
+                "negative": negative_count,
+                "neutral": neutral_count
+            },
+            "consistency": 1.0 - (max(sentiments) - min(sentiments)) / 2.0 if len(sentiments) > 1 else 1.0
+        }
+    
+    def _analyze_theme_temporal_aspects(self, evidence_list: List[Dict]) -> Dict[str, Any]:
+        """Analyze temporal aspects of theme evidence"""
+        # Collect temporal markers from cultural context
+        all_temporal_markers = []
+        for ev in evidence_list:
+            markers = ev.get("cultural_context", {}).get("temporal_markers", [])
+            all_temporal_markers.extend(markers)
+        
+        from collections import Counter
+        temporal_freq = Counter(all_temporal_markers)
+        
+        # Analyze publication dates
+        pub_dates = []
+        for ev in evidence_list:
+            pub_date_str = ev.get("published_date")
+            if pub_date_str:
+                try:
+                    pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00'))
+                    pub_dates.append(pub_date)
+                except:
+                    pass
+        
+        # Calculate temporal spread
+        temporal_spread = 0
+        if len(pub_dates) > 1:
+            oldest = min(pub_dates)
+            newest = max(pub_dates)
+            temporal_spread = (newest - oldest).days
+        
+        return {
+            "temporal_markers": dict(temporal_freq.most_common(5)),
+            "evidence_span_days": temporal_spread,
+            "newest_evidence": max(pub_dates).isoformat() if pub_dates else None,
+            "oldest_evidence": min(pub_dates).isoformat() if pub_dates else None,
+            "seasonal_indicators": [marker for marker in temporal_freq.keys() 
+                                  if marker in ["summer", "winter", "spring", "fall", "season"]]
+        }
     
     def _get_macro_category(self, theme_name: str) -> str:
         """Get macro category for a theme"""
@@ -1399,13 +2019,466 @@ class EnhancedThemeAnalysisTool:
         if not themes:
             return 0.0
             
-        total_confidence = sum(theme.get("confidence_score", 0.0) for theme in themes)
-        return total_confidence / len(themes)
+        overall_confidence = sum(theme.get("confidence_score", 0.0) for theme in themes)
+        return overall_confidence / len(themes)
 
     def _setup_logger(self):
         """Setup logger for the enhanced theme analysis tool"""
         import logging
         return logging.getLogger(__name__)
+
+    def _extract_seasonal_relevance(self, content: str, seasonal_patterns: List[Dict] = None) -> Dict[str, float]:
+        """Extract seasonal relevance scores by month using detected patterns."""
+        relevance = {
+            "january": 0.0,
+            "february": 0.0,
+            "march": 0.0,
+            "april": 0.0,
+            "may": 0.0,
+            "june": 0.0,
+            "july": 0.0,
+            "august": 0.0,
+            "september": 0.0,
+            "october": 0.0,
+            "november": 0.0,
+            "december": 0.0
+        }
+        
+        # If we have seasonal patterns, use them
+        if seasonal_patterns:
+            for pattern in seasonal_patterns:
+                pattern_type = pattern.get('pattern_type', '')
+                start_month = pattern.get('start_month', 1)
+                end_month = pattern.get('end_month', 12)
+                confidence = pattern.get('confidence', 0.5)
+                
+                # Map pattern to months with confidence score
+                month_names = ["january", "february", "march", "april", "may", "june",
+                             "july", "august", "september", "october", "november", "december"]
+                
+                # Handle year-wrapping (e.g., Dec-Jan-Feb)
+                if start_month <= end_month:
+                    months_in_pattern = list(range(start_month, end_month + 1))
+                else:
+                    months_in_pattern = list(range(start_month, 13)) + list(range(1, end_month + 1))
+                
+                for month_num in months_in_pattern:
+                    month_name = month_names[month_num - 1]
+                    relevance[month_name] = max(relevance[month_name], confidence)
+        
+        # Fallback: Basic text analysis for seasonal keywords
+        content_lower = content.lower()
+        seasonal_keywords = {
+            "winter": ["winter", "snow", "ski", "cold", "christmas", "ice", "skiing", "snowboard"],
+            "spring": ["spring", "flower", "bloom", "easter", "cherry blossom", "mild", "warming"],
+            "summer": ["summer", "beach", "swimming", "warm", "sunny", "hot", "festival", "vacation"],
+            "fall": ["fall", "autumn", "foliage", "harvest", "halloween", "changing leaves", "crisp"]
+        }
+        
+        # Map seasons to months
+        season_months = {
+            "winter": [12, 1, 2],
+            "spring": [3, 4, 5], 
+            "summer": [6, 7, 8],
+            "fall": [9, 10, 11]
+        }
+        
+        # Check for seasonal keywords
+        for season, keywords in seasonal_keywords.items():
+            keyword_count = sum(1 for keyword in keywords if keyword in content_lower)
+            if keyword_count > 0:
+                # Calculate relevance based on keyword frequency
+                keyword_relevance = min(keyword_count * 0.2, 1.0)
+                
+                # Apply to relevant months
+                month_names = ["january", "february", "march", "april", "may", "june",
+                             "july", "august", "september", "october", "november", "december"]
+                for month_num in season_months[season]:
+                    month_name = month_names[month_num - 1]
+                    relevance[month_name] = max(relevance[month_name], keyword_relevance)
+        
+        return relevance
+
+    def _extract_insider_tips(self, content: str, actionable_details: List[str] = None) -> List[str]:
+        """Extract insider tips from content using actionable details and pattern matching."""
+        tips = []
+        
+        # First, use any actionable details provided
+        if actionable_details:
+            # Filter actionable details that sound like insider tips
+            for detail in actionable_details:
+                # Look for tip-like language patterns
+                if any(indicator in detail.lower() for indicator in [
+                    "tip:", "secret", "insider", "local", "hidden", "avoid", "best time",
+                    "pro tip", "locals know", "off the beaten", "lesser known"
+                ]):
+                    tips.append(detail.strip())
+        
+        # Pattern-based extraction from content
+        content_lower = content.lower()
+        
+        # Look for explicit tip markers
+        tip_patterns = [
+            r'insider tip[:\s]([^.]+)',
+            r'pro tip[:\s]([^.]+)', 
+            r'local tip[:\s]([^.]+)',
+            r'secret[:\s]([^.]+)',
+            r'hidden gem[:\s]([^.]+)',
+            r'locals know[:\s]([^.]+)',
+            r'best kept secret[:\s]([^.]+)',
+            r'off the beaten path[:\s]([^.]+)'
+        ]
+        
+        import re
+        for pattern in tip_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                tip_text = match.group(1).strip()
+                if len(tip_text) > 10 and tip_text not in tips:  # Avoid duplicates and short tips
+                    tips.append(tip_text)
+        
+        # Look for advice-like sentences with specific indicators
+        sentences = content.split('.')
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 20:  # Skip very short sentences
+                continue
+                
+            # Check for advice patterns
+            advice_indicators = [
+                "make sure to", "don't forget to", "be sure to", "remember to",
+                "avoid", "watch out for", "best time to", "ideal time",
+                "locals recommend", "locals suggest", "word of advice",
+                "you should", "it's worth", "don't miss"
+            ]
+            
+            if any(indicator in sentence.lower() for indicator in advice_indicators):
+                # Clean up the sentence and add as tip
+                clean_tip = sentence.strip()
+                if clean_tip and clean_tip not in tips:
+                    tips.append(clean_tip)
+        
+        # Look for timing and practical advice
+        timing_patterns = [
+            r'(arrive early|go early|visit early)([^.]+)',
+            r'(best time|ideal time|perfect time)([^.]+)',
+            r'(avoid crowds|fewer crowds|less crowded)([^.]+)',
+            r'(book in advance|reserve ahead|make reservations)([^.]+)'
+        ]
+        
+        for pattern in timing_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                full_match = match.group(0).strip()
+                if len(full_match) > 15 and full_match not in tips:
+                    tips.append(full_match)
+        
+        # Limit to most relevant tips and clean them up
+        if len(tips) > 5:
+            tips = tips[:5]  # Keep top 5 tips
+        
+        # Clean up tips - remove incomplete sentences and improve formatting
+        cleaned_tips = []
+        for tip in tips:
+            # Remove leading/trailing whitespace and normalize
+            tip = tip.strip()
+            if len(tip) > 10:  # Keep only substantial tips
+                # Capitalize first letter if needed
+                if tip and not tip[0].isupper():
+                    tip = tip[0].upper() + tip[1:]
+                cleaned_tips.append(tip)
+        
+        return cleaned_tips
+    
+    def _analyze_sentiment(self, text: str) -> float:
+        """Analyze sentiment of text content"""
+        # Simple sentiment analysis based on positive/negative words
+        positive_words = [
+            "amazing", "beautiful", "wonderful", "fantastic", "excellent", "great", "love",
+            "perfect", "stunning", "incredible", "awesome", "brilliant", "outstanding",
+            "magnificent", "spectacular", "charming", "delightful", "enjoyable", "pleasant",
+            "recommend", "must-see", "must-visit", "best", "favorite", "special"
+        ]
+        
+        negative_words = [
+            "terrible", "awful", "horrible", "bad", "worst", "hate", "disappointing",
+            "overpriced", "crowded", "dirty", "dangerous", "avoid", "waste", "boring",
+            "expensive", "poor", "limited", "difficult", "problem", "issue", "warning",
+            "closed", "unavailable", "cancelled", "broken", "unsafe"
+        ]
+        
+        text_lower = text.lower()
+        positive_count = sum(1 for word in positive_words if word in text_lower)
+        negative_count = sum(1 for word in negative_words if word in text_lower)
+        
+        # Calculate sentiment score between -1 and 1
+        total_words = len(text.split())
+        if total_words == 0:
+            return 0.0
+            
+        positive_score = positive_count / total_words
+        negative_score = negative_count / total_words
+        
+        # Normalize to -1 to 1 scale
+        if positive_score + negative_score == 0:
+            return 0.0
+        
+        sentiment = (positive_score - negative_score) / (positive_score + negative_score + 0.1)
+        return max(-1.0, min(1.0, sentiment))
+    
+    def _extract_published_date(self, content: str, url: str) -> Optional[datetime]:
+        """Extract published date from content or URL"""
+        import re
+        
+        # Look for date patterns in content
+        date_patterns = [
+            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
+            r'(\d{2}/\d{2}/\d{4})',  # MM/DD/YYYY
+            r'(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})',  # DD Month YYYY
+            r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})'  # Month DD, YYYY
+        ]
+        
+        for pattern in date_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            if matches:
+                try:
+                    # Try to parse the first match
+                    date_str = matches[0]
+                    # Simple parsing - in production would use more robust date parsing
+                    if '-' in date_str:
+                        return datetime.strptime(date_str, '%Y-%m-%d')
+                    elif '/' in date_str:
+                        return datetime.strptime(date_str, '%m/%d/%Y')
+                except:
+                    continue
+        
+        # If no date found, return None
+        return None
+    
+    def _build_evidence_relationships(
+        self, chunk_idx: int, chunk_relationships: Dict, content_idx: int, chunks: List
+    ) -> List[Dict[str, str]]:
+        """Build relationships between evidence pieces"""
+        relationships = []
+        
+        # Add relationships to related chunks in same content
+        for related_chunk_idx in chunk_relationships.get(chunk_idx, []):
+            relationships.append({
+                "target_id": f"{content_idx}-{related_chunk_idx}",
+                "relationship_type": "content_sequence",
+                "strength": "high"
+            })
+        
+        # Add relationship to source content
+        relationships.append({
+            "target_id": f"content_{content_idx}",
+            "relationship_type": "source_document", 
+            "strength": "direct"
+        })
+        
+        # Add thematic relationships based on chunk context
+        current_chunk = chunks[chunk_idx]
+        current_topics = current_chunk.get("context", {}).get("topics", [])
+        
+        for other_idx, other_chunk in enumerate(chunks):
+            if other_idx != chunk_idx:
+                other_topics = other_chunk.get("context", {}).get("topics", [])
+                shared_topics = set(current_topics) & set(other_topics)
+                if shared_topics:
+                    relationships.append({
+                        "target_id": f"{content_idx}-{other_idx}",
+                        "relationship_type": "thematic_similarity",
+                        "strength": "medium",
+                        "shared_topics": list(shared_topics)
+                    })
+        
+        return relationships
+    
+    def _extract_title_from_content(self, text: str) -> str:
+        """Extract potential title from content text"""
+        lines = text.split('\n')
+        # Look for first substantial line that could be a title
+        for line in lines[:3]:  # Check first 3 lines
+            line = line.strip()
+            if len(line) > 10 and len(line) < 100:  # Reasonable title length
+                return line
+        
+        # Fallback: use first sentence
+        sentences = text.split('.')
+        if sentences:
+            first_sentence = sentences[0].strip()
+            if len(first_sentence) < 150:  # Not too long for a title
+                return first_sentence
+        
+        return "Content Extract"
+    
+    def _detect_language_indicators(self, text: str, url: str) -> List[str]:
+        """Detect language indicators in text and URL"""
+        indicators = []
+        
+        # URL-based indicators
+        url_lower = url.lower()
+        if '.fr' in url_lower or '/fr/' in url_lower:
+            indicators.append("french")
+        if '.es' in url_lower or '/es/' in url_lower:
+            indicators.append("spanish")
+        if '.de' in url_lower or '/de/' in url_lower:
+            indicators.append("german")
+        if '.it' in url_lower or '/it/' in url_lower:
+            indicators.append("italian")
+        
+        # Text-based indicators (simple character pattern detection)
+        text_sample = text.lower()[:500]  # First 500 chars
+        
+        # Common non-English words/patterns
+        if any(word in text_sample for word in ['le ', 'la ', 'des ', 'une ', 'avec']):
+            indicators.append("french_content")
+        if any(word in text_sample for word in ['el ', 'la ', 'los ', 'las ', 'con ']):
+            indicators.append("spanish_content")
+        if any(word in text_sample for word in ['der ', 'die ', 'das ', 'und ', 'mit ']):
+            indicators.append("german_content")
+        
+        # Default to English if no other indicators
+        if not indicators:
+            indicators.append("english")
+        
+        return indicators
+    
+    def _assess_content_quality(self, text: str) -> float:
+        """Assess the quality of content based on various factors"""
+        score = 0.0
+        
+        # Length factor (not too short, not too long)
+        word_count = len(text.split())
+        if 50 <= word_count <= 500:
+            score += 0.3
+        elif 20 <= word_count < 50 or 500 < word_count <= 1000:
+            score += 0.2
+        elif word_count > 1000:
+            score += 0.1
+        
+        # Sentence structure (variety in sentence length)
+        sentences = text.split('.')
+        if len(sentences) > 1:
+            sentence_lengths = [len(s.split()) for s in sentences if s.strip()]
+            if sentence_lengths:
+                avg_length = sum(sentence_lengths) / len(sentence_lengths)
+                if 8 <= avg_length <= 20:  # Good average sentence length
+                    score += 0.2
+        
+        # Information density (specific terms, numbers, names)
+        specific_indicators = len([
+            word for word in text.split()
+            if word[0].isupper() or word.isdigit() or '$' in word or '%' in word
+        ])
+        density = specific_indicators / max(len(text.split()), 1)
+        if 0.1 <= density <= 0.3:
+            score += 0.3
+        
+        # Grammar indicators (proper punctuation)
+        punctuation_count = sum(1 for char in text if char in '.!?:;')
+        if punctuation_count > len(text.split()) * 0.05:  # Reasonable punctuation
+            score += 0.2
+        
+        return min(score, 1.0)
+    
+    def _assess_geographic_specificity(self, text: str, local_entities: List[str]) -> float:
+        """Assess how geographically specific the content is"""
+        # Base score from local entities
+        entity_score = min(len(local_entities) * 0.2, 0.6)
+        
+        # Look for geographic terms
+        geographic_terms = [
+            'located', 'address', 'street', 'avenue', 'road', 'near', 'downtown',
+            'neighborhood', 'district', 'area', 'region', 'north', 'south', 'east', 'west',
+            'miles', 'kilometers', 'km', 'minutes', 'walk', 'drive', 'direction'
+        ]
+        
+        text_lower = text.lower()
+        geo_term_count = sum(1 for term in geographic_terms if term in text_lower)
+        geo_score = min(geo_term_count * 0.1, 0.4)
+        
+        return min(entity_score + geo_score, 1.0)
+
+    def _classify_source_category(self, url: str, title: str, content: str) -> SourceCategory:
+        """Classify the source category based on URL, title, and content"""
+        url_lower = url.lower()
+        title_lower = title.lower()
+        content_lower = content.lower()
+        
+        # Government sources
+        if any(domain in url_lower for domain in ['.gov', 'tourism', 'official', 'city', 'state']):
+            return SourceCategory.GOVERNMENT
+        
+        # Academic sources
+        if any(domain in url_lower for domain in ['.edu', 'university', 'research', 'study']):
+            return SourceCategory.ACADEMIC
+        
+        # Business sources
+        if any(domain in url_lower for domain in ['business', '.biz', 'company', 'corp']):
+            return SourceCategory.BUSINESS
+        
+        # Travel guides
+        if any(domain in url_lower for domain in ['lonelyplanet', 'fodors', 'frommers', 'tripadvisor', 'guidebook']):
+            return SourceCategory.GUIDEBOOK
+        
+        # Blogs and social media
+        if any(domain in url_lower for domain in ['blog', 'facebook', 'instagram', 'twitter', 'reddit']):
+            return SourceCategory.BLOG
+        
+        # Social media
+        if any(domain in url_lower for domain in ['social', 'facebook', 'instagram', 'twitter', 'tiktok']):
+            return SourceCategory.SOCIAL
+        
+        # Default to unknown for unrecognized sources
+        return SourceCategory.UNKNOWN
+
+    def _classify_evidence_type(self, content: str, source_category: SourceCategory) -> EvidenceType:
+        """Classify the evidence type based on content and source"""
+        content_lower = content.lower()
+        
+        # Primary evidence indicators
+        if any(indicator in content_lower for indicator in ['official', 'certified', 'verified', 'authorized']):
+            return EvidenceType.PRIMARY
+        
+        # Secondary evidence indicators
+        if source_category in [SourceCategory.GOVERNMENT, SourceCategory.ACADEMIC]:
+            return EvidenceType.SECONDARY
+        
+        if any(indicator in content_lower for indicator in ['research', 'study', 'survey', 'statistics']):
+            return EvidenceType.SECONDARY
+        
+        # Everything else is tertiary
+        return EvidenceType.TERTIARY
+
+    def _calculate_authority_weight(self, source_category: SourceCategory, url: str, content: str) -> float:
+        """Calculate authority weight based on source characteristics"""
+        base_weights = {
+            SourceCategory.GOVERNMENT: 0.9,
+            SourceCategory.ACADEMIC: 0.85,
+            SourceCategory.BUSINESS: 0.7,
+            SourceCategory.GUIDEBOOK: 0.75,
+            SourceCategory.BLOG: 0.5,
+            SourceCategory.SOCIAL: 0.3,
+            SourceCategory.UNKNOWN: 0.4
+        }
+        
+        base_weight = base_weights.get(source_category, 0.5)
+        
+        # Adjust based on URL quality indicators
+        url_lower = url.lower()
+        if any(domain in url_lower for domain in ['tripadvisor', 'lonelyplanet', 'timeout']):
+            base_weight += 0.1
+        
+        # Adjust based on content quality
+        content_lower = content.lower()
+        if len(content) > 1000:  # Substantial content
+            base_weight += 0.05
+        
+        if any(indicator in content_lower for indicator in ['updated', '2024', '2023', 'current']):
+            base_weight += 0.05  # Recent content
+        
+        return min(1.0, base_weight)
 
 def create_enhanced_theme_analysis_tool() -> Tool:
     """Factory function to create the tool for LangChain"""
@@ -1597,22 +2670,24 @@ class EnhancedAnalyzeThemesFromEvidenceTool(Tool):
                         discovered_themes = []
                         
                         for theme in result["themes"]:
-                            # Preserve evidence information in description and create rich evidence list
-                            evidence_list = []
-                            evidence_string_list = []
+                            # Create enhanced evidence list for the new schema
+                            enhanced_evidence_list = []
                             for ev in theme.get("evidence_summary", []):
-                                evidence_dict = {
-                                    "source_url": ev.get("source_url", ""),
-                                    "source_category": ev.get("source_category", ""),
-                                    "authority_weight": ev.get("authority_weight", 0.0),
-                                    "text_snippet": ev.get("text_snippet", ""),
-                                    "cultural_context": ev.get("cultural_context")
-                                }
-                                evidence_list.append(evidence_dict)
-                                
-                                # Create string version for DestinationInsight schema compatibility
-                                evidence_string = f"[{ev.get('source_category', 'Unknown')}] {ev.get('text_snippet', '')[:100]}..."
-                                evidence_string_list.append(evidence_string)
+                                from src.schemas import EnhancedEvidence
+                                enhanced_evidence = EnhancedEvidence(
+                                    source_url=ev.get("source_url", ""),
+                                    source_category=ev.get("source_category", ""),
+                                    authority_weight=ev.get("authority_weight", 0.0),
+                                    text_snippet=ev.get("text_snippet", ""),
+                                    cultural_context=ev.get("cultural_context", {}),
+                                    sentiment=ev.get("sentiment"),
+                                    relationships=ev.get("relationships", []),
+                                    agent_id=ev.get("agent_id"),
+                                    published_date=ev.get("published_date"),
+                                    confidence=ev.get("confidence", 0.0),
+                                    timestamp=ev.get("timestamp", "")
+                                )
+                                enhanced_evidence_list.append(enhanced_evidence)
                             
                             # Create rich description with evidence count and confidence info
                             description = (
@@ -1632,9 +2707,14 @@ class EnhancedAnalyzeThemesFromEvidenceTool(Tool):
                                 insight_name=theme.get("name", "Unknown"),
                                 description=description,
                                 confidence_score=theme.get("confidence_score", 0.0),
-                                evidence=evidence_string_list,  # Use string list for schema compatibility
+                                evidence=enhanced_evidence_list,  # Use enhanced evidence objects
                                 source_urls=[ev.get("source_url", "") for ev in theme.get("evidence_summary", [])],
-                                tags=theme_tags  # Now supported in schema
+                                tags=theme_tags,
+                                # Include enhanced analytical fields
+                                factors=theme.get("factors"),
+                                cultural_summary=theme.get("cultural_summary"),
+                                sentiment_analysis=theme.get("sentiment_analysis"),
+                                temporal_analysis=theme.get("temporal_analysis")
                             )
                             
                             # Store enhanced metadata in the evidence field for later processing (instead of as attributes)

@@ -1,148 +1,109 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from datetime import datetime, timedelta
 from enum import Enum
 import re
 from dataclasses import dataclass
 import logging
+import math
+
+# Forward references for type hints to avoid circular imports
+if TYPE_CHECKING:
+    from .enhanced_data_models import LocalAuthority
+
+from src.schemas import AuthorityType
 
 logger = logging.getLogger(__name__)
 
 class EvidenceType(Enum):
     """Evidence source classification"""
-    PRIMARY = "primary"      # .gov, UNESCO, official datasets
-    SECONDARY = "secondary"  # Industry reports, vetted guidebooks
-    TERTIARY = "tertiary"    # Blogs, social media, user reviews
-    
+    PRIMARY = "primary"      # Direct, first-hand
+    SECONDARY = "secondary"  # Curated, reviewed
+    TERTIARY = "tertiary"    # Referenced, cited
+
 class SourceCategory(Enum):
-    """Detailed source categorization for decay functions"""
+    """Source category classification"""
     GOVERNMENT = "government"
-    UNESCO = "unesco"
     ACADEMIC = "academic"
-    INDUSTRY = "industry"
+    BUSINESS = "business"
     GUIDEBOOK = "guidebook"
-    NEWS = "news"
-    REVIEW = "review"
-    SOCIAL = "social"
     BLOG = "blog"
+    SOCIAL = "social"
     UNKNOWN = "unknown"
 
 @dataclass
-class EvidenceAuthority:
-    """Evidence authority configuration"""
+class AuthorityConfig:
+    """Configuration for source authority"""
     evidence_type: EvidenceType
     base_weight: float
     decay_half_life_days: int
-    category: SourceCategory
 
 class EvidenceHierarchy:
-    """Manages evidence classification, weighting, and decay"""
+    """Enhanced evidence hierarchy with local authority classification"""
     
-    # Authority configurations with weights and decay half-lives
+    # Authority configuration by source category
     AUTHORITY_CONFIG = {
-        # Primary sources (0.90-0.95)
-        SourceCategory.GOVERNMENT: EvidenceAuthority(
-            EvidenceType.PRIMARY, 0.95, 365 * 5, SourceCategory.GOVERNMENT  # 5 year half-life
-        ),
-        SourceCategory.UNESCO: EvidenceAuthority(
-            EvidenceType.PRIMARY, 0.95, 365 * 50, SourceCategory.UNESCO  # 50 year half-life
-        ),
-        SourceCategory.ACADEMIC: EvidenceAuthority(
-            EvidenceType.PRIMARY, 0.90, 365 * 10, SourceCategory.ACADEMIC  # 10 year half-life
-        ),
-        
-        # Secondary sources (0.60-0.75)
-        SourceCategory.INDUSTRY: EvidenceAuthority(
-            EvidenceType.SECONDARY, 0.75, 365 * 3, SourceCategory.INDUSTRY  # 3 year half-life
-        ),
-        SourceCategory.GUIDEBOOK: EvidenceAuthority(
-            EvidenceType.SECONDARY, 0.70, 365 * 2, SourceCategory.GUIDEBOOK  # 2 year half-life
-        ),
-        SourceCategory.NEWS: EvidenceAuthority(
-            EvidenceType.SECONDARY, 0.65, 180, SourceCategory.NEWS  # 6 month half-life
-        ),
-        
-        # Tertiary sources (0.25-0.40)
-        SourceCategory.REVIEW: EvidenceAuthority(
-            EvidenceType.TERTIARY, 0.40, 365, SourceCategory.REVIEW  # 1 year half-life
-        ),
-        SourceCategory.BLOG: EvidenceAuthority(
-            EvidenceType.TERTIARY, 0.35, 180, SourceCategory.BLOG  # 6 month half-life
-        ),
-        SourceCategory.SOCIAL: EvidenceAuthority(
-            EvidenceType.TERTIARY, 0.25, 90, SourceCategory.SOCIAL  # 3 month half-life
-        ),
-        SourceCategory.UNKNOWN: EvidenceAuthority(
-            EvidenceType.TERTIARY, 0.30, 365, SourceCategory.UNKNOWN  # 1 year default
-        )
+        SourceCategory.GOVERNMENT: AuthorityConfig(EvidenceType.PRIMARY, 0.95, 730),
+        SourceCategory.ACADEMIC: AuthorityConfig(EvidenceType.PRIMARY, 0.90, 1095),
+        SourceCategory.BUSINESS: AuthorityConfig(EvidenceType.SECONDARY, 0.75, 365),
+        SourceCategory.GUIDEBOOK: AuthorityConfig(EvidenceType.SECONDARY, 0.70, 365),
+        SourceCategory.BLOG: AuthorityConfig(EvidenceType.TERTIARY, 0.50, 180),
+        SourceCategory.SOCIAL: AuthorityConfig(EvidenceType.TERTIARY, 0.30, 90),
+        SourceCategory.UNKNOWN: AuthorityConfig(EvidenceType.TERTIARY, 0.20, 90)
     }
     
     # URL patterns for source classification
     SOURCE_PATTERNS = {
         SourceCategory.GOVERNMENT: [
-            r'\.gov(\.[a-z]{2})?(/|$)',
-            r'\.gob\.',
-            r'\.gouv\.',
-            r'government\.',
-            r'official\.',
-            r'state\.',
+            r'\.gov',
+            r'\.ca\.gov',
+            r'\.state\.',
+            r'\.us\.gov',
+            r'gov\.uk',
+            r'gouvernement',
+            r'municipal',
             r'city\.',
-            r'tourism\..*\.gov'
-        ],
-        SourceCategory.UNESCO: [
-            r'unesco\.org',
-            r'whc\.unesco',
-            r'en\.unesco'
+            r'county\.',
+            r'tourism\.gov'
         ],
         SourceCategory.ACADEMIC: [
-            r'\.edu(/|$)',
-            r'\.ac\.',
+            r'\.edu',
+            r'\.ac\.uk',
             r'university',
-            r'journal',
-            r'academic',
+            r'college',
             r'scholar\.google',
-            r'jstor\.org',
-            r'pubmed'
+            r'researchgate',
+            r'academia\.edu',
+            r'journal\.',
+            r'academic'
         ],
-        SourceCategory.INDUSTRY: [
-            r'travel-industry',
-            r'tourism-board',
-            r'destination-marketing',
-            r'phocuswright',
-            r'skift\.com',
-            r'traveldailynews'
+        SourceCategory.BUSINESS: [
+            r'\.com\/business',
+            r'\.biz',
+            r'chamber\.org',
+            r'business',
+            r'corp\.',
+            r'company',
+            r'enterprise'
         ],
         SourceCategory.GUIDEBOOK: [
             r'lonelyplanet',
+            r'tripadvisor',
             r'fodors',
             r'frommers',
             r'roughguides',
-            r'tripadvisor\.com/Tourism',
-            r'timeout\.com'
-        ],
-        SourceCategory.NEWS: [
-            r'cnn\.com/travel',
-            r'bbc\.com/travel',
-            r'nytimes\.com/.*travel',
-            r'theguardian\.com/travel',
-            r'reuters\.com',
-            r'bloomberg\.com'
-        ],
-        SourceCategory.REVIEW: [
-            r'tripadvisor\.com/.*Review',
-            r'yelp\.com',
-            r'booking\.com/reviews',
-            r'hotels\.com/.*reviews',
-            r'airbnb\.com/.*reviews',
-            r'viator\.com'
+            r'timeout',
+            r'travel\+leisure',
+            r'natgeo',
+            r'guidebook'
         ],
         SourceCategory.BLOG: [
-            r'blogspot\.com',
-            r'wordpress\.com',
+            r'blog',
+            r'wordpress',
+            r'blogspot',
             r'medium\.com',
-            r'/blog/',
-            r'travelblog',
-            r'nomadic',
-            r'backpacker'
+            r'substack',
+            r'personal',
+            r'diary'
         ],
         SourceCategory.SOCIAL: [
             r'instagram\.com',
@@ -154,106 +115,165 @@ class EvidenceHierarchy:
             r'tiktok\.com'
         ]
     }
-    
-    @classmethod
-    def classify_source(cls, url: str) -> SourceCategory:
-        """Classify a URL into a source category"""
+
+    LOCAL_AUTHORITY_PATTERNS = {
+        AuthorityType.PRODUCER: [
+            r'maple.*farm', r'distillery', r'winery', r'brewery',
+            r'artisan', r'craftsman', r'local.*producer'
+        ],
+        AuthorityType.RESIDENT: [
+            r'local.*blog', r'resident.*forum', r'neighborhood',
+            r'community.*group', r'nextdoor', r'local.*facebook'
+        ],
+        AuthorityType.PROFESSIONAL: [
+            r'tour.*guide', r'sommelier', r'chef', r'hospitality',
+            r'local.*expert', r'concierge'
+        ]
+    }
+
+    SEASONAL_INDICATORS = [
+        r'maple.*season', r'harvest.*time', r'peak.*season',
+        r'best.*time.*visit', r'seasonal.*hours', r'winter.*hours',
+        r'summer.*season', r'fall.*foliage', r'spring.*opening',
+        r'holiday.*hours', r'seasonal.*closure'
+    ]
+
+    @staticmethod
+    def classify_source(url: str) -> SourceCategory:
+        """Classify source URL into category"""
         url_lower = url.lower()
         
-        for category, patterns in cls.SOURCE_PATTERNS.items():
+        for category, patterns in EvidenceHierarchy.SOURCE_PATTERNS.items():
             for pattern in patterns:
                 if re.search(pattern, url_lower):
-                    logger.debug(f"Classified {url} as {category.value}")
                     return category
         
-        logger.debug(f"Could not classify {url}, defaulting to UNKNOWN")
         return SourceCategory.UNKNOWN
     
-    @classmethod
-    def get_source_authority(cls, url: str, published_date: Optional[datetime] = None) -> Tuple[float, EvidenceType]:
-        """
-        Get the authority weight for a source, including time decay
+    @staticmethod
+    def get_source_authority(url: str, timestamp: Optional[datetime] = None) -> Tuple[float, EvidenceType]:
+        """Get authority weight and evidence type for source"""
+        category = EvidenceHierarchy.classify_source(url)
+        config = EvidenceHierarchy.AUTHORITY_CONFIG[category]
         
-        Returns:
-            Tuple of (weight, evidence_type)
-        """
-        category = cls.classify_source(url)
-        authority = cls.AUTHORITY_CONFIG[category]
+        base_weight = config.base_weight
+        evidence_type = config.evidence_type
         
-        # Apply time decay if published date is known
-        if published_date:
-            current_weight = cls._apply_time_decay(
-                authority.base_weight,
-                published_date,
-                authority.decay_half_life_days
-            )
+        # Apply temporal decay if timestamp provided
+        if timestamp:
+            days_old = (datetime.now() - timestamp).days
+            decay_factor = 0.5 ** (days_old / config.decay_half_life_days)
+            weight = base_weight * decay_factor
         else:
-            current_weight = authority.base_weight
-            
-        return current_weight, authority.evidence_type
+            weight = base_weight
+        
+        return weight, evidence_type
     
-    @classmethod
-    def _apply_time_decay(cls, base_weight: float, published_date: datetime, half_life_days: int) -> float:
-        """Apply exponential decay to evidence weight based on age"""
-        age_days = (datetime.now() - published_date).days
-        
-        # Exponential decay formula: weight = base_weight * (0.5)^(age/half_life)
-        decay_factor = 0.5 ** (age_days / half_life_days)
-        decayed_weight = base_weight * decay_factor
-        
-        # Ensure minimum weight of 0.1
-        return max(decayed_weight, 0.1)
-    
-    @classmethod
-    def calculate_evidence_diversity(cls, sources: List[str]) -> float:
-        """
-        Calculate diversity score based on variety of source types
-        
-        Returns score from 0.0 to 1.0
-        """
-        if not sources:
+    @staticmethod
+    def calculate_evidence_diversity(source_urls: List[str]) -> float:
+        """Calculate diversity score for evidence sources"""
+        if not source_urls:
             return 0.0
-            
-        categories = set()
-        evidence_types = set()
         
-        for source in sources:
-            category = cls.classify_source(source)
-            categories.add(category)
-            evidence_types.add(cls.AUTHORITY_CONFIG[category].evidence_type)
+        # Count sources by category
+        category_counts = {}
+        for url in source_urls:
+            category = EvidenceHierarchy.classify_source(url)
+            category_counts[category] = category_counts.get(category, 0) + 1
         
-        # Diversity based on number of unique categories and evidence types
-        category_diversity = len(categories) / len(SourceCategory)
-        type_diversity = len(evidence_types) / len(EvidenceType)
+        # Calculate Shannon diversity index
+        total_sources = len(source_urls)
+        diversity = 0.0
         
-        # Weight category diversity more heavily
-        diversity_score = (0.7 * category_diversity) + (0.3 * type_diversity)
+        for count in category_counts.values():
+            if count > 0:
+                proportion = count / total_sources
+                # Use natural logarithm for Shannon diversity
+                diversity -= proportion * math.log(proportion) if proportion > 0 else 0
         
-        return min(diversity_score, 1.0)
+        # Normalize to 0-1 scale (max diversity is log of number of categories)
+        max_diversity = math.log(len(SourceCategory))
+        return min(diversity / max_diversity, 1.0) if max_diversity > 0 else 0.0
     
-    @classmethod
-    def is_local_source(cls, url: str, destination_country_code: Optional[str] = None) -> bool:
-        """
-        Determine if a source is local to the destination
+    @staticmethod
+    def is_local_source(url: str, country_code: Optional[str] = None) -> bool:
+        """Determine if source appears to be local"""
+        url_lower = url.lower()
         
-        Args:
-            url: Source URL
-            destination_country_code: ISO country code of destination
+        # Country-specific TLD patterns
+        if country_code:
+            country_patterns = {
+                'CA': [r'\.ca(?:/|$)', r'canada'],
+                'US': [r'\.us(?:/|$)', r'america', r'usa'],
+                'UK': [r'\.uk(?:/|$)', r'britain', r'england'],
+                'AU': [r'\.au(?:/|$)', r'australia'],
+                'DE': [r'\.de(?:/|$)', r'germany', r'deutschland']
+            }
             
-        Returns:
-            True if source appears to be local
-        """
-        # Check for country-specific TLDs
-        if destination_country_code:
-            country_tld = f".{destination_country_code.lower()}"
-            if country_tld in url.lower():
-                return True
+            patterns = country_patterns.get(country_code, [])
+            for pattern in patterns:
+                if re.search(pattern, url_lower):
+                    return True
         
-        # Check for local indicators
+        # Local keywords
         local_indicators = [
-            'local', 'native', 'resident', 'municipal',
-            'community', 'neighborhood', 'district'
+            r'local', r'community', r'neighborhood', r'resident',
+            r'municipal', r'city', r'town', r'village'
         ]
         
+        for pattern in local_indicators:
+            if re.search(pattern, url_lower):
+                return True
+        
+        return False
+    
+    @staticmethod
+    def classify_local_authority(url: str, content: str) -> 'LocalAuthority':
+        """Classify and create LocalAuthority from URL and content"""
+        # Import here to avoid circular imports
+        from .enhanced_data_models import LocalAuthority
+        
         url_lower = url.lower()
-        return any(indicator in url_lower for indicator in local_indicators) 
+        content_lower = content.lower()
+        combined_text = f"{url_lower} {content_lower}"
+        
+        # Check for authority type patterns
+        authority_type = AuthorityType.RESIDENT  # Default
+        expertise_domain = "general local knowledge"
+        community_validation = 0.2  # Default low validation
+        
+        # Producer patterns
+        for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.PRODUCER]:
+            if re.search(pattern, combined_text):
+                authority_type = AuthorityType.PRODUCER
+                expertise_domain = "local production/artisan work"
+                community_validation = 0.8
+                break
+        
+        # Professional patterns  
+        for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.PROFESSIONAL]:
+            if re.search(pattern, combined_text):
+                authority_type = AuthorityType.PROFESSIONAL
+                expertise_domain = "professional local services"
+                community_validation = 0.9
+                break
+        
+        # Resident patterns
+        for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.RESIDENT]:
+            if re.search(pattern, combined_text):
+                authority_type = AuthorityType.RESIDENT
+                expertise_domain = "community knowledge"
+                community_validation = 0.6
+                break
+        
+        # Extract expertise domain from content if possible
+        if 'expert' in content_lower or 'specialist' in content_lower:
+            expertise_domain = "specialized local knowledge"
+            community_validation = min(community_validation + 0.2, 1.0)
+        
+        return LocalAuthority(
+            authority_type=authority_type,
+            local_tenure=None,  # Would need additional parsing to extract
+            expertise_domain=expertise_domain,
+            community_validation=community_validation
+        ) 

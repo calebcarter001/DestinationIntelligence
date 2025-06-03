@@ -143,6 +143,8 @@ class JsonExportManager:
             "dimensions": self._format_dimensions(destination.dimensions),
             "temporal_analysis": self._format_temporal_slices(destination.temporal_slices),
             "points_of_interest": self._format_pois(destination.pois),
+            "authentic_insights": [ai.to_dict() for ai in destination.authentic_insights],
+            "local_authorities": [la.to_dict() for la in destination.local_authorities],
             "quality_metrics": self._calculate_quality_metrics(destination),
             "lineage": destination.lineage,
             "metadata": destination.meta
@@ -155,8 +157,8 @@ class JsonExportManager:
     
     def _create_executive_summary(self, destination: Destination) -> Dict[str, Any]:
         """Create executive summary for quick overview"""
-        verified_themes = [t for t in destination.themes 
-                          if t.get_confidence_level() in [ConfidenceLevel.VERIFIED, ConfidenceLevel.STRONGLY_SUPPORTED]]
+        verified_themes = [t for t in destination.themes
+                           if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]]
         
         top_dimensions = self._get_top_dimensions(destination.dimensions, n=10)
         
@@ -178,11 +180,11 @@ class JsonExportManager:
                     {
                         "name": t.name,
                         "category": t.macro_category,
-                        "confidence": t.confidence_breakdown.total_confidence if t.confidence_breakdown else 0,
+                        "confidence": t.confidence_breakdown.overall_confidence if t.confidence_breakdown else 0,
                         "evidence_count": len(t.evidence)
                     }
                     for t in sorted(verified_themes, 
-                                  key=lambda x: x.confidence_breakdown.total_confidence if x.confidence_breakdown else 0,
+                                  key=lambda x: x.confidence_breakdown.overall_confidence if x.confidence_breakdown else 0,
                                   reverse=True)[:5]
                 ],
                 "destination_strengths": top_dimensions,
@@ -219,7 +221,16 @@ class JsonExportManager:
                 "evidence_distribution": self._get_evidence_distribution(theme.evidence),
                 "tags": theme.tags,
                 "created": theme.created_date.isoformat(),
-                "last_validated": theme.last_validated.isoformat() if theme.last_validated else None
+                "last_validated": theme.last_validated.isoformat() if theme.last_validated else None,
+                "authentic_insights": [ai.to_dict() for ai in theme.authentic_insights],
+                "local_authorities": [la.to_dict() for la in theme.local_authorities],
+                "seasonal_relevance": theme.seasonal_relevance,
+                "regional_uniqueness": theme.regional_uniqueness,
+                "insider_tips": theme.insider_tips,
+                "factors": theme.factors,
+                "cultural_summary": theme.cultural_summary,
+                "sentiment_analysis": theme.sentiment_analysis,
+                "temporal_analysis": theme.temporal_analysis
             }
             
             themes_by_category[category].append(theme_data)
@@ -258,7 +269,10 @@ class JsonExportManager:
                     "confidence": evidence.confidence,
                     "timestamp": evidence.timestamp.isoformat(),
                     "cultural_context": evidence.cultural_context,
-                    "agent_id": evidence.agent_id
+                    "agent_id": evidence.agent_id,
+                    "sentiment": evidence.sentiment,
+                    "published_date": evidence.published_date.isoformat() if evidence.published_date else None,
+                    "relationships": evidence.relationships
                 }
                 
                 all_evidence.append(evidence_data)
@@ -314,55 +328,32 @@ class JsonExportManager:
         }
     
     def _format_themes_with_evidence(self, themes: List[Theme]) -> List[Dict[str, Any]]:
-        """Format themes with evidence samples"""
+        """Format themes and their evidence for export"""
         formatted_themes = []
-        
         for theme in themes:
-            theme_data = {
-                "theme_id": theme.theme_id,
-                "name": theme.name,
-                "macro_category": theme.macro_category,
-                "micro_category": theme.micro_category,
-                "description": theme.description,
-                "fit_score": theme.fit_score,
-                "confidence": {
-                    "level": theme.get_confidence_level().value,
-                    "score": theme.confidence_breakdown.total_confidence if theme.confidence_breakdown else 0,
-                    "breakdown": theme.confidence_breakdown.to_dict() if theme.confidence_breakdown else None
-                },
-                "evidence": {
-                    "count": len(theme.evidence),
-                    "samples": [
-                        {
-                            "source": ev.source_url,
-                            "type": ev.evidence_type.value,
-                            "authority": ev.authority_weight,
-                            "snippet": ev.text_snippet[:200] + "..." if len(ev.text_snippet) > 200 else ev.text_snippet
-                        }
-                        for ev in theme.evidence[:3]  # Top 3 evidence samples
-                    ]
-                },
-                "tags": theme.tags
-            }
-            formatted_themes.append(theme_data)
+            theme_dict = theme.to_dict() # Use the to_dict method from the Theme dataclass
             
+            # Evidence is already formatted by Theme.to_dict() if needed, but let's confirm
+            # If evidence objects themselves need to be formatted beyond simple dict, do it here.
+            # For now, assuming Evidence.to_dict() is called within Theme.to_dict() for nested objects.
+            
+            formatted_themes.append(theme_dict)
         return formatted_themes
     
     def _format_dimensions(self, dimensions: Dict[str, Any]) -> Dict[str, Any]:
-        """Format dimensions with metadata"""
-        formatted = {}
-        
-        for name, dim_value in dimensions.items():
-            if dim_value.value is not None:
-                formatted[name] = {
-                    "value": dim_value.value,
-                    "unit": dim_value.unit,
-                    "confidence": dim_value.confidence,
-                    "last_updated": dim_value.last_updated.isoformat(),
-                    "evidence_count": len(dim_value.source_evidence_ids)
+        """Format dimensions for export"""
+        formatted_dimensions = {}
+        for name, dv in dimensions.items():
+            if dv.value is not None:
+                formatted_dimensions[name] = {
+                    "value": dv.value,
+                    "unit": dv.unit,
+                    "confidence": dv.confidence,
+                    "last_updated": dv.last_updated.isoformat(),
+                    "evidence_count": len(dv.source_evidence_ids)
                 }
                 
-        return formatted
+        return formatted_dimensions
     
     def _format_temporal_slices(self, slices: List[TemporalSlice]) -> List[Dict[str, Any]]:
         """Format temporal slices"""
@@ -399,7 +390,7 @@ class JsonExportManager:
         total_evidence = sum(len(t.evidence) for t in destination.themes)
         
         confidence_scores = [
-            t.confidence_breakdown.total_confidence 
+            t.confidence_breakdown.overall_confidence 
             for t in destination.themes 
             if t.confidence_breakdown
         ]
@@ -410,7 +401,7 @@ class JsonExportManager:
             "average_confidence": sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0,
             "high_confidence_themes": len([
                 t for t in destination.themes 
-                if t.get_confidence_level() in [ConfidenceLevel.VERIFIED, ConfidenceLevel.STRONGLY_SUPPORTED]
+                if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]
             ]),
             "dimensions_populated": len([d for d in destination.dimensions.values() if d.value is not None]),
             "temporal_coverage": len(destination.temporal_slices),
@@ -441,7 +432,7 @@ class JsonExportManager:
         characteristics = []
         
         for theme in destination.themes:
-            if theme.get_confidence_level() in [ConfidenceLevel.VERIFIED, ConfidenceLevel.STRONGLY_SUPPORTED]:
+            if theme.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]:
                 if theme.fit_score > 0.8:  # High relevance to destination
                     characteristics.append(f"{theme.name} ({theme.macro_category})")
                     
@@ -474,7 +465,7 @@ class JsonExportManager:
     def _calculate_average_confidence(self, themes: List[Theme]) -> float:
         """Calculate average confidence across themes"""
         scores = [
-            t.confidence_breakdown.total_confidence 
+            t.confidence_breakdown.overall_confidence 
             for t in themes 
             if t.confidence_breakdown
         ]

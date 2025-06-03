@@ -6,6 +6,7 @@ config.yaml
 
 # Python virtual environment
 demo_env/
+venv/
 
 # Ignore Python bytecode and caches
 __pycache__/

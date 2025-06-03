@@ -1,0 +1,159 @@
+{
+  "export_metadata": {
+    "version": "2.0",
+    "export_timestamp": "2025-06-02T21:43:17.149186",
+    "destination_id": "bali-indonesia",
+    "destination_revision": 1,
+    "export_type": "full_comprehensive"
+  },
+  "destination": {
+    "id": "bali-indonesia",
+    "names": [
+      "Bali"
+    ],
+    "primary_name": "Bali",
+    "admin_levels": {
+      "country": "Indonesia",
+      "state": "Bali"
+    },
+    "country_code": "ID",
+    "timezone": "Asia/Makassar",
+    "population": null,
+    "geography": {},
+    "last_updated": "2025-06-02T21:43:17.106821"
+  },
+  "themes": [
+    {
+      "theme_id": "test-theme-1",
+      "macro_category": "Culture & Heritage",
+      "micro_category": "Local Traditions",
+      "name": "Cultural Experiences",
+      "description": "Rich cultural experiences and traditional ceremonies",
+      "fit_score": 0.9,
+      "evidence": [
+        {
+          "id": "test-evidence-1",
+          "source_url": "https://example.com/test1",
+          "source_category": "blog",
+          "evidence_type": "tertiary",
+          "authority_weight": 0.8,
+          "text_snippet": "Beautiful beaches and vibrant culture",
+          "timestamp": "2025-06-02T21:43:17.106791",
+          "confidence": 0.9,
+          "sentiment": 0.8,
+          "cultural_context": {
+            "is_local_source": true,
+            "local_entities": [
+              "Kuta Beach",
+              "Tanah Lot"
+            ],
+            "content_type": "experience"
+          },
+          "relationships": [
+            {
+              "target_id": "test-evidence-2",
+              "relationship_type": "thematic_similarity",
+              "strength": "high"
+            }
+          ],
+          "agent_id": "test_agent_123",
+          "published_date": "2025-06-02T21:43:17.106795",
+          "factors": null
+        },
+        {
+          "id": "test-evidence-2",
+          "source_url": "https://example.com/test2",
+          "source_category": "guidebook",
+          "evidence_type": "secondary",
+          "authority_weight": 0.9,
+          "text_snippet": "Rich cultural heritage and traditional ceremonies",
+          "timestamp": "2025-06-02T21:43:17.106804",
+          "confidence": 0.85,
+          "sentiment": 0.7,
+          "cultural_context": {
+            "is_local_source": true,
+            "local_entities": [
+              "Ubud",
+              "Uluwatu Temple"
+            ],
+            "content_type": "guide"
+          },
+          "relationships": [
+            {
+              "target_id": "test-evidence-1",
+              "relationship_type": "thematic_similarity",
+              "strength": "high"
+            }
+          ],
+          "agent_id": "test_agent_123",
+          "published_date": "2025-06-02T21:43:17.106805",
+          "factors": null
+        }
+      ],
+      "confidence_breakdown": null,
+      "tags": [
+        "culture",
+        "tradition",
+        "ceremony"
+      ],
+      "created_date": "2025-06-02T21:43:17.106809",
+      "last_validated": null,
+      "metadata": {},
+      "authentic_insights": [],
+      "local_authorities": [],
+      "seasonal_relevance": {},
+      "regional_uniqueness": 0.0,
+      "insider_tips": [],
+      "factors": {
+        "source_diversity": 2,
+        "authority_distribution": {
+          "high_authority_ratio": 0.85
+        },
+        "temporal_relevance": 0.9
+      },
+      "cultural_summary": {
+        "total_sources": 2,
+        "local_sources": 2,
+        "cultural_balance": "local-heavy",
+        "key_cultural_elements": [
+          "ceremonies",
+          "temples",
+          "traditions"
+        ]
+      },
+      "sentiment_analysis": {
+        "overall": "very positive",
+        "average_score": 0.75,
+        "confidence": 0.87,
+        "distribution": {
+          "positive": 0.8,
+          "neutral": 0.2,
+          "negative": 0
+        }
+      },
+      "temporal_analysis": {
+        "evidence_span_days": 30,
+        "seasonal_indicators": [
+          "year-round"
+        ],
+        "temporal_confidence": 0.8
+      }
+    }
+  ],
+  "dimensions": {},
+  "temporal_analysis": [],
+  "points_of_interest": [],
+  "authentic_insights": [],
+  "local_authorities": [],
+  "quality_metrics": {
+    "total_themes": 1,
+    "total_evidence": 2,
+    "average_confidence": 0,
+    "high_confidence_themes": 0,
+    "dimensions_populated": 0,
+    "temporal_coverage": 0,
+    "poi_count": 0
+  },
+  "lineage": {},
+  "metadata": {}
+}

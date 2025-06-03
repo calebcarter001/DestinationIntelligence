@@ -1,0 +1,82 @@
+{
+  "export_metadata": {
+    "version": "2.0",
+    "export_timestamp": "2025-06-02T21:43:17.150153",
+    "export_type": "themes_detailed",
+    "destination_id": "bali-indonesia"
+  },
+  "themes_by_category": {
+    "Culture & Heritage": [
+      {
+        "theme_id": "test-theme-1",
+        "name": "Cultural Experiences",
+        "micro_category": "Local Traditions",
+        "description": "Rich cultural experiences and traditional ceremonies",
+        "fit_score": 0.9,
+        "confidence_level": "insufficient",
+        "confidence_breakdown": null,
+        "evidence_count": 2,
+        "evidence_distribution": {
+          "blog": 1,
+          "guidebook": 1
+        },
+        "tags": [
+          "culture",
+          "tradition",
+          "ceremony"
+        ],
+        "created": "2025-06-02T21:43:17.106809",
+        "last_validated": null,
+        "authentic_insights": [],
+        "local_authorities": [],
+        "seasonal_relevance": {},
+        "regional_uniqueness": 0.0,
+        "insider_tips": [],
+        "factors": {
+          "source_diversity": 2,
+          "authority_distribution": {
+            "high_authority_ratio": 0.85
+          },
+          "temporal_relevance": 0.9
+        },
+        "cultural_summary": {
+          "total_sources": 2,
+          "local_sources": 2,
+          "cultural_balance": "local-heavy",
+          "key_cultural_elements": [
+            "ceremonies",
+            "temples",
+            "traditions"
+          ]
+        },
+        "sentiment_analysis": {
+          "overall": "very positive",
+          "average_score": 0.75,
+          "confidence": 0.87,
+          "distribution": {
+            "positive": 0.8,
+            "neutral": 0.2,
+            "negative": 0
+          }
+        },
+        "temporal_analysis": {
+          "evidence_span_days": 30,
+          "seasonal_indicators": [
+            "year-round"
+          ],
+          "temporal_confidence": 0.8
+        }
+      }
+    ]
+  },
+  "theme_statistics": {
+    "total_themes": 1,
+    "themes_by_confidence": {
+      "insufficient": 1
+    },
+    "categories": [
+      "Culture & Heritage"
+    ],
+    "average_evidence_per_theme": 2.0
+  }
+}

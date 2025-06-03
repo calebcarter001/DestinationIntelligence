@@ -1,9 +1,13 @@
 # Example configuration file for Destination Intelligence Discovery
 # Copy this file to config.yaml and update with your settings
 
+# demo_settings:
+#   log_level: "INFO"
+
 # Database configuration
 database:
-  path: "real_destination_intelligence.db"
+  path: "enhanced_destination_intelligence.db"
+  type: "sqlite"
   chroma_db_path: "./chroma_db"
 
 # LLM settings (can be overridden by .env)
