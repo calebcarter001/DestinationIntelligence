@@ -1,0 +1,841 @@
+"""
+Consolidated JSON Export Manager
+Replaces multiple file exports with single comprehensive file using reference-based architecture
+Now with configurable export modes and smart view generation
+Enhanced with adaptive data quality classification for intelligent processing
+"""
+import json
+import os
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+import logging
+from pathlib import Path
+
+from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice
+from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
+from .export_config import ExportConfig, ExportMode, SmartViewGenerator, create_export_config_from_yaml
+from .authentic_insights_deduplicator import deduplicate_authentic_insights_for_export, AuthenticInsightsDeduplicator
+from .adaptive_data_quality_classifier import AdaptiveDataQualityClassifier
+
+logger = logging.getLogger(__name__)
+
+class ConsolidatedJsonExportManager:
+    """
+    Consolidated export manager that creates a single comprehensive JSON file
+    with reference-based architecture to eliminate duplication
+    Now supports configurable export modes and smart view generation
+    Includes authentic insights deduplication to fix cross-referencing issues
+    Enhanced with adaptive data quality classification for intelligent processing
+    """
+    
+    def __init__(self, export_base_path: str, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize export manager with adaptive configuration
+        
+        Args:
+            export_base_path: Base path for exports
+            config: Application configuration dictionary for adaptive processing
+        """
+        self.base_path = Path(export_base_path)
+        self.consolidated_path = self.base_path / "consolidated"
+        self.consolidated_path.mkdir(parents=True, exist_ok=True)
+        
+        self.logger = logging.getLogger(__name__)
+        
+        # Store configuration for adaptive processing
+        self.config = config or {}
+        
+        # Initialize adaptive data quality classifier
+        self.quality_classifier = AdaptiveDataQualityClassifier(self.config)
+        
+        # Create export configuration (can be overridden by adaptive logic)
+        self.export_config = create_export_config_from_yaml(self.config)
+        
+        # Initialize smart view generator and insights deduplicator
+        self.view_generator = SmartViewGenerator(self.export_config)
+        self.insights_deduplicator = AuthenticInsightsDeduplicator()
+        
+        self.logger.info(f"Consolidated JSON export manager initialized with adaptive intelligence")
+        self.logger.info(f"Export path: {self.consolidated_path}")
+        
+        # Log adaptive configuration status
+        heuristics_enabled = self.config.get("data_quality_heuristics", {}).get("enabled", False)
+        self.logger.info(f"Adaptive data quality classification: {'enabled' if heuristics_enabled else 'disabled'}")
+
+    def export_destination_insights(
+        self, 
+        destination: Destination,
+        analysis_metadata: Optional[Dict[str, Any]] = None,
+        evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> str:
+        """
+        Export destination insights with adaptive processing based on data quality
+        
+        Args:
+            destination: Destination object to export
+            analysis_metadata: Optional metadata about the analysis process
+            evidence_registry: Optional evidence registry for reference-based export
+            
+        Returns:
+            str: Path to the exported file
+        """
+        
+        try:
+            # Generate safe destination ID for filename
+            destination_id_safe = destination.id.replace(' ', '_').replace(',', '_').lower()
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            # Build evidence registry if not provided
+            if not evidence_registry:
+                evidence_registry = self._build_evidence_registry(destination)
+            
+            # Classify data quality for adaptive processing
+            discovered_themes_count = len(destination.themes)
+            content_list = self._extract_content_from_evidence(evidence_registry)
+            
+            data_quality_result = self.quality_classifier.classify_data_quality(
+                destination_name=destination.id,
+                evidence_list=list(evidence_registry.values()),
+                content_list=content_list,
+                discovered_themes_count=discovered_themes_count,
+                analysis_metadata=analysis_metadata
+            )
+            
+            # Extract adaptive settings
+            classification = data_quality_result["classification"]
+            adaptive_settings = data_quality_result["adaptive_settings"]
+            
+            self.logger.info(f"Data quality classification: {classification}")
+            self.logger.info(f"Reasoning: {data_quality_result['reasoning']}")
+            self.logger.debug(f"Adaptive settings: {adaptive_settings}")
+            
+            # Update export configuration with adaptive settings
+            self._apply_adaptive_settings(adaptive_settings)
+            
+            # Apply adaptive theme filtering
+            destination = self._apply_adaptive_theme_filtering(destination, adaptive_settings)
+            
+            # Create export based on adaptive mode
+            export_mode = adaptive_settings.get("export_mode", "themes_focused")
+
+            # TEMPORARY OVERRIDE FOR CHICAGO COMPREHENSIVE EXPORT (FOR DEBUGGING AUTHORITY WEIGHT)
+            if "chicago" in destination_id_safe:
+                self.logger.warning(f"TEMPORARY OVERRIDE: Forcing 'comprehensive' export mode for {destination_id_safe}")
+                export_mode = "comprehensive"
+            
+            if export_mode == "comprehensive":
+                export_data = self._create_comprehensive_export(
+                    destination, analysis_metadata, evidence_registry
+                )
+            elif export_mode == "minimal":
+                export_data = self._create_minimal_export(
+                    destination, evidence_registry
+                )
+            elif export_mode == "summary_only":
+                export_data = self._create_summary_export(
+                    destination, evidence_registry
+                )
+            elif export_mode == "evidence_focused":
+                export_data = self._create_evidence_focused_export(
+                    destination, evidence_registry
+                )
+            elif export_mode == "themes_focused":
+                export_data = self._create_themes_focused_export(
+                    destination, evidence_registry
+                )
+            else:
+                # Fallback to themes_focused
+                export_data = self._create_themes_focused_export(
+                    destination, evidence_registry
+                )
+            
+            # Add data quality analysis to export metadata
+            if "metadata" not in export_data:
+                export_data["metadata"] = {}
+            export_data["metadata"]["data_quality_analysis"] = data_quality_result
+            
+            # Apply adaptive filtering
+            export_data = self._apply_adaptive_filters(export_data, adaptive_settings)
+            
+            # Save export file with classification suffix
+            mode_suffix = f"{export_mode}_{classification}"
+            comprehensive_path = self.consolidated_path / f"dest_{destination_id_safe}_{mode_suffix}_{timestamp}.json"
+            self._save_json(export_data, comprehensive_path)
+            
+            # Create latest symlink for easy access
+            latest_link = self.consolidated_path / f"dest_{destination_id_safe}_latest.json"
+            self._create_latest_link(comprehensive_path, latest_link)
+            
+            self.logger.info(f"Successfully exported {export_mode} insights ({classification}) to {comprehensive_path}")
+            
+            # Archive old exports if needed
+            self._archive_old_exports(destination_id_safe, days_to_keep=7)
+            
+        except Exception as e:
+            self.logger.error(f"Error exporting destination insights: {e}")
+            raise
+            
+        return str(comprehensive_path)
+    
+    def _apply_adaptive_settings(self, adaptive_settings: Dict[str, Any]):
+        """Apply adaptive settings to export configuration"""
+        
+        # Update confidence threshold
+        if "confidence_threshold" in adaptive_settings:
+            self.export_config.min_confidence_threshold = adaptive_settings["confidence_threshold"]
+        
+        # Update evidence per theme limit
+        if "max_evidence_per_theme" in adaptive_settings:
+            self.export_config.max_evidence_per_theme = adaptive_settings["max_evidence_per_theme"]
+        
+        # Update export mode
+        if "export_mode" in adaptive_settings:
+            try:
+                self.export_config.mode = ExportMode(adaptive_settings["export_mode"])
+            except ValueError:
+                self.logger.warning(f"Invalid export mode: {adaptive_settings['export_mode']}, using default")
+    
+    def _apply_adaptive_theme_filtering(
+        self, 
+        destination: Destination, 
+        adaptive_settings: Dict[str, Any]
+    ) -> Destination:
+        """Apply adaptive theme filtering based on data quality"""
+        
+        max_themes = adaptive_settings.get("max_themes", 35)
+        confidence_threshold = adaptive_settings.get("confidence_threshold", 0.55)
+        
+        # Filter and limit themes
+        filtered_themes = []
+        for theme in destination.themes:
+            # Check confidence threshold
+            theme_confidence = 0.5  # Default
+            if theme.confidence_breakdown:
+                theme_confidence = theme.confidence_breakdown.overall_confidence
+            
+            if theme_confidence >= confidence_threshold:
+                filtered_themes.append(theme)
+        
+        # Sort by confidence and limit count
+        filtered_themes.sort(
+            key=lambda t: t.confidence_breakdown.overall_confidence if t.confidence_breakdown else 0.5,
+            reverse=True
+        )
+        
+        if len(filtered_themes) > max_themes:
+            filtered_themes = filtered_themes[:max_themes]
+            self.logger.info(f"Limited themes to top {max_themes} based on adaptive settings")
+        
+        # Create new destination with filtered themes
+        destination.themes = filtered_themes
+        return destination
+    
+    def _apply_adaptive_filters(
+        self, 
+        export_data: Dict[str, Any], 
+        adaptive_settings: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Apply adaptive filtering to export data"""
+        
+        # Apply confidence threshold filtering
+        confidence_threshold = adaptive_settings.get("confidence_threshold", 0.55)
+        if "data" in export_data and "themes" in export_data["data"]:
+            filtered_themes = {}
+            for theme_id, theme_data in export_data["data"]["themes"].items():
+                confidence = theme_data.get("confidence_breakdown", {}).get("overall_confidence", 0)
+                if confidence >= confidence_threshold:
+                    filtered_themes[theme_id] = theme_data
+            export_data["data"]["themes"] = filtered_themes
+        
+        # Apply evidence per theme limit
+        max_evidence_per_theme = adaptive_settings.get("max_evidence_per_theme", 5)
+        if (max_evidence_per_theme and 
+            "relationships" in export_data and 
+            "theme_evidence" in export_data["relationships"]):
+            
+            for theme_id, evidence_ids in export_data["relationships"]["theme_evidence"].items():
+                if len(evidence_ids) > max_evidence_per_theme:
+                    # Keep highest authority evidence
+                    evidence_registry = export_data.get("data", {}).get("evidence", {})
+                    sorted_evidence = sorted(
+                        evidence_ids,
+                        key=lambda eid: evidence_registry.get(eid, {}).get("authority_weight", 0),
+                        reverse=True
+                    )
+                    export_data["relationships"]["theme_evidence"][theme_id] = sorted_evidence[:max_evidence_per_theme]
+        
+        return export_data
+    
+    def _build_evidence_registry(self, destination: Destination) -> Dict[str, Dict[str, Any]]:
+        """Build evidence registry from destination themes"""
+        
+        evidence_registry = {}
+        for theme in destination.themes:
+            for evidence in theme.evidence:
+                if evidence.id not in evidence_registry:
+                    evidence_registry[evidence.id] = evidence.to_dict()
+        
+        return evidence_registry
+    
+    def _extract_content_from_evidence(self, evidence_registry: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Extract content list from evidence registry for quality classification"""
+        
+        content_list = []
+        for evidence_data in evidence_registry.values():
+            content_list.append({
+                "content": evidence_data.get("text_snippet", ""),
+                "source_url": evidence_data.get("source_url", ""),
+                "authority_weight": evidence_data.get("authority_weight", 0.0)
+            })
+        
+        return content_list
+    
+    def _create_comprehensive_export(
+        self, 
+        destination: Destination,
+        analysis_metadata: Optional[Dict[str, Any]] = None,
+        evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Create comprehensive export with all data using references"""
+        
+        # Deduplicate authentic insights and get cross-references
+        self.insights_deduplicator.clear_registry()  # Clear previous state
+        deduplicated_insights, insights_cross_refs = deduplicate_authentic_insights_for_export(destination)
+        
+        # Format themes and get data
+        themes_data = self._format_themes_with_references(destination.themes)
+        destination_data = self._format_destination_data(destination)
+
+        # Build evidence_registry if not provided or empty
+        current_evidence_registry = evidence_registry or {}
+        if not current_evidence_registry:
+            self.logger.info("Evidence registry not provided or empty, building from destination themes.")
+            temp_registry = {}
+            for theme in destination.themes:
+                for ev in theme.evidence:
+                    if ev.id not in temp_registry:
+                        temp_registry[ev.id] = ev.to_dict() # Use Evidence.to_dict()
+            current_evidence_registry = temp_registry
+            self.logger.info(f"Built evidence registry with {len(current_evidence_registry)} items.")
+        
+        # Generate views using smart view generator with deduplicated insights
+        views = self.view_generator.generate_views(
+            destination_data, 
+            current_evidence_registry, 
+            themes_data
+        )
+        
+        export = {
+            "export_metadata": {
+                "version": self.export_config.version,
+                "export_timestamp": datetime.now().isoformat(),
+                "destination_id": destination.id,
+                "destination_revision": destination.destination_revision,
+                "export_type": "comprehensive_consolidated",
+                "export_mode": self.export_config.mode.value,
+                "format": "reference_based_configurable",
+                "deduplication_applied": {
+                    "evidence_deduplication": bool(current_evidence_registry), # Use current_evidence_registry
+                    "insights_deduplication": True,
+                    "cross_referencing_fixed": True
+                }
+            },
+            
+            # Core destination information
+            "destination": destination_data,
+            
+            # Data stores - single source of truth for each data type
+            "data": {
+                "evidence": current_evidence_registry, # Use current_evidence_registry
+                "themes": themes_data,
+                "insights": deduplicated_insights,  # Now deduplicated with no cross-reference issues
+                "authorities": self._format_local_authorities(destination.local_authorities),
+                "temporal_slices": self._format_temporal_slices(destination.temporal_slices),
+                "dimensions": self._format_dimensions(destination.dimensions),
+                "points_of_interest": self._format_pois(destination.pois)
+            },
+            
+            # Relationship mappings for references (now includes deduplicated insights)
+            "relationships": {
+                "theme_evidence": self._build_theme_evidence_relationships(destination.themes),
+                "theme_insights": insights_cross_refs.get("theme_insights", {}),  # From deduplicator
+                "insight_themes": insights_cross_refs.get("insight_themes", {}),  # Reverse mapping
+                "destination_insights": insights_cross_refs.get("destination_insights", {}),  # From deduplicator
+                "insight_authorities": self._build_insight_authority_relationships_deduplicated(deduplicated_insights),
+                "temporal_themes": self._build_temporal_theme_relationships(destination.temporal_slices)
+            },
+            
+            # Smart generated views
+            "views": views,
+            
+            # Analysis metadata and lineage
+            "metadata": {
+                "analysis_metadata": analysis_metadata or {},
+                "lineage": destination.lineage,
+                "processing_metadata": destination.meta,
+                "data_quality": self._calculate_comprehensive_quality_metrics(destination, current_evidence_registry), # Use current_evidence_registry
+                "export_configuration": self.export_config.dict(),
+                "deduplication_statistics": {
+                    "insights_stats": self.insights_deduplicator.get_registry().get_cross_reference_statistics()
+                }
+            }
+        }
+        
+        return export
+    
+    def _create_minimal_export(
+        self, 
+        destination: Destination,
+        evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Create minimal export with essential data only"""
+        
+        destination_data = self._format_destination_data(destination)
+        
+        # Only include high-confidence themes
+        high_conf_themes = {}
+        for theme in destination.themes:
+            if theme.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]:
+                theme_data = self._format_single_theme(theme)
+                high_conf_themes[theme.theme_id] = theme_data
+        
+        # Generate minimal views
+        views = {
+            "executive_summary": self.view_generator._generate_executive_summary(
+                destination_data, high_conf_themes
+            )
+        }
+        
+        return {
+            "export_metadata": {
+                "version": self.export_config.version,
+                "export_timestamp": datetime.now().isoformat(),
+                "destination_id": destination.id,
+                "export_type": "minimal_export",
+                "export_mode": "minimal"
+            },
+            "destination": destination_data,
+            "data": {
+                "themes": high_conf_themes
+            },
+            "views": views
+        }
+    
+    def _create_summary_export(
+        self, 
+        destination: Destination,
+        evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Create summary-only export"""
+        
+        destination_data = self._format_destination_data(destination)
+        themes_data = self._format_themes_with_references(destination.themes)
+        
+        # Generate only executive summary
+        summary_view = self.view_generator._generate_executive_summary(
+            destination_data, themes_data
+        )
+        
+        return {
+            "export_metadata": {
+                "version": self.export_config.version,
+                "export_timestamp": datetime.now().isoformat(),
+                "destination_id": destination.id,
+                "export_type": "summary_only",
+                "export_mode": "summary_only"
+            },
+            "destination": destination_data,
+            "executive_summary": summary_view,
+            "stats": {
+                "total_themes": len(themes_data),
+                "high_confidence_themes": len([t for t in themes_data.values() 
+                                             if t.get("confidence_breakdown", {}).get("overall_confidence", 0) > 0.7])
+            }
+        }
+    
+    def _create_evidence_focused_export(
+        self, 
+        destination: Destination,
+        evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Create evidence-focused export"""
+        
+        destination_data = self._format_destination_data(destination)
+        
+        # Generate evidence-focused views
+        evidence_views = {
+            "evidence_by_source": self.view_generator._generate_evidence_by_source_views(evidence_registry or {}),
+            "quality_dashboard": self.view_generator._generate_quality_dashboard(
+                destination_data, evidence_registry or {}, {}
+            )
+        }
+        
+        return {
+            "export_metadata": {
+                "version": self.export_config.version,
+                "export_timestamp": datetime.now().isoformat(),
+                "destination_id": destination.id,
+                "export_type": "evidence_focused",
+                "export_mode": "evidence_focused"
+            },
+            "destination": destination_data,
+            "data": {
+                "evidence": evidence_registry or {}
+            },
+            "relationships": {
+                "theme_evidence": self._build_theme_evidence_relationships(destination.themes)
+            },
+            "views": evidence_views
+        }
+    
+    def _create_themes_focused_export(
+        self, 
+        destination: Destination,
+        evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Create themes-focused export"""
+        
+        # Deduplicate insights for themes-focused export
+        self.insights_deduplicator.clear_registry()
+        deduplicated_insights, insights_cross_refs = deduplicate_authentic_insights_for_export(destination)
+        
+        destination_data = self._format_destination_data(destination)
+        themes_data = self._format_themes_with_references(destination.themes)
+        
+        # Generate theme-focused views
+        theme_views = {
+            "themes_by_category": self.view_generator._generate_category_views(themes_data),
+            "seasonal_overview": self.view_generator._generate_seasonal_views(themes_data)
+        }
+        
+        return {
+            "export_metadata": {
+                "version": self.export_config.version,
+                "export_timestamp": datetime.now().isoformat(),
+                "destination_id": destination.id,
+                "export_type": "themes_focused",
+                "export_mode": "themes_focused"
+            },
+            "destination": destination_data,
+            "data": {
+                "themes": themes_data,
+                "insights": deduplicated_insights  # Now deduplicated
+            },
+            "relationships": {
+                "theme_insights": insights_cross_refs.get("theme_insights", {}),
+                "insight_themes": insights_cross_refs.get("insight_themes", {})
+            },
+            "views": theme_views
+        }
+    
+    def _format_destination_data(self, destination: Destination) -> Dict[str, Any]:
+        """Format destination core data"""
+        return {
+            "id": destination.id,
+            "names": destination.names,
+            "primary_name": destination.names[0] if destination.names else "Unknown",
+            "admin_levels": destination.admin_levels,
+            "country_code": destination.country_code,
+            "timezone": destination.timezone,
+            "population": destination.population,
+            "geography": destination.core_geo,
+            "last_updated": destination.last_updated.isoformat()
+        }
+
+    def _format_single_theme(self, theme: Theme) -> Dict[str, Any]:
+        """Format a single theme with references"""
+        # Extract evidence references if they exist
+        evidence_refs = []
+        if hasattr(theme, 'evidence_references'):
+            evidence_refs = theme.evidence_references
+        elif hasattr(theme, 'evidence'):
+            # Fallback: create simple references from evidence
+            evidence_refs = [{"evidence_id": f"ev_{i}", "relevance_score": 1.0} 
+                           for i, _ in enumerate(theme.evidence)]
+        
+        # Format confidence breakdown - ensure it's never None
+        confidence_breakdown_dict = {}
+        if theme.confidence_breakdown:
+            confidence_breakdown_dict = theme.confidence_breakdown.to_dict()
+        else:
+            # Provide default confidence breakdown structure
+            confidence_breakdown_dict = {
+                "overall_confidence": 0.5,
+                "evidence_quality": 0.5,
+                "source_authority": 0.5,
+                "temporal_freshness": 0.5,
+                "cultural_relevance": 0.5
+            }
+        
+        return {
+            "theme_id": theme.theme_id,
+            "name": theme.name,
+            "macro_category": theme.macro_category,
+            "micro_category": theme.micro_category,
+            "description": theme.description,
+            "fit_score": theme.fit_score,
+            "confidence_level": theme.get_confidence_level().value,
+            "confidence_breakdown": confidence_breakdown_dict,  # Now guaranteed to be a dict
+            "evidence_references": evidence_refs,
+            "tags": theme.tags,
+            "created": theme.created_date.isoformat(),
+            "last_validated": theme.last_validated.isoformat() if theme.last_validated else None,
+            "factors": getattr(theme, 'factors', {}),
+            "cultural_summary": getattr(theme, 'cultural_summary', {}),
+            "sentiment_analysis": getattr(theme, 'sentiment_analysis', {}),
+            "temporal_analysis": getattr(theme, 'temporal_analysis', {}),
+            "seasonal_relevance": getattr(theme, 'seasonal_relevance', {}),
+            "regional_uniqueness": getattr(theme, 'regional_uniqueness', 0.0),
+            "insider_tips": getattr(theme, 'insider_tips', [])
+        }
+
+    def _format_themes_with_references(self, themes: List[Theme]) -> Dict[str, Dict[str, Any]]:
+        """Format themes using reference IDs instead of embedding objects"""
+        themes_dict = {}
+        
+        for theme in themes:
+            themes_dict[theme.theme_id] = self._format_single_theme(theme)
+        
+        return themes_dict
+
+    def _format_authentic_insights(self, insights: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Format authentic insights with unique IDs (legacy method - prefer deduplicator)"""
+        insights_dict = {}
+        
+        for i, insight in enumerate(insights):
+            insight_id = f"ai_{i}"
+            insights_dict[insight_id] = insight.to_dict() if hasattr(insight, 'to_dict') else insight
+        
+        return insights_dict
+    
+    def _format_local_authorities(self, authorities: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Format local authorities with unique IDs"""
+        authorities_dict = {}
+        
+        for i, authority in enumerate(authorities):
+            authority_id = f"la_{i}"
+            authorities_dict[authority_id] = authority.to_dict() if hasattr(authority, 'to_dict') else authority
+        
+        return authorities_dict
+    
+    def _format_temporal_slices(self, slices: List[TemporalSlice]) -> Dict[str, Dict[str, Any]]:
+        """Format temporal slices with unique IDs"""
+        slices_dict = {}
+        
+        for i, slice_obj in enumerate(slices):
+            slice_id = f"ts_{i}"
+            slices_dict[slice_id] = {
+                "valid_from": slice_obj.valid_from.isoformat(),
+                "valid_to": slice_obj.valid_to.isoformat() if slice_obj.valid_to else "current",
+                "season": slice_obj.season,
+                "seasonal_highlights": slice_obj.seasonal_highlights,
+                "special_events": slice_obj.special_events,
+                "weather_patterns": slice_obj.weather_patterns,
+                "visitor_patterns": slice_obj.visitor_patterns,
+                "is_current": slice_obj.is_current()
+            }
+        
+        return slices_dict
+    
+    def _format_dimensions(self, dimensions: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Format dimensions with only populated values"""
+        dimensions_dict = {}
+        
+        for name, dim in dimensions.items():
+            if dim.value is not None:
+                dimensions_dict[name] = {
+                    "value": dim.value,
+                    "unit": dim.unit,
+                    "confidence": dim.confidence,
+                    "last_updated": dim.last_updated.isoformat(),
+                    "evidence_count": len(dim.source_evidence_ids)
+                }
+                
+        return dimensions_dict
+    
+    def _format_pois(self, pois: List[Any]) -> Dict[str, Dict[str, Any]]:
+        """Format POIs with unique IDs"""
+        pois_dict = {}
+        
+        for poi in pois:
+            poi_id = poi.poi_id
+            pois_dict[poi_id] = {
+                "id": poi_id,
+                "name": poi.name,
+                "type": poi.poi_type,
+                "location": poi.location,
+                "theme_associations": poi.theme_tags,
+                "accessibility": {
+                    "ada_accessible": poi.ada_accessible,
+                    "features": poi.ada_features
+                }
+            }
+        
+        return pois_dict
+    
+    def _build_theme_evidence_relationships(self, themes: List[Theme]) -> Dict[str, List[str]]:
+        """Build theme -> evidence ID mappings"""
+        relationships = {}
+        
+        for theme in themes:
+            theme_id = theme.theme_id
+            evidence_ids = []
+            
+            if hasattr(theme, 'evidence_references'):
+                evidence_ids = [ref["evidence_id"] for ref in theme.evidence_references]
+            elif hasattr(theme, 'evidence'):
+                # Fallback: create evidence IDs from index
+                evidence_ids = [f"ev_{i}" for i, _ in enumerate(theme.evidence)]
+            
+            relationships[theme_id] = evidence_ids
+        
+        return relationships
+    
+    def _build_theme_insight_relationships(self, themes: List[Theme]) -> Dict[str, List[str]]:
+        """Build theme -> insight ID mappings (legacy method - prefer deduplicator)"""
+        relationships = {}
+        
+        for theme in themes:
+            theme_id = theme.theme_id
+            insight_ids = []
+            
+            if hasattr(theme, 'authentic_insights'):
+                insight_ids = [f"ai_{i}" for i, _ in enumerate(theme.authentic_insights)]
+            
+            relationships[theme_id] = insight_ids
+        
+        return relationships
+    
+    def _build_insight_authority_relationships_deduplicated(self, deduplicated_insights: Dict[str, Any]) -> Dict[str, List[str]]:
+        """Build insight -> authority ID mappings for deduplicated insights"""
+        relationships = {}
+        
+        for insight_id, insight_data in deduplicated_insights.items():
+            authority_ids = []
+            
+            # Extract authority references from insight data
+            if isinstance(insight_data, dict) and 'local_authorities' in insight_data:
+                local_authorities = insight_data['local_authorities']
+                if isinstance(local_authorities, list):
+                    authority_ids = [f"la_{i}" for i, _ in enumerate(local_authorities)]
+            
+            relationships[insight_id] = authority_ids
+        
+        return relationships
+    
+    def _build_temporal_theme_relationships(self, slices: List[TemporalSlice]) -> Dict[str, List[str]]:
+        """Build temporal slice -> theme relationships"""
+        relationships = {}
+        
+        for i, slice_obj in enumerate(slices):
+            slice_id = f"ts_{i}"
+            theme_ids = []
+            
+            # Extract theme references from slice if available
+            if hasattr(slice_obj, 'related_themes'):
+                theme_ids = slice_obj.related_themes
+            
+            relationships[slice_id] = theme_ids
+        
+        return relationships
+    
+    def _calculate_comprehensive_quality_metrics(self, destination: Destination, evidence_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculate comprehensive quality metrics"""
+        total_evidence = len(evidence_registry)
+        
+        confidence_scores = [
+            t.confidence_breakdown.overall_confidence 
+            for t in destination.themes 
+            if t.confidence_breakdown
+        ]
+        
+        return {
+            "total_themes": len(destination.themes),
+            "total_evidence": total_evidence,
+            "unique_evidence_ratio": 1.0,  # Already deduplicated
+            "average_confidence": sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0,
+            "high_confidence_themes": len([
+                t for t in destination.themes 
+                if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]
+            ]),
+            "dimensions_populated": len([d for d in destination.dimensions.values() if d.value is not None]),
+            "temporal_coverage": len(destination.temporal_slices),
+            "poi_count": len(destination.pois),
+            "data_completeness_score": self._calculate_overall_quality_score(destination),
+            "export_efficiency_score": self._calculate_export_efficiency_score(destination, evidence_registry)
+        }
+    
+    def _calculate_export_efficiency_score(self, destination: Destination, evidence_registry: Dict[str, Dict[str, Any]]) -> float:
+        """Calculate export efficiency score based on deduplication and optimization"""
+        scores = []
+        
+        # Evidence deduplication efficiency
+        if evidence_registry:
+            # Assume all evidence is deduplicated in registry
+            scores.append(1.0)
+        
+        # Reference-based architecture efficiency
+        reference_usage = 0
+        total_relationships = 0
+        for theme in destination.themes:
+            if hasattr(theme, 'evidence_references'):
+                reference_usage += 1
+            total_relationships += 1
+            
+        if total_relationships > 0:
+            reference_efficiency = reference_usage / total_relationships
+            scores.append(reference_efficiency)
+        
+        return sum(scores) / len(scores) if scores else 0.0
+    
+    def _calculate_overall_quality_score(self, destination: Destination) -> float:
+        """Calculate overall data quality score (0-1)"""
+        scores = []
+        
+        # Theme quality
+        if destination.themes:
+            high_conf_ratio = len([t for t in destination.themes if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]]) / len(destination.themes)
+            scores.append(high_conf_ratio)
+        
+        # Data completeness
+        has_temporal = 1.0 if destination.temporal_slices else 0.0
+        has_dimensions = 1.0 if any(d.value is not None for d in destination.dimensions.values()) else 0.0
+        has_pois = 1.0 if destination.pois else 0.0
+        
+        completeness = (has_temporal + has_dimensions + has_pois) / 3.0
+        scores.append(completeness)
+        
+        return sum(scores) / len(scores) if scores else 0.0
+    
+    def _save_json(self, data: Dict[str, Any], filepath: Path):
+        """Save data to JSON file with configurable formatting"""
+        indent = 2 if self.export_config.pretty_print else None
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=indent, ensure_ascii=False, default=str)
+            
+    def _create_latest_link(self, source_path: Path, link_path: Path):
+        """Create 'latest' symlink for easy access"""
+        # Remove existing symlink if it exists
+        if link_path.is_symlink():
+            link_path.unlink()
+        elif link_path.exists():
+            link_path.unlink()
+            
+        # Create new symlink
+        try:
+            link_path.symlink_to(source_path.name)
+        except OSError:
+            # Fall back to copying on systems that don't support symlinks
+            import shutil
+            shutil.copy2(source_path, link_path)
+    
+    def _archive_old_exports(self, destination_id: str, days_to_keep: int = 7):
+        """Archive exports older than specified days"""
+        archive_date = datetime.now().timestamp() - (days_to_keep * 24 * 60 * 60)
+        
+        for filepath in self.consolidated_path.glob(f"{destination_id}_*_*.json"):
+            if filepath.stat().st_mtime < archive_date:
+                archive_file = self.base_path / "archive" / filepath.name
+                filepath.rename(archive_file)
+                self.logger.info(f"Archived old export: {filepath.name}") 

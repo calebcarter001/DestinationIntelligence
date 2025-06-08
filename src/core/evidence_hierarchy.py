@@ -119,15 +119,21 @@ class EvidenceHierarchy:
     LOCAL_AUTHORITY_PATTERNS = {
         AuthorityType.PRODUCER: [
             r'maple.*farm', r'distillery', r'winery', r'brewery',
-            r'artisan', r'craftsman', r'local.*producer'
+            r'artisan', r'craftsman', r'local.*producer', r'farm', r'vineyard',
+            r'bakery', r'market.*vendor', r'local.*business.*owner'
         ],
         AuthorityType.RESIDENT: [
             r'local.*blog', r'resident.*forum', r'neighborhood',
-            r'community.*group', r'nextdoor', r'local.*facebook'
+            r'community.*group', r'nextdoor', r'local.*facebook',
+            r'lived.*here', r'born.*here', r'resident.*for', r'local.*for.*years'
         ],
         AuthorityType.PROFESSIONAL: [
             r'tour.*guide', r'sommelier', r'chef', r'hospitality',
-            r'local.*expert', r'concierge'
+            r'local.*expert', r'concierge', r'professional.*chef',
+            r'sushi.*chef', r'years.*experience', r'tourism.*board',
+            r'certified.*guide', r'official.*guide', r'licensed.*guide',
+            r'industry.*professional', r'hospitality.*professional',
+            r'culinary.*expert', r'food.*expert', r'travel.*professional'
         ]
     }
 
@@ -241,39 +247,66 @@ class EvidenceHierarchy:
         authority_type = AuthorityType.RESIDENT  # Default
         expertise_domain = "general local knowledge"
         community_validation = 0.2  # Default low validation
+        local_tenure = None
         
-        # Producer patterns
-        for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.PRODUCER]:
-            if re.search(pattern, combined_text):
-                authority_type = AuthorityType.PRODUCER
-                expertise_domain = "local production/artisan work"
-                community_validation = 0.8
-                break
-        
-        # Professional patterns  
+        # Professional patterns (check first for higher priority)
         for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.PROFESSIONAL]:
             if re.search(pattern, combined_text):
                 authority_type = AuthorityType.PROFESSIONAL
                 expertise_domain = "professional local services"
                 community_validation = 0.9
+                
+                # Extract years of experience if mentioned
+                experience_match = re.search(r'(\d+).*years.*experience', content_lower)
+                if experience_match:
+                    local_tenure = int(experience_match.group(1))
+                    community_validation = min(0.95, 0.7 + (local_tenure * 0.02))  # Higher validation for more experience
+                
+                # Determine specific expertise domain
+                if any(term in combined_text for term in ['chef', 'culinary', 'food', 'restaurant']):
+                    expertise_domain = "culinary expertise"
+                elif any(term in combined_text for term in ['guide', 'tour', 'tourism']):
+                    expertise_domain = "tourism and local guidance"
+                elif any(term in combined_text for term in ['hospitality', 'hotel', 'accommodation']):
+                    expertise_domain = "hospitality services"
                 break
         
-        # Resident patterns
-        for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.RESIDENT]:
-            if re.search(pattern, combined_text):
-                authority_type = AuthorityType.RESIDENT
-                expertise_domain = "community knowledge"
-                community_validation = 0.6
-                break
+        # Producer patterns
+        if authority_type == AuthorityType.RESIDENT:  # Only check if not already classified as professional
+            for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.PRODUCER]:
+                if re.search(pattern, combined_text):
+                    authority_type = AuthorityType.PRODUCER
+                    expertise_domain = "local production/artisan work"
+                    community_validation = 0.8
+                    break
         
-        # Extract expertise domain from content if possible
+        # Resident patterns (lowest priority)
+        if authority_type == AuthorityType.RESIDENT:
+            for pattern in EvidenceHierarchy.LOCAL_AUTHORITY_PATTERNS[AuthorityType.RESIDENT]:
+                if re.search(pattern, combined_text):
+                    authority_type = AuthorityType.RESIDENT
+                    expertise_domain = "community knowledge"
+                    community_validation = 0.6
+                    
+                    # Extract tenure if mentioned
+                    tenure_match = re.search(r'(?:lived|been|resident).*?(\d+).*?years?', content_lower)
+                    if tenure_match:
+                        local_tenure = int(tenure_match.group(1))
+                    break
+        
+        # Additional expertise domain refinement
         if 'expert' in content_lower or 'specialist' in content_lower:
-            expertise_domain = "specialized local knowledge"
-            community_validation = min(community_validation + 0.2, 1.0)
+            expertise_domain = f"specialized {expertise_domain}"
+            community_validation = min(community_validation + 0.1, 1.0)
+        
+        if 'official' in content_lower or 'certified' in content_lower or 'licensed' in content_lower:
+            community_validation = min(community_validation + 0.1, 1.0)
+            if 'tourism' in content_lower:
+                expertise_domain = "official tourism guidance"
         
         return LocalAuthority(
             authority_type=authority_type,
-            local_tenure=None,  # Would need additional parsing to extract
+            local_tenure=local_tenure,
             expertise_domain=expertise_domain,
             community_validation=community_validation
         ) 

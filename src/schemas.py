@@ -114,13 +114,21 @@ class DestinationInsight(BaseModel):
     temporal_analysis: Optional[Dict[str, Any]] = Field(None, description="Temporal analysis results")
 
 class ThemeInsightOutput(BaseModel):
-    """Output schema for theme analysis, containing lists of validated and discovered themes."""
+    """Enhanced output schema for theme analysis with unified themes list and evidence registry."""
     destination_name: str
-    validated_themes: List[DestinationInsight] = Field(default_factory=list, description="List of themes that were validated based on seed themes.")
-    discovered_themes: List[DestinationInsight] = Field(default_factory=list, description="List of new themes discovered from the content.")
+    themes: List[DestinationInsight] = Field(default_factory=list, description="List of all discovered themes with enhanced metadata.")
+    evidence_registry: Dict[str, Any] = Field(default_factory=dict, description="Registry of unique evidence pieces to avoid duplication.")
     priority_insights: List[DestinationInsight] = Field(default_factory=list, description="List of priority-related insights (safety, cost, health concerns).")
     priority_metrics: Optional[PriorityMetrics] = Field(None, description="Aggregated priority metrics for the destination")
-    # raw_analysis_summary: Optional[str] = Field(None, description="A brief textual summary of the analysis process or overall findings.")
+    temporal_slices: List[Dict[str, Any]] = Field(default_factory=list, description="Temporal analysis slices with seasonal information.")
+    dimensions: Dict[str, Any] = Field(default_factory=dict, description="Multi-dimensional analysis scores.")
+    evidence_summary: Dict[str, Any] = Field(default_factory=dict, description="Summary statistics about evidence collection.")
+    quality_metrics: Dict[str, Any] = Field(default_factory=dict, description="Quality metrics for the analysis.")
+    authentic_insights: List[Dict[str, Any]] = Field(default_factory=list, description="Authentic insights with local authority validation.")
+    
+    # Legacy fields for backward compatibility
+    validated_themes: List[DestinationInsight] = Field(default_factory=list, description="[DEPRECATED] Use 'themes' instead. Legacy field for backward compatibility.")
+    discovered_themes: List[DestinationInsight] = Field(default_factory=list, description="[DEPRECATED] Use 'themes' instead. Legacy field for backward compatibility.")
 
 class StoreInsightsInput(BaseModel):
     destination_name: str = Field(description="Name of the destination.")

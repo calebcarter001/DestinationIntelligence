@@ -7,6 +7,7 @@ import hashlib
 import uuid
 import re
 from collections import Counter
+import sys # Add at the top of the file
 
 from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory, EvidenceType
 from ..core.confidence_scoring import ConfidenceScorer, AuthenticityScorer, UniquenessScorer, ActionabilityScorer, MultiDimensionalScore
@@ -17,8 +18,106 @@ from ..tools.priority_aggregation_tool import PriorityAggregationTool
 from ..tools.priority_data_extraction_tool import PriorityDataExtractor
 from ..core.insight_classifier import InsightClassifier
 from ..core.seasonal_intelligence import SeasonalIntelligence
+from ..core.source_authority import get_authority_weight # ADDED IMPORT
 
 logger = logging.getLogger(__name__)
+
+class EvidenceRegistry:
+    """Registry for deduplicating evidence and using references"""
+    
+    def __init__(self):
+        self.evidence_by_hash = {}  # content_hash -> evidence_data
+        self.evidence_by_id = {}    # evidence_id -> evidence_data
+        self.hash_to_id = {}        # content_hash -> evidence_id
+        
+    def _generate_content_hash(self, text_snippet: str, source_url: str) -> str:
+        """Generate a content hash to detect duplicate evidence"""
+        # Normalize text for comparison
+        normalized_text = re.sub(r'\s+', ' ', text_snippet.lower().strip())
+        
+        # Create hash from normalized text + source URL
+        content = f"{normalized_text}|{source_url}"
+        return hashlib.md5(content.encode('utf-8')).hexdigest()[:12]
+    
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """Calculate text similarity between two evidence snippets"""
+        # Simple word-based similarity
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        
+        if not words1 or not words2:
+            return 0.0
+            
+        intersection = len(words1.intersection(words2))
+        union = len(words1.union(words2))
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def add_evidence(self, evidence: Evidence, similarity_threshold: float = 0.85) -> str:
+        """
+        Add evidence to registry with deduplication.
+        Returns evidence ID (existing if duplicate, new if unique)
+        """
+        content_hash = self._generate_content_hash(evidence.text_snippet, evidence.source_url)
+        
+        # Check for exact hash match
+        if content_hash in self.hash_to_id:
+            existing_id = self.hash_to_id[content_hash]
+            logger.info(f"Found exact duplicate evidence (hash: {content_hash}), reusing ID: {existing_id}")
+            return existing_id
+        
+        # Check for similar content from same source
+        for existing_hash, existing_evidence in self.evidence_by_hash.items():
+            if (existing_evidence["source_url"] == evidence.source_url and
+                self._calculate_similarity(existing_evidence["text_snippet"], evidence.text_snippet) > similarity_threshold):
+                
+                existing_id = self.hash_to_id[existing_hash]
+                logger.info(f"Found similar evidence (similarity: {self._calculate_similarity(existing_evidence['text_snippet'], evidence.text_snippet):.2f}), reusing ID: {existing_id}")
+                return existing_id
+        
+        # Create new evidence entry
+        evidence_id = f"ev_{len(self.evidence_by_id)}"
+        
+        evidence_data = {
+            "id": evidence_id,
+            "content_hash": content_hash,
+            "source_url": evidence.source_url,
+            "source_category": evidence.source_category.value,
+            "evidence_type": evidence.evidence_type.value,
+            "authority_weight": evidence.authority_weight,
+            "text_snippet": evidence.text_snippet,
+            "cultural_context": evidence.cultural_context,
+            "sentiment": evidence.sentiment,
+            "relationships": evidence.relationships,
+            "agent_id": evidence.agent_id,
+            "published_date": evidence.published_date.isoformat() if evidence.published_date else None,
+            "confidence": evidence.confidence,
+            "timestamp": evidence.timestamp.isoformat(),
+            "factors": getattr(evidence, 'factors', {})
+        }
+        
+        self.evidence_by_hash[content_hash] = evidence_data
+        self.evidence_by_id[evidence_id] = evidence_data
+        self.hash_to_id[content_hash] = evidence_id
+        
+        logger.info(f"Added new evidence with ID: {evidence_id}")
+        return evidence_id
+    
+    def get_evidence(self, evidence_id: str) -> Dict[str, Any]:
+        """Get evidence data by ID"""
+        return self.evidence_by_id.get(evidence_id, {})
+    
+    def get_all_evidence(self) -> Dict[str, Dict[str, Any]]:
+        """Get all evidence in the registry"""
+        return self.evidence_by_id.copy()
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get deduplication statistics"""
+        return {
+            "total_evidence": len(self.evidence_by_id),
+            "unique_content_hashes": len(self.evidence_by_hash),
+            "deduplication_ratio": 1.0 - (len(self.evidence_by_id) / len(self.hash_to_id)) if self.hash_to_id else 0.0
+        }
 
 class EnhancedThemeAnalysisInput(BaseModel):
     """Input for enhanced theme analysis"""
@@ -42,6 +141,9 @@ class EnhancedThemeAnalysisTool:
             "confidence scoring, cultural perspective, and contradiction detection"
         )
         self.logger = self._setup_logger()
+        
+        # Initialize evidence registry for deduplication
+        self.evidence_registry = EvidenceRegistry()
         
         # Initialize specialized agents
         self.validation_agent = ValidationAgent()
@@ -86,11 +188,6 @@ class EnhancedThemeAnalysisTool:
                 "Zoos & Aquariums", "Children's Museums", "Playgrounds",
                 "Family Entertainment", "Learning Experiences"
             ],
-            "Accommodation & Stay": [
-                "Hotels", "Resorts", "Unique Stays", "Luxury Accommodation",
-                "Budget Options", "Vacation Rentals", "Bed & Breakfasts",
-                "Camping & Glamping", "Historic Inns"
-            ],
             "Health & Wellness": [
                 "Spas & Wellness", "Hot Springs", "Yoga & Meditation", "Fitness",
                 "Health Retreats", "Therapeutic", "Natural Healing", "Relaxation"
@@ -105,6 +202,7 @@ class EnhancedThemeAnalysisTool:
         """
         Perform comprehensive theme analysis with enhanced features
         """
+        print(f"DEBUG_ETA: ENTERING analyze_themes for {input_data.destination_name}", file=sys.stderr)
         self.logger.info(f"Starting enhanced theme analysis for {input_data.destination_name}")
         
         # Step 1: Extract and classify evidence
@@ -112,14 +210,16 @@ class EnhancedThemeAnalysisTool:
             input_data.text_content_list,
             input_data.country_code
         )
-        
+        print(f"DEBUG_ETA: STEP 1 (extract_evidence) COMPLETED. Found {len(all_evidence)} evidence pieces.", file=sys.stderr)
+
         # Step 2: Discover themes from evidence
         discovered_themes = await self._discover_themes(
             all_evidence,
             input_data.destination_name,
             input_data.country_code
         )
-        
+        print(f"DEBUG_ETA: STEP 2 (_discover_themes) COMPLETED. Discovered {len(discovered_themes)} raw themes.", file=sys.stderr)
+
         # Step 3: Cultural perspective analysis
         cultural_result = await self.cultural_agent.execute_task({
             "sources": [
@@ -127,44 +227,49 @@ class EnhancedThemeAnalysisTool:
                     "url": ev.source_url,
                     "content": ev.text_snippet
                 }
-                for ev in all_evidence
+                for ev in all_evidence # Use all_evidence from Step 1
             ],
             "country_code": input_data.country_code,
             "destination_name": input_data.destination_name
         })
-        
+        print(f"DEBUG_ETA: STEP 3 (cultural_agent) COMPLETED.", file=sys.stderr)
+
         # Step 4: Validate themes with confidence scoring
+        validation_task_input_themes = []
+        for theme in discovered_themes: # discovered_themes are List[Theme]
+            theme_input_data = {
+                "name": theme.name,
+                "macro_category": theme.macro_category, 
+                "micro_category": theme.micro_category, 
+                "tags": theme.tags, 
+                "fit_score": theme.fit_score, 
+                "original_evidence_objects": theme.evidence 
+            }
+            validation_task_input_themes.append(theme_input_data)
+
+        print(f"DEBUG_ETA: PREPARING TO CALL ValidationAgent with {len(validation_task_input_themes)} themes.", file=sys.stderr)
         validation_result = await self.validation_agent.execute_task({
             "destination_name": input_data.destination_name,
-            "themes": [
-                {
-                    "name": theme.name,
-                    "macro_category": theme.macro_category, # Pass through
-                    "micro_category": theme.micro_category, # Pass through
-                    "tags": theme.tags, # Pass through initial tags
-                    "fit_score": theme.fit_score, # Pass through initial fit_score
-                    "evidence_sources": [ev.source_url for ev in theme.evidence],
-                    "evidence_texts": [ev.text_snippet for ev in theme.evidence],
-                    "sentiment_scores": [ev.sentiment for ev in theme.evidence if ev.sentiment]
-                }
-                for theme in discovered_themes
-            ],
+            "themes": validation_task_input_themes, 
             "country_code": input_data.country_code
         })
-        
+        print(f"DEBUG_ETA: STEP 4 (validation_agent) COMPLETED. Validated count: {validation_result.get('validated_count', 'N/A')}", file=sys.stderr)
+
         # Step 5: Detect and resolve contradictions
         contradiction_result = await self.contradiction_agent.execute_task({
             "themes": validation_result["validated_themes"],
             "destination_name": input_data.destination_name
         })
-        
+        print(f"DEBUG_ETA: STEP 5 (contradiction_agent) COMPLETED. Contradictions found: {contradiction_result.get('contradictions_found', 'N/A')}", file=sys.stderr)
+
         # Step 6: Build enhanced themes with full metadata
         enhanced_themes = self._build_enhanced_themes(
             contradiction_result["resolved_themes"],
-            all_evidence,
+            all_evidence, # Pass all_evidence here for _build_enhanced_themes
             cultural_result
         )
-        
+        print(f"DEBUG_ETA: STEP 6 (_build_enhanced_themes) COMPLETED. Built {len(enhanced_themes)} enhanced themes.", file=sys.stderr)
+
         # Step 7: Create temporal slices if requested
         temporal_slices = []
         if input_data.analyze_temporal:
@@ -207,28 +312,56 @@ class EnhancedThemeAnalysisTool:
             local_authorities_for_theme = []
             
             # Analyze theme evidence for local authority indicators
-            theme_evidence = theme_data.get("evidence_summary", [])
+            # Get actual evidence data from evidence references since we use reference-based architecture
+            theme_evidence = []
+            evidence_refs = theme_data.get("evidence_references", [])
+            
+            self.logger.info(f"Processing theme '{theme_data.get('name')}' with {len(evidence_refs)} evidence references")
+            
+            # Get actual evidence data from registry using references
+            for evidence_ref in evidence_refs:
+                evidence_id = evidence_ref.get("evidence_id")
+                if evidence_id:
+                    evidence_data = self.evidence_registry.get_evidence(evidence_id)
+                    if evidence_data:
+                        theme_evidence.append(evidence_data)
+                        self.logger.info(f"Retrieved evidence {evidence_id} from registry")
+            
+            self.logger.info(f"Retrieved {len(theme_evidence)} actual evidence pieces from registry")
+            
             for evidence_item in theme_evidence:
                 source_url = evidence_item.get("source_url", "")
                 text_snippet = evidence_item.get("text_snippet", "")
                 
+                self.logger.info(f"Checking evidence: URL={source_url[:50]}..., snippet={text_snippet[:100]}...")
+                
                 # Check for local authority patterns
                 local_authority = evidence_hierarchy.classify_local_authority(source_url, text_snippet)
+                self.logger.info(f"Classified authority: type={local_authority.authority_type.value}, domain={local_authority.expertise_domain}, validation={local_authority.community_validation}")
+                
                 if local_authority.authority_type != AuthorityType.RESIDENT:  # If we found a specific authority type
                     # Use the authority data from the classification
                     local_authorities_for_theme.append(local_authority)
+                    self.logger.info(f"Added authority: {local_authority.authority_type.value}")
             
             # If no specific authorities found, create a default one based on source quality
             if not local_authorities_for_theme and theme_evidence:
+                self.logger.info("No specific authorities found, checking for high authority evidence...")
                 highest_authority_evidence = max(theme_evidence, key=lambda x: x.get("authority_weight", 0))
-                if highest_authority_evidence.get("authority_weight", 0) > 0.6:
+                auth_weight = highest_authority_evidence.get("authority_weight", 0)
+                self.logger.info(f"Highest authority weight: {auth_weight}")
+                
+                if auth_weight > 0.6:
                     local_authority = LocalAuthority(
                         authority_type=AuthorityType.PROFESSIONAL,
                         local_tenure=2,  # Assume moderate tenure for professional sources
                         expertise_domain=theme_data.get('name', ''),
-                        community_validation=highest_authority_evidence.get("authority_weight", 0.6)
+                        community_validation=auth_weight
                     )
                     local_authorities_for_theme.append(local_authority)
+                    self.logger.info(f"Added default professional authority with weight {auth_weight}")
+            
+            self.logger.info(f"Final authorities for theme: {len(local_authorities_for_theme)}")
             
             # Calculate local validation count
             local_validation_count = len([la for la in local_authorities_for_theme if la.community_validation > 0.7])
@@ -296,11 +429,14 @@ class EnhancedThemeAnalysisTool:
         return {
             "destination_name": input_data.destination_name,
             "country_code": input_data.country_code,
-            "themes": enhanced_themes, # Now includes authentic_insights etc.
+            "themes": enhanced_themes, # Now includes evidence references instead of duplicated evidence
+            "evidence_registry": self.evidence_registry.get_all_evidence(),  # Single source of all unique evidence
             "temporal_slices": temporal_slices,
             "dimensions": dimensions,
             "evidence_summary": {
                 "total_evidence": len(all_evidence),
+                "unique_evidence": self.evidence_registry.get_statistics()["total_evidence"],
+                "deduplication_stats": self.evidence_registry.get_statistics(),
                 "source_distribution": self._get_source_distribution(all_evidence),
                 "cultural_metrics": cultural_result["cultural_metrics"]
             },
@@ -308,7 +444,8 @@ class EnhancedThemeAnalysisTool:
                 "themes_discovered": len(discovered_themes),
                 "themes_validated": validation_result["validated_count"],
                 "contradictions_found": contradiction_result["contradictions_found"],
-                "average_confidence": self._calculate_average_confidence(enhanced_themes)
+                "average_confidence": self._calculate_average_confidence(enhanced_themes),
+                "evidence_efficiency": self.evidence_registry.get_statistics()["deduplication_ratio"]
             },
             "analysis_timestamp": datetime.now().isoformat(),
             "priority_metrics": priority_metrics,
@@ -468,8 +605,6 @@ class EnhancedThemeAnalysisTool:
         # Classify content type
         if any(word in text_lower for word in ["restaurant", "food", "dining", "meal", "cuisine"]):
             context["content_type"] = "culinary"
-        elif any(word in text_lower for word in ["hotel", "accommodation", "stay", "room", "booking"]):
-            context["content_type"] = "accommodation"
         elif any(word in text_lower for word in ["activity", "tour", "experience", "adventure", "visit"]):
             context["content_type"] = "activity"
         elif any(word in text_lower for word in ["transport", "travel", "bus", "train", "flight", "taxi"]):
@@ -1266,17 +1401,6 @@ class EnhancedThemeAnalysisTool:
             "zoos": ["zoo", "animals", "wildlife", "conservation", "nature"],
             "aquariums": ["aquarium", "fish", "marine", "underwater", "ocean"],
             
-            # Accommodation & Stay themes
-            "hotels": ["hotel", "accommodation", "stay", "resort", "lodge", "inn", "motel"],
-            "resorts": ["resort", "hotel", "luxury", "vacation", "accommodation"],
-            "unique": ["unique", "special", "unusual", "distinctive", "one-of-a-kind"],
-            "luxury": ["luxury", "upscale", "premium", "high-end", "exclusive", "elegant"],
-            "budget": ["budget", "affordable", "cheap", "inexpensive", "value"],
-            "vacation": ["vacation", "holiday", "rental", "stay", "getaway"],
-            "bed": ["bed", "breakfast", "b&b", "inn", "accommodation"],
-            "breakfast": ["breakfast", "b&b", "morning", "meal", "inn"],
-            "glamping": ["glamping", "camping", "luxury", "tent", "outdoor"],
-            
             # Health & Wellness themes
             "spas": ["spa", "wellness", "relaxation", "massage", "treatment", "therapeutic"],
             "springs": ["springs", "hot", "thermal", "natural", "healing", "mineral"],
@@ -1340,10 +1464,20 @@ class EnhancedThemeAnalysisTool:
         all_evidence: List[Evidence],
         cultural_result: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Build enhanced theme objects with full metadata"""
+        """Build enhanced theme objects with deduplicated evidence references"""
         enhanced_themes = []
         
-        self.logger.info(f"Building enhanced themes: {len(validated_themes)} validated themes, {len(all_evidence)} evidence pieces")
+        # First pass: Register all evidence to enable deduplication
+        self.logger.info(f"Registering {len(all_evidence)} evidence pieces for deduplication...")
+        for evidence in all_evidence:
+            self.evidence_registry.add_evidence(evidence)
+        
+        # Log deduplication statistics
+        stats = self.evidence_registry.get_statistics()
+        self.logger.info(f"Evidence deduplication stats: {stats['total_evidence']} unique evidence, "
+                        f"deduplication ratio: {stats['deduplication_ratio']:.2%}")
+        
+        self.logger.info(f"Building enhanced themes: {len(validated_themes)} validated themes")
         
         for idx, theme_data in enumerate(validated_themes):
             theme_name = theme_data["name"]
@@ -1352,47 +1486,32 @@ class EnhancedThemeAnalysisTool:
             # Extract confidence breakdown
             confidence_breakdown = theme_data.get("confidence_breakdown", {})
             
-            # Build evidence list with cultural context
-            theme_evidence = []
+            # Build evidence reference list AND actual evidence list for storage compatibility
+            theme_evidence_refs = []
+            theme_evidence_objects = []  # Add actual Evidence objects for storage
             evidence_matches = 0
-            for ev_idx, ev in enumerate(all_evidence):
+            
+            for evidence in all_evidence:
                 # Match evidence to theme (simplified)
-                if self._check_theme_match(theme_name, ev.text_snippet):
+                if self._check_theme_match(theme_name, evidence.text_snippet):
                     evidence_matches += 1
-                    self.logger.info(f"  Evidence match {evidence_matches} for '{theme_name}': {ev.text_snippet[:100]}...")
                     
-                    # Use the rich cultural context from the evidence object itself
-                    # instead of trying to find it in cultural_result
-                    cultural_context = ev.cultural_context or {}
+                    # Get evidence ID from registry (deduplicated)
+                    evidence_id = self.evidence_registry.add_evidence(evidence)
                     
-                    # Add additional cultural metrics from the overall cultural analysis
-                    if cultural_result.get("cultural_metrics"):
-                        cultural_context.update({
-                            "cultural_diversity_score": cultural_result["cultural_metrics"].get("cultural_diversity_score", 0.0),
-                            "local_source_ratio": cultural_result["cultural_metrics"].get("local_source_ratio", 0.0),
-                            "language_distribution": cultural_result["cultural_metrics"].get("language_distribution", {}),
-                            "optimal_mix_score": cultural_result["cultural_metrics"].get("optimal_mix_score", 0.0)
-                        })
-                    
-                    # Create enhanced evidence summary with all populated fields
-                    evidence_summary = {
-                        "id": ev.id,
-                        "source_url": ev.source_url,
-                        "source_category": ev.source_category.value,
-                        "authority_weight": ev.authority_weight,
-                        "text_snippet": ev.text_snippet[:200] + "..." if len(ev.text_snippet) > 200 else ev.text_snippet,
-                        "cultural_context": cultural_context,
-                        "sentiment": ev.sentiment,
-                        "relationships": ev.relationships,
-                        "agent_id": ev.agent_id,
-                        "published_date": ev.published_date.isoformat() if ev.published_date else None,
-                        "confidence": ev.confidence,
-                        "timestamp": ev.timestamp.isoformat()
+                    # Store only the reference and minimal metadata for theme context
+                    evidence_ref = {
+                        "evidence_id": evidence_id,
+                        "relevance_score": self._calculate_theme_relevance(theme_name, evidence.text_snippet),
+                        "theme_context": evidence.text_snippet[:100] + "..." if len(evidence.text_snippet) > 100 else evidence.text_snippet
                     }
                     
-                    theme_evidence.append(evidence_summary)
+                    theme_evidence_refs.append(evidence_ref)
+                    theme_evidence_objects.append(evidence)  # Add actual Evidence object
+                    
+                    self.logger.info(f"  Evidence match {evidence_matches} for '{theme_name}': {evidence_id}")
             
-            self.logger.info(f"  Theme '{theme_name}' matched {len(theme_evidence)} evidence pieces")
+            self.logger.info(f"  Theme '{theme_name}' references {len(theme_evidence_refs)} evidence pieces")
             
             # Get macro and micro categories from theme data or derive them if not present
             macro_category = theme_data.get("macro_category")
@@ -1415,51 +1534,119 @@ class EnhancedThemeAnalysisTool:
             if not micro_category:
                 micro_category = theme_name  # Use theme name as micro category
             
-            # Calculate theme-level factors for confidence
-            theme_factors = self._calculate_theme_factors(theme_evidence, theme_data)
+            # Calculate theme-level factors using evidence references
+            theme_factors = self._calculate_theme_factors_from_refs(theme_evidence_refs)
             
             enhanced_theme = {
                 "theme_id": hashlib.md5(theme_name.encode()).hexdigest()[:12],
                 "name": theme_name,
                 "macro_category": macro_category,
-                "micro_category": micro_category,  # Now including micro category
+                "micro_category": micro_category,
                 "confidence_level": theme_data.get("confidence_level", "unknown"),
                 "confidence_score": confidence_breakdown.get("overall_confidence", 0.0),
                 "confidence_breakdown": confidence_breakdown,
-                "factors": theme_factors,  # Add theme-level factors
-                "evidence_count": len(theme_evidence),
-                "evidence_summary": theme_evidence,  # Use enhanced evidence with all fields populated
+                "factors": theme_factors,
+                "evidence_count": len(theme_evidence_refs),
+                "evidence_references": theme_evidence_refs,  # Use references instead of full evidence
+                "evidence": theme_evidence_objects,  # Add actual Evidence objects for storage compatibility
                 "is_validated": theme_data.get("is_validated", False),
                 "contradiction_status": {
                     "has_contradictions": theme_data.get("contradiction_resolved", False),
                     "resolution": theme_data.get("winning_position", "none")
                 },
                 "tags": self._generate_tags(theme_name),
-                "cultural_summary": self._generate_cultural_summary(theme_evidence),
-                "sentiment_analysis": self._analyze_theme_sentiment(theme_evidence),
-                "temporal_analysis": self._analyze_theme_temporal_aspects(theme_evidence)
+                "cultural_summary": self._generate_cultural_summary_from_refs(theme_evidence_refs),
+                "sentiment_analysis": self._analyze_theme_sentiment_from_refs(theme_evidence_refs),
+                "temporal_analysis": self._analyze_theme_temporal_aspects_from_refs(theme_evidence_refs)
             }
             
             enhanced_themes.append(enhanced_theme)
             
         return enhanced_themes
     
-    def _calculate_theme_factors(self, evidence_list: List[Dict], theme_data: Dict) -> Dict[str, Any]:
-        """Calculate various factors contributing to theme strength"""
-        if not evidence_list:
+    def _calculate_theme_relevance(self, theme_name: str, evidence_text: str) -> float:
+        """Calculate how relevant evidence is to a specific theme"""
+        theme_words = set(theme_name.lower().split())
+        evidence_words = set(evidence_text.lower().split())
+        
+        # Simple word overlap scoring
+        overlap = len(theme_words.intersection(evidence_words))
+        max_possible = len(theme_words)
+        
+        if max_possible == 0:
+            return 0.0
+            
+        return min(overlap / max_possible, 1.0)
+    
+    def _calculate_theme_factors_from_refs(self, evidence_refs: List[Dict]) -> Dict[str, Any]:
+        """Calculate theme factors using evidence references"""
+        if not evidence_refs:
+            return {}
+        
+        # Get actual evidence data from registry
+        evidence_data = []
+        for ref in evidence_refs:
+            evidence = self.evidence_registry.get_evidence(ref["evidence_id"])
+            if evidence:
+                evidence_data.append(evidence)
+        
+        if not evidence_data:
             return {}
         
         factors = {
-            "source_diversity": len(set(ev.get("source_url", "") for ev in evidence_list)),
-            "authority_distribution": self._calculate_authority_distribution(evidence_list),
-            "sentiment_consistency": self._calculate_sentiment_consistency(evidence_list),
-            "cultural_breadth": self._calculate_cultural_breadth(evidence_list),
-            "temporal_freshness": self._calculate_temporal_freshness(evidence_list),
-            "geographic_specificity": self._calculate_geographic_specificity_avg(evidence_list),
-            "content_quality_avg": self._calculate_content_quality_avg(evidence_list)
+            "source_diversity": len(set(ev.get("source_url", "") for ev in evidence_data)),
+            "authority_distribution": self._calculate_authority_distribution(evidence_data),
+            "sentiment_consistency": self._calculate_sentiment_consistency(evidence_data),
+            "cultural_breadth": self._calculate_cultural_breadth(evidence_data),
+            "temporal_freshness": self._calculate_temporal_freshness(evidence_data),
+            "geographic_specificity": self._calculate_geographic_specificity_avg(evidence_data),
+            "content_quality_avg": self._calculate_content_quality_avg(evidence_data)
         }
         
         return factors
+    
+    def _generate_cultural_summary_from_refs(self, evidence_refs: List[Dict]) -> Dict[str, Any]:
+        """Generate cultural summary using evidence references"""
+        if not evidence_refs:
+            return {
+                "total_sources": 0,
+                "local_sources": 0,
+                "international_sources": 0,
+                "local_ratio": 0.0,
+                "primary_languages": {},
+                "cultural_balance": "no-data"
+            }
+        
+        # Get actual evidence data from registry
+        evidence_data = []
+        for ref in evidence_refs:
+            evidence = self.evidence_registry.get_evidence(ref["evidence_id"])
+            if evidence:
+                evidence_data.append(evidence)
+        
+        return self._generate_cultural_summary(evidence_data)
+    
+    def _analyze_theme_sentiment_from_refs(self, evidence_refs: List[Dict]) -> Dict[str, Any]:
+        """Analyze theme sentiment using evidence references"""
+        # Get actual evidence data from registry
+        evidence_data = []
+        for ref in evidence_refs:
+            evidence = self.evidence_registry.get_evidence(ref["evidence_id"])
+            if evidence:
+                evidence_data.append(evidence)
+        
+        return self._analyze_theme_sentiment(evidence_data)
+    
+    def _analyze_theme_temporal_aspects_from_refs(self, evidence_refs: List[Dict]) -> Dict[str, Any]:
+        """Analyze temporal aspects using evidence references"""
+        # Get actual evidence data from registry
+        evidence_data = []
+        for ref in evidence_refs:
+            evidence = self.evidence_registry.get_evidence(ref["evidence_id"])
+            if evidence:
+                evidence_data.append(evidence)
+        
+        return self._analyze_theme_temporal_aspects(evidence_data)
     
     def _calculate_authority_distribution(self, evidence_list: List[Dict]) -> Dict[str, float]:
         """Calculate distribution of evidence by authority level"""
@@ -2452,33 +2639,11 @@ class EnhancedThemeAnalysisTool:
         return EvidenceType.TERTIARY
 
     def _calculate_authority_weight(self, source_category: SourceCategory, url: str, content: str) -> float:
-        """Calculate authority weight based on source characteristics"""
-        base_weights = {
-            SourceCategory.GOVERNMENT: 0.9,
-            SourceCategory.ACADEMIC: 0.85,
-            SourceCategory.BUSINESS: 0.7,
-            SourceCategory.GUIDEBOOK: 0.75,
-            SourceCategory.BLOG: 0.5,
-            SourceCategory.SOCIAL: 0.3,
-            SourceCategory.UNKNOWN: 0.4
-        }
-        
-        base_weight = base_weights.get(source_category, 0.5)
-        
-        # Adjust based on URL quality indicators
-        url_lower = url.lower()
-        if any(domain in url_lower for domain in ['tripadvisor', 'lonelyplanet', 'timeout']):
-            base_weight += 0.1
-        
-        # Adjust based on content quality
-        content_lower = content.lower()
-        if len(content) > 1000:  # Substantial content
-            base_weight += 0.05
-        
-        if any(indicator in content_lower for indicator in ['updated', '2024', '2023', 'current']):
-            base_weight += 0.05  # Recent content
-        
-        return min(1.0, base_weight)
+        """Calculate authority weight for evidence based on URL using the centralized function."""
+        # The content and source_category parameters are no longer used by this specific implementation
+        # but are kept for compatibility with the calling signature if other tools or future versions
+        # might use them or if this method is overridden with different logic.
+        return get_authority_weight(url) # MODIFIED LINE
 
 def create_enhanced_theme_analysis_tool() -> Tool:
     """Factory function to create the tool for LangChain"""
@@ -2507,7 +2672,7 @@ def create_enhanced_theme_analysis_tool() -> Tool:
         func=run_analysis
     )
 
-class EnhancedAnalyzeThemesFromEvidenceTool(Tool):
+class EnhancedAnalyzeThemesFromEvidenceTool:
     """
     Enhanced LangChain Tool for theme analysis with agent orchestration integration
     """
@@ -2520,254 +2685,198 @@ class EnhancedAnalyzeThemesFromEvidenceTool(Tool):
             agent_orchestrator: Optional agent orchestrator for multi-agent validation
             llm: Optional LLM instance for enhanced analysis
         """
-        super().__init__(
-            name="analyze_themes_from_evidence",
-            description="Enhanced theme analysis with evidence-based confidence scoring and multi-agent validation",
-            func=self._create_analysis_function(agent_orchestrator, llm)
-        )
+        self.name = "analyze_themes_from_evidence"
+        self.description = "Enhanced theme analysis with evidence-based confidence scoring and multi-agent validation"
+        
+        # Store attributes without Pydantic validation
+        self.agent_orchestrator = agent_orchestrator
+        self.llm = llm
+        
+        # Initialize the tool analyzer
+        self.theme_analyzer = EnhancedThemeAnalysisTool()
+        
+        # Import priority aggregation tool
+        from .priority_aggregation_tool import PriorityAggregationTool
+        self.priority_aggregator = PriorityAggregationTool()
+        
+        # Store LLM reference for potential use in analysis
+        if llm:
+            self.theme_analyzer.llm = llm
+        
+        # If agent orchestrator provided, replace the analyzer's agents
+        if agent_orchestrator:
+            # Get agents from orchestrator
+            for agent_id, agent in agent_orchestrator.broker.agents.items():
+                if isinstance(agent, ValidationAgent):
+                    self.theme_analyzer.validation_agent = agent
+                elif isinstance(agent, CulturalPerspectiveAgent):
+                    self.theme_analyzer.cultural_agent = agent
+                elif isinstance(agent, ContradictionDetectionAgent):
+                    self.theme_analyzer.contradiction_agent = agent
     
-    def _create_analysis_function(self, agent_orchestrator, llm):
-        """Create the analysis function with captured dependencies"""
-        def create_tool_func(orchestrator, llm_instance):
-            theme_analyzer = EnhancedThemeAnalysisTool()
+    async def _arun(
+        self,
+        destination_name: str,
+        country_code: str = "US",
+        text_content_list: Optional[List[Dict[str, Any]]] = None,
+        evidence_snippets: Optional[List[Dict[str, Any]]] = None,
+        seed_themes_with_evidence: Optional[Dict[str, Any]] = None,
+        config=None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Enhanced theme analysis execution"""
+        try:
+            logger.info(f"=== Enhanced Theme Analysis Starting for {destination_name} ===")
+            logger.info(f"Received parameters:")
+            logger.info(f"  - text_content_list: {type(text_content_list)}, length: {len(text_content_list) if text_content_list else 0}")
+            logger.info(f"  - evidence_snippets: {type(evidence_snippets)}, length: {len(evidence_snippets) if evidence_snippets else 0}")
+            logger.info(f"  - seed_themes_with_evidence: {type(seed_themes_with_evidence)}, keys: {list(seed_themes_with_evidence.keys()) if seed_themes_with_evidence else []}")
             
-            # Import priority aggregation tool
-            from .priority_aggregation_tool import PriorityAggregationTool
-            priority_aggregator = PriorityAggregationTool()
+            # Handle backward compatibility with evidence_snippets
+            if text_content_list is None and evidence_snippets is not None:
+                logger.info("Converting evidence_snippets to text_content_list format")
+                text_content_list = [
+                    {
+                        "url": snippet.get("source_url", ""),
+                        "content": snippet.get("content", ""),
+                        "title": snippet.get("title", "")
+                    }
+                    for snippet in evidence_snippets
+                ]
+            elif text_content_list is None:
+                logger.warning("No content provided - initializing empty list")
+                text_content_list = []
             
-            # Store LLM reference for potential use in analysis
-            if llm_instance:
-                theme_analyzer.llm = llm_instance
+            # If we have PageContent objects, convert them to the expected format
+            formatted_content_list = []
+            page_content_objects = []  # Keep original PageContent objects for priority analysis
             
-            # If agent orchestrator provided, replace the analyzer's agents
-            if orchestrator:
-                # Get agents from orchestrator
-                for agent_id, agent in orchestrator.broker.agents.items():
-                    if isinstance(agent, ValidationAgent):
-                        theme_analyzer.validation_agent = agent
-                    elif isinstance(agent, CulturalPerspectiveAgent):
-                        theme_analyzer.cultural_agent = agent
-                    elif isinstance(agent, ContradictionDetectionAgent):
-                        theme_analyzer.contradiction_agent = agent
+            logger.info(f"Converting {len(text_content_list) if text_content_list else 0} content items")
             
-            async def _arun(
-                destination_name: str,
-                country_code: str = "US",
-                text_content_list: Optional[List[Dict[str, Any]]] = None,
-                evidence_snippets: Optional[List[Dict[str, Any]]] = None,
-                seed_themes_with_evidence: Optional[Dict[str, Any]] = None,
-                config=None,  # Added to satisfy LangChain's requirements
-                **kwargs
-            ) -> Dict[str, Any]:
-                """Enhanced theme analysis execution"""
+            for idx, item in enumerate(text_content_list or []):
+                logger.info(f"Processing item {idx}: type={type(item)}")
+                
+                if hasattr(item, 'url') and hasattr(item, 'content'):
+                    # It's a PageContent object
+                    page_content_objects.append(item)  # Keep original for priority analysis
+                    formatted_item = {
+                        "url": item.url,
+                        "content": item.content,
+                        "title": getattr(item, 'title', '')
+                    }
+                    formatted_content_list.append(formatted_item)
+                    logger.info(f"Converted PageContent {idx}: url={item.url[:50]}..., content_length={len(item.content) if item.content else 0}")
+                elif isinstance(item, dict):
+                    # Already in dict format
+                    formatted_content_list.append(item)
+                    logger.info(f"Dict item {idx}: url={item.get('url', 'N/A')[:50]}..., content_length={len(item.get('content', ''))}")
+                else:
+                    logger.warning(f"Unexpected content item type: {type(item)} at index {idx}")
+            
+            logger.info(f"Formatted content list has {len(formatted_content_list)} items")
+            
+            # Log sample of formatted content
+            if formatted_content_list:
+                first_item = formatted_content_list[0]
+                logger.info(f"First formatted item preview:")
+                logger.info(f"  - URL: {first_item.get('url', 'N/A')[:100]}")
+                logger.info(f"  - Title: {first_item.get('title', 'N/A')[:100]}")
+                logger.info(f"  - Content length: {len(first_item.get('content', ''))}")
+                if first_item.get('content'):
+                    logger.info(f"  - Content preview: {first_item['content'][:200]}...")
+            
+            # Load config from app
+            from src.config_loader import load_app_config
+            app_config = load_app_config()
+            
+            # Run enhanced analysis
+            input_data = EnhancedThemeAnalysisInput(
+                destination_name=destination_name,
+                country_code=country_code,
+                text_content_list=formatted_content_list,
+                analyze_temporal=kwargs.get("analyze_temporal", True),
+                min_confidence=kwargs.get("min_confidence", 0.5),
+                config=app_config,  # Pass the app config
+                agent_orchestrator=self.agent_orchestrator  # Pass the orchestrator if available
+            )
+            
+            logger.info(f"Created input data with {len(input_data.text_content_list)} content items")
+            
+            result = await self.theme_analyzer.analyze_themes(input_data)
+            
+            # Aggregate priority data if we have PageContent objects with priority data
+            priority_metrics = None
+            priority_insights = []
+            
+            if page_content_objects and any(hasattr(pc, 'priority_data') for pc in page_content_objects):
+                logger.info("Aggregating priority data from content sources")
                 try:
-                    logger.info(f"=== Enhanced Theme Analysis Starting for {destination_name} ===")
-                    logger.info(f"Received parameters:")
-                    logger.info(f"  - text_content_list: {type(text_content_list)}, length: {len(text_content_list) if text_content_list else 0}")
-                    logger.info(f"  - evidence_snippets: {type(evidence_snippets)}, length: {len(evidence_snippets) if evidence_snippets else 0}")
-                    logger.info(f"  - seed_themes_with_evidence: {type(seed_themes_with_evidence)}, keys: {list(seed_themes_with_evidence.keys()) if seed_themes_with_evidence else []}")
-                    
-                    # Handle backward compatibility with evidence_snippets
-                    if text_content_list is None and evidence_snippets is not None:
-                        logger.info("Converting evidence_snippets to text_content_list format")
-                        text_content_list = [
-                            {
-                                "url": snippet.get("source_url", ""),
-                                "content": snippet.get("content", ""),
-                                "title": snippet.get("title", "")
-                            }
-                            for snippet in evidence_snippets
-                        ]
-                    elif text_content_list is None:
-                        logger.warning("No content provided - initializing empty list")
-                        text_content_list = []
-                    
-                    # If we have PageContent objects, convert them to the expected format
-                    formatted_content_list = []
-                    page_content_objects = []  # Keep original PageContent objects for priority analysis
-                    
-                    logger.info(f"Converting {len(text_content_list) if text_content_list else 0} content items")
-                    
-                    for idx, item in enumerate(text_content_list or []):
-                        logger.info(f"Processing item {idx}: type={type(item)}")
-                        
-                        if hasattr(item, 'url') and hasattr(item, 'content'):
-                            # It's a PageContent object
-                            page_content_objects.append(item)  # Keep original for priority analysis
-                            formatted_item = {
-                                "url": item.url,
-                                "content": item.content,
-                                "title": getattr(item, 'title', '')
-                            }
-                            formatted_content_list.append(formatted_item)
-                            logger.info(f"Converted PageContent {idx}: url={item.url[:50]}..., content_length={len(item.content) if item.content else 0}")
-                        elif isinstance(item, dict):
-                            # Already in dict format
-                            formatted_content_list.append(item)
-                            logger.info(f"Dict item {idx}: url={item.get('url', 'N/A')[:50]}..., content_length={len(item.get('content', ''))}")
-                        else:
-                            logger.warning(f"Unexpected content item type: {type(item)} at index {idx}")
-                    
-                    logger.info(f"Formatted content list has {len(formatted_content_list)} items")
-                    
-                    # Log sample of formatted content
-                    if formatted_content_list:
-                        first_item = formatted_content_list[0]
-                        logger.info(f"First formatted item preview:")
-                        logger.info(f"  - URL: {first_item.get('url', 'N/A')[:100]}")
-                        logger.info(f"  - Title: {first_item.get('title', 'N/A')[:100]}")
-                        logger.info(f"  - Content length: {len(first_item.get('content', ''))}")
-                        if first_item.get('content'):
-                            logger.info(f"  - Content preview: {first_item['content'][:200]}...")
-                    
-                    # Load config from app
-                    from src.config_loader import load_app_config
-                    app_config = load_app_config()
-                    
-                    # Run enhanced analysis
-                    input_data = EnhancedThemeAnalysisInput(
+                    priority_result = await self.priority_aggregator._arun(
                         destination_name=destination_name,
-                        country_code=country_code,
-                        text_content_list=formatted_content_list,
-                        analyze_temporal=kwargs.get("analyze_temporal", True),
-                        min_confidence=kwargs.get("min_confidence", 0.5),
-                        config=app_config,  # Pass the app config
-                        agent_orchestrator=orchestrator  # Pass the orchestrator if available
+                        page_contents=page_content_objects,
+                        confidence_threshold=0.6
                     )
                     
-                    logger.info(f"Created input data with {len(input_data.text_content_list)} content items")
+                    priority_metrics = priority_result.get("priority_metrics")
+                    priority_insights = priority_result.get("priority_insights", [])
                     
-                    result = await theme_analyzer.analyze_themes(input_data)
-                    
-                    # Aggregate priority data if we have PageContent objects with priority data
-                    priority_metrics = None
-                    priority_insights = []
-                    
-                    if page_content_objects and any(hasattr(pc, 'priority_data') for pc in page_content_objects):
-                        logger.info("Aggregating priority data from content sources")
-                        try:
-                            priority_result = await priority_aggregator._arun(
-                                destination_name=destination_name,
-                                page_contents=page_content_objects,
-                                confidence_threshold=0.6
-                            )
-                            
-                            priority_metrics = priority_result.get("priority_metrics")
-                            priority_insights = priority_result.get("priority_insights", [])
-                            
-                            logger.info(f"Aggregated priority data: {len(priority_insights)} priority insights generated")
-                            
-                        except Exception as e:
-                            logger.error(f"Error aggregating priority data: {e}")
-                    
-                    # Convert result to backward compatible format if needed
-                    # The basic tool expects validated_themes and discovered_themes
-                    if "themes" in result:
-                        # Create ThemeInsightOutput-like structure for backward compatibility
-                        from src.schemas import ThemeInsightOutput, DestinationInsight
-                        
-                        validated_themes = []
-                        discovered_themes = []
-                        
-                        for theme in result["themes"]:
-                            # Create enhanced evidence list for the new schema
-                            enhanced_evidence_list = []
-                            for ev in theme.get("evidence_summary", []):
-                                from src.schemas import EnhancedEvidence
-                                enhanced_evidence = EnhancedEvidence(
-                                    source_url=ev.get("source_url", ""),
-                                    source_category=ev.get("source_category", ""),
-                                    authority_weight=ev.get("authority_weight", 0.0),
-                                    text_snippet=ev.get("text_snippet", ""),
-                                    cultural_context=ev.get("cultural_context", {}),
-                                    sentiment=ev.get("sentiment"),
-                                    relationships=ev.get("relationships", []),
-                                    agent_id=ev.get("agent_id"),
-                                    published_date=ev.get("published_date"),
-                                    confidence=ev.get("confidence", 0.0),
-                                    timestamp=ev.get("timestamp", "")
-                                )
-                                enhanced_evidence_list.append(enhanced_evidence)
-                            
-                            # Create rich description with evidence count and confidence info
-                            description = (
-                                f"{theme.get('name', '')} experiences in {destination_name}. "
-                                f"Confidence: {theme.get('confidence_level', 'unknown')} "
-                                f"({theme.get('confidence_score', 0.0):.2f}). "
-                                f"Evidence: {theme.get('evidence_count', 0)} pieces. "
-                                f"Category: {theme.get('macro_category', 'Other')}"
-                            )
-                            
-                            # Generate tags for the theme
-                            theme_tags = theme_analyzer._generate_tags(theme.get("name", ""))
-                            
-                            theme_insight = DestinationInsight(
-                                destination_name=destination_name,
-                                insight_type=theme.get("macro_category", "Other"),
-                                insight_name=theme.get("name", "Unknown"),
-                                description=description,
-                                confidence_score=theme.get("confidence_score", 0.0),
-                                evidence=enhanced_evidence_list,  # Use enhanced evidence objects
-                                source_urls=[ev.get("source_url", "") for ev in theme.get("evidence_summary", [])],
-                                tags=theme_tags,
-                                # Include enhanced analytical fields
-                                factors=theme.get("factors"),
-                                cultural_summary=theme.get("cultural_summary"),
-                                sentiment_analysis=theme.get("sentiment_analysis"),
-                                temporal_analysis=theme.get("temporal_analysis")
-                            )
-                            
-                            # Store enhanced metadata in the evidence field for later processing (instead of as attributes)
-                            # Enhanced data is preserved in evidence_details list and description
-                            
-                            if theme.get("is_validated", False):
-                                validated_themes.append(theme_insight)
-                            else:
-                                discovered_themes.append(theme_insight)
-                        
-                        # Return backward compatible format with priority data
-                        output = ThemeInsightOutput(
-                            destination_name=destination_name,
-                            validated_themes=validated_themes,
-                            discovered_themes=discovered_themes,
-                            priority_insights=priority_insights,
-                            priority_metrics=priority_metrics
-                        )
-                        
-                        # Note: Raw themes data is available in the result dict but cannot be attached
-                        # to Pydantic model as dynamic field. Use the validated/discovered themes instead.
-                        
-                        return output
-                    
-                    # Log summary
-                    logger.info(
-                        f"Enhanced analysis complete for {destination_name}: "
-                        f"{result.get('quality_metrics', {}).get('themes_validated', 0)} themes validated, "
-                        f"{len(priority_insights)} priority insights, "
-                        f"avg confidence {result.get('quality_metrics', {}).get('average_confidence', 0.0):.2f}"
-                    )
-                    
-                    return result
+                    logger.info(f"Aggregated priority data: {len(priority_insights)} priority insights generated")
                     
                 except Exception as e:
-                    logger.error(f"Error in enhanced theme analysis: {e}", exc_info=True)
-                    # Return minimal result on error
-                    from src.schemas import ThemeInsightOutput
-                    return ThemeInsightOutput(
-                        destination_name=destination_name,
-                        validated_themes=[],
-                        discovered_themes=[]
-                    )
+                    logger.error(f"Error aggregating priority data: {e}")
             
-            def _run(**kwargs):
-                """Synchronous wrapper"""
-                import asyncio
-                # Use asyncio.run() which creates a new event loop
-                return asyncio.run(_arun(**kwargs))
+            # Don't convert the enhanced result to backward compatibility - pass it through directly!
+            # The storage tool can handle the enhanced format
+            logger.info(f"Returning enhanced result directly with {len(result['themes'])} themes and evidence registry")
             
-            return _run
-        
-        # Create the functions with captured dependencies
-        func = create_tool_func(agent_orchestrator, llm)
-        
-        return func 
+            # Add priority data to the result
+            result["priority_metrics"] = priority_metrics
+            result["priority_insights"] = priority_insights
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in enhanced theme analysis: {e}", exc_info=True)
+            # Return minimal result on error
+            from src.schemas import ThemeInsightOutput
+            return ThemeInsightOutput(
+                destination_name=destination_name,
+                validated_themes=[],
+                discovered_themes=[]
+            )
+    
+    def _run(self, **kwargs):
+        """Synchronous wrapper - properly implemented"""
+        import asyncio
+        try:
+            # Try to run in the current event loop if one exists
+            loop = asyncio.get_running_loop()
+            # If there's a running loop, we need to use a different approach
+            import concurrent.futures
+            import threading
+            
+            result = None
+            exception = None
+            
+            def run_in_thread():
+                nonlocal result, exception
+                try:
+                    # Create new event loop in thread
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    result = new_loop.run_until_complete(self._arun(**kwargs))
+                    new_loop.close()
+                except Exception as e:
+                    exception = e
+            
+            thread = threading.Thread(target=run_in_thread)
+            thread.start()
+            thread.join()
+            
+            if exception:
+                raise exception
+            return result
+            
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run()
+            return asyncio.run(self._arun(**kwargs))

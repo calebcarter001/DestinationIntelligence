@@ -7,9 +7,15 @@ from typing import Dict, Any, Optional, List
 from langchain.tools import Tool
 import hashlib
 import os
+from datetime import datetime
 
 from ..core.enhanced_database_manager import EnhancedDatabaseManager
-from ..core.enhanced_data_models import Destination, Theme
+from ..core.enhanced_data_models import (
+    Destination, Theme, Evidence,
+    AuthenticInsight, LocalAuthority, SeasonalWindow
+)
+from ..core.confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
+from ..schemas import InsightType, LocationExclusivity, AuthorityType
 
 class StoreEnhancedDestinationInsightsTool(Tool):
     """Enhanced tool for storing destination insights with JSON export"""
@@ -25,19 +31,13 @@ class StoreEnhancedDestinationInsightsTool(Tool):
         
         # Create wrapper functions that capture the db_manager
         def create_tool_func(db_mgr):
-            def _store_insights(destination_name: str = None, insights: List[Any] = None,
-                              destination_data: Dict[str, Any] = None,
+            def _store_insights(destination_data: Dict[str, Any] = None,
                               config: Any = None, run_manager: Any = None, **kwargs) -> str:
                 """
                 Store enhanced destination insights with all new features
                 
-                Supports both legacy (destination_name + insights) and new (destination_data) formats.
-                The config and run_manager parameters are required by LangChain but not used.
-                
                 Args:
-                    destination_name: Legacy format - name of destination
-                    insights: Legacy format - list of insights
-                    destination_data: New format - Dictionary containing destination object or data
+                    destination_data: Dictionary containing destination object and metadata
                     config: LangChain RunnableConfig (not used)
                     run_manager: LangChain callback manager (not used)
                     
@@ -45,40 +45,331 @@ class StoreEnhancedDestinationInsightsTool(Tool):
                     Status message with storage results and JSON export paths
                 """
                 try:
-                    # Handle backward compatibility first
-                    if destination_name is not None and insights is not None:
-                        # Convert basic format to legacy format
-                        legacy_data = {
-                            "name": destination_name,
-                            "insights": insights
-                        }
-                        return _store_legacy_insights(legacy_data, db_mgr)
-                    
-                    # Handle new format
                     if destination_data is None:
-                        # Try to extract from kwargs
-                        if "destination_name" in kwargs and "insights" in kwargs:
-                            legacy_data = {
-                                "name": kwargs["destination_name"],
-                                "insights": kwargs["insights"]
-                            }
-                            return _store_legacy_insights(legacy_data, db_mgr)
-                        return "Error: No valid destination data provided"
+                        return "Error: No destination data provided"
                     
-                    # Handle both Destination object and dict input
+                    # Handle Destination object and dict input
                     if isinstance(destination_data, Destination):
+                        logger.info("DEBUG: Path 1 - destination_data is already a Destination object")
                         destination = destination_data
                         analysis_metadata = {}
                     elif isinstance(destination_data, dict):
+                        logger.info("DEBUG: Path 2 - destination_data is a dictionary")
                         # Check if it's wrapped with metadata
                         if "destination" in destination_data and isinstance(destination_data["destination"], Destination):
+                            logger.info("DEBUG: Path 2a - destination key contains Destination object")
                             destination = destination_data["destination"]
                             analysis_metadata = destination_data.get("analysis_metadata", {})
+                        elif "destination" in destination_data and isinstance(destination_data["destination"], dict):
+                            logger.info("DEBUG: Path 2b - destination key contains dictionary")
+                            # Handle case where analysis result contains evidence_registry
+                            destination_dict = destination_data["destination"]
+                            logger.info(f"DEBUG: destination_dict keys: {list(destination_dict.keys())}")
+                            logger.info(f"DEBUG: themes in destination_dict: {len(destination_dict.get('themes', []))}")
+                            
+                            destination = Destination(
+                                names=[destination_dict.get("destination_name", "Unknown")],
+                                id=f"dest_{destination_dict.get('destination_name', 'unknown').lower().replace(' ', '_')}",
+                                country_code=destination_dict.get("country_code", "US"),
+                                timezone="UTC",
+                                admin_levels={}
+                            )
+                            
+                            # CRITICAL FIX: Add ALL attributes to the destination object!
+                            
+                            # 1. Add themes (already working)
+                            themes_data = destination_dict.get("themes", [])
+                            logger.info(f"DEBUG: Found {len(themes_data)} themes to add to destination")
+                            if themes_data:
+                                # Convert theme dictionaries to Theme objects if needed
+                                from ..core.enhanced_data_models import Theme
+                                from ..core.evidence_hierarchy import SourceCategory, EvidenceType
+                                themes_added = 0
+                                for i, theme_data in enumerate(themes_data):
+                                    try:
+                                        if isinstance(theme_data, dict):
+                                            logger.info(f"DEBUG: Converting theme {i}: {theme_data.get('name', 'Unknown')}")
+                                            
+                                            # Reconstruct ConfidenceBreakdown object
+                                            cb_obj = None
+                                            confidence_breakdown_dict = theme_data.get("confidence_breakdown")
+                                            if confidence_breakdown_dict and isinstance(confidence_breakdown_dict, dict):
+                                                try:
+                                                    # Make a copy to modify for initialization
+                                                    cb_dict_for_init = confidence_breakdown_dict.copy()
+                                                    
+                                                    # Convert confidence_level string to Enum member
+                                                    level_str = cb_dict_for_init.get("confidence_level")
+                                                    if isinstance(level_str, str):
+                                                        try:
+                                                            cb_dict_for_init["confidence_level"] = ConfidenceLevel(level_str)
+                                                        except ValueError as e_val:
+                                                            logger.error(f"DEBUG: Invalid string for ConfidenceLevel enum '{level_str}': {e_val}. Defaulting in ConfidenceBreakdown.")
+                                                    
+                                                    cb_obj = ConfidenceBreakdown(**cb_dict_for_init)
+                                                except Exception as e_cb:
+                                                    logger.error(f"DEBUG: Error reconstructing ConfidenceBreakdown for theme {theme_data.get('name')}: {e_cb}")
+
+                                            # Reconstruct Evidence objects
+                                            reconstructed_evidence_list = []
+                                            evidence_data_list = theme_data.get("evidence", [])
+                                            if isinstance(evidence_data_list, list):
+                                                for ev_data in evidence_data_list:
+                                                    if isinstance(ev_data, dict):
+                                                        try:
+                                                            # Attempt to parse datetime if it's a string
+                                                            ts_val = ev_data.get("timestamp")
+                                                            timestamp_obj = datetime.fromisoformat(ts_val) if isinstance(ts_val, str) else datetime.now()
+                                                            
+                                                            pub_date_val = ev_data.get("published_date")
+                                                            published_date_obj = None
+                                                            if pub_date_val:
+                                                                try:
+                                                                    published_date_obj = datetime.fromisoformat(pub_date_val) if isinstance(pub_date_val, str) else None
+                                                                except ValueError: # handle cases where it might not be a valid ISO format
+                                                                    logger.warning(f"Could not parse published_date: {pub_date_val}")
+
+
+                                                            reconstructed_evidence_list.append(
+                                                                Evidence(
+                                                                    id=ev_data.get("id", ""),
+                                                                    source_url=ev_data.get("source_url", ""),
+                                                                    source_category=SourceCategory(ev_data.get("source_category", "unknown")),
+                                                                    evidence_type=EvidenceType(ev_data.get("evidence_type", "text")),
+                                                                    authority_weight=float(ev_data.get("authority_weight", 0.0)),
+                                                                    text_snippet=ev_data.get("text_snippet", ""),
+                                                                    timestamp=timestamp_obj,
+                                                                    confidence=float(ev_data.get("confidence", 0.0)),
+                                                                    sentiment=float(ev_data.get("sentiment", 0.0)) if ev_data.get("sentiment") is not None else None,
+                                                                    cultural_context=ev_data.get("cultural_context"),
+                                                                    relationships=ev_data.get("relationships", []),
+                                                                    agent_id=ev_data.get("agent_id"),
+                                                                    published_date=published_date_obj,
+                                                                    factors=ev_data.get("factors")
+                                                                )
+                                                            )
+                                                        except Exception as e_ev:
+                                                            logger.error(f"DEBUG: Error reconstructing Evidence for theme {theme_data.get('name')}: {e_ev}")
+                                                    elif isinstance(ev_data, Evidence): # if it's already an Evidence object
+                                                        reconstructed_evidence_list.append(ev_data)
+
+
+                                            # Reconstruct AuthenticInsight objects
+                                            reconstructed_authentic_insights = []
+                                            ai_list_data = theme_data.get("authentic_insights", [])
+                                            if isinstance(ai_list_data, list):
+                                                for ai_data in ai_list_data:
+                                                    if isinstance(ai_data, dict):
+                                                        try:
+                                                            ai_dict_for_init = ai_data.copy()
+                                                            # Convert insight_type string to Enum
+                                                            it_str = ai_dict_for_init.get("insight_type")
+                                                            if isinstance(it_str, str):
+                                                                try:
+                                                                    ai_dict_for_init["insight_type"] = InsightType(it_str)
+                                                                except ValueError:
+                                                                    logger.warning(f"Invalid insight_type string '{it_str}', defaulting.")
+                                                                    ai_dict_for_init["insight_type"] = InsightType.UNKNOWN # Or your default
+                                                            
+                                                            # Convert location_exclusivity string to Enum
+                                                            le_str = ai_dict_for_init.get("location_exclusivity")
+                                                            if isinstance(le_str, str):
+                                                                try:
+                                                                    ai_dict_for_init["location_exclusivity"] = LocationExclusivity(le_str)
+                                                                except ValueError:
+                                                                    logger.warning(f"Invalid location_exclusivity string '{le_str}', defaulting.")
+                                                                    ai_dict_for_init["location_exclusivity"] = LocationExclusivity.COMMON # Or your default
+
+                                                            # Handle nested SeasonalWindow if it's also a dict
+                                                            sw_data = ai_dict_for_init.get("seasonal_window")
+                                                            if isinstance(sw_data, dict):
+                                                                ai_dict_for_init["seasonal_window"] = SeasonalWindow(**sw_data)
+                                                            elif not (sw_data is None or isinstance(sw_data, SeasonalWindow)):
+                                                                logger.warning(f"Unexpected type for seasonal_window in AuthenticInsight: {type(sw_data)}")
+                                                                ai_dict_for_init["seasonal_window"] = None
+                                                                
+                                                            reconstructed_authentic_insights.append(AuthenticInsight(**ai_dict_for_init))
+                                                        except Exception as e_ai:
+                                                            logger.error(f"DEBUG: Error reconstructing AuthenticInsight for theme {theme_data.get('name')}: {e_ai}")
+                                                    elif isinstance(ai_data, AuthenticInsight):
+                                                         reconstructed_authentic_insights.append(ai_data)
+
+
+                                            # Reconstruct LocalAuthority objects
+                                            reconstructed_local_authorities = []
+                                            la_list_data = theme_data.get("local_authorities", [])
+                                            if isinstance(la_list_data, list):
+                                                for la_data in la_list_data:
+                                                    if isinstance(la_data, dict):
+                                                        try:
+                                                            la_dict_for_init = la_data.copy()
+                                                            # Convert authority_type string to Enum
+                                                            at_str = la_dict_for_init.get("authority_type")
+                                                            if isinstance(at_str, str):
+                                                                try:
+                                                                    la_dict_for_init["authority_type"] = AuthorityType(at_str)
+                                                                except ValueError:
+                                                                    logger.warning(f"Invalid authority_type string '{at_str}', defaulting.")
+                                                                    la_dict_for_init["authority_type"] = AuthorityType.OTHER # Or your default
+                                                            reconstructed_local_authorities.append(LocalAuthority(**la_dict_for_init))
+                                                        except Exception as e_la:
+                                                            logger.error(f"DEBUG: Error reconstructing LocalAuthority for theme {theme_data.get('name')}: {e_la}")
+                                                    elif isinstance(la_data, LocalAuthority):
+                                                        reconstructed_local_authorities.append(la_data)
+                                            
+                                            theme = Theme(
+                                                theme_id=theme_data.get("theme_id", f"theme_{i}_{theme_data.get('name', 'unknown').lower().replace(' ', '_')}") ,
+                                                name=theme_data.get("name", "Unknown Theme"),
+                                                macro_category=theme_data.get("macro_category", "General"),
+                                                micro_category=theme_data.get("micro_category", theme_data.get("category", "General")),
+                                                description=theme_data.get("description", f"Theme about {theme_data.get('name', 'unknown topic')}" ),
+                                                fit_score=float(theme_data.get("fit_score", 0.5)),
+                                                confidence_breakdown=cb_obj,
+                                                evidence=reconstructed_evidence_list,
+                                                tags=theme_data.get("tags", []),
+                                                created_date=datetime.fromisoformat(theme_data.get("created_date")) if theme_data.get("created_date") and isinstance(theme_data.get("created_date"), str) else datetime.now(),
+                                                last_validated=datetime.fromisoformat(theme_data.get("last_validated")) if theme_data.get("last_validated") and isinstance(theme_data.get("last_validated"), str) else None,
+                                                metadata=theme_data.get("metadata", {}),
+                                                authentic_insights=reconstructed_authentic_insights,
+                                                local_authorities=reconstructed_local_authorities,
+                                                seasonal_relevance=theme_data.get("seasonal_relevance", {}),
+                                                regional_uniqueness=float(theme_data.get("regional_uniqueness", 0.0)),
+                                                insider_tips=theme_data.get("insider_tips", []),
+                                                factors=theme_data.get("factors", {}),
+                                                cultural_summary=theme_data.get("cultural_summary", {}),
+                                                sentiment_analysis=theme_data.get("sentiment_analysis", {}),
+                                                temporal_analysis=theme_data.get("temporal_analysis", {})
+                                            )
+                                            destination.themes.append(theme)
+                                            themes_added += 1
+                                            logger.info(f"DEBUG: Successfully added theme {i}: {theme.name}")
+                                        elif hasattr(theme_data, 'insight_name'):  # DestinationInsight object
+                                            logger.info(f"DEBUG: Converting DestinationInsight {i}: {theme_data.insight_name}")
+                                            # Create Theme object from DestinationInsight
+                                            theme = Theme(
+                                                theme_id=f"theme_{i}_{theme_data.insight_name.lower().replace(' ', '_').replace(',', '')}",
+                                                name=theme_data.insight_name,
+                                                macro_category=getattr(theme_data, 'insight_type', 'General'),
+                                                micro_category=getattr(theme_data, 'priority_category', 'General'),
+                                                description=getattr(theme_data, 'description', f"Theme about {theme_data.insight_name}"),
+                                                fit_score=getattr(theme_data, 'confidence_score', 0.5) or 0.5
+                                            )
+                                            # Add evidence if present
+                                            if hasattr(theme_data, 'evidence') and theme_data.evidence:
+                                                theme.evidence = theme_data.evidence
+                                            destination.themes.append(theme)
+                                            themes_added += 1
+                                            logger.info(f"DEBUG: Successfully added DestinationInsight as theme {i}: {theme.name}")
+                                        elif hasattr(theme_data, 'name'):  # Already a Theme object
+                                            logger.info(f"DEBUG: Adding existing Theme object {i}: {theme_data.name}")
+                                            destination.themes.append(theme_data)
+                                            themes_added += 1
+                                        else:
+                                            logger.warning(f"DEBUG: Skipping invalid theme data {i}: {type(theme_data)}")
+                                    except Exception as e:
+                                        logger.error(f"DEBUG: Error converting theme {i}: {e}", exc_info=True)
+                                        logger.error(f"DEBUG: Theme data was: {theme_data}")
+                                
+                                logger.info(f"DEBUG: Successfully added {themes_added} out of {len(themes_data)} themes to destination")
+                                logger.info(f"DEBUG: Destination now has {len(destination.themes)} themes total")
+                            
+                            # 2. Add dimensions
+                            dimensions_data = destination_dict.get("dimensions", {})
+                            logger.info(f"DEBUG: Found {len(dimensions_data)} dimensions to add")
+                            for dim_name, dim_value in dimensions_data.items():
+                                if isinstance(dim_value, (int, float)):
+                                    destination.update_dimension(dim_name, dim_value, confidence=0.8)
+                                elif isinstance(dim_value, dict):
+                                    # Handle more complex dimension format
+                                    value = dim_value.get("value", dim_value.get("score", 0))
+                                    unit = dim_value.get("unit", "score")
+                                    confidence = dim_value.get("confidence", 0.8)
+                                    destination.update_dimension(dim_name, value, unit, confidence)
+                            
+                            # 3. Add POIs
+                            pois_data = destination_dict.get("pois", [])
+                            logger.info(f"DEBUG: Found {len(pois_data)} POIs to add")
+                            from ..core.enhanced_data_models import PointOfInterest
+                            for poi_data in pois_data:
+                                if isinstance(poi_data, dict):
+                                    poi = PointOfInterest(
+                                        poi_id=poi_data.get("poi_id", f"poi_{len(destination.pois)}"),
+                                        name=poi_data.get("name", "Unknown POI"),
+                                        description=poi_data.get("description", ""),
+                                        location=poi_data.get("location", {}),
+                                        address=poi_data.get("address"),
+                                        poi_type=poi_data.get("poi_type", "attraction"),
+                                        theme_tags=poi_data.get("theme_tags", []),
+                                        ada_accessible=poi_data.get("ada_accessible"),
+                                        ada_features=poi_data.get("ada_features", []),
+                                        media_urls=poi_data.get("media_urls", []),
+                                        operating_hours=poi_data.get("operating_hours"),
+                                        price_range=poi_data.get("price_range"),
+                                        rating=poi_data.get("rating"),
+                                        review_count=poi_data.get("review_count")
+                                    )
+                                    destination.pois.append(poi)
+                            
+                            # 4. Add temporal slices
+                            temporal_data = destination_dict.get("temporal_slices", [])
+                            logger.info(f"DEBUG: Found {len(temporal_data)} temporal slices to add")
+                            from ..core.enhanced_data_models import TemporalSlice
+                            for temporal_item in temporal_data:
+                                if isinstance(temporal_item, dict):
+                                    # Parse date strings if needed
+                                    valid_from = datetime.now()
+                                    valid_to = None
+                                    if "valid_from" in temporal_item:
+                                        try:
+                                            valid_from = datetime.fromisoformat(temporal_item["valid_from"])
+                                        except:
+                                            valid_from = datetime.now()
+                                    if "valid_to" in temporal_item and temporal_item["valid_to"]:
+                                        try:
+                                            valid_to = datetime.fromisoformat(temporal_item["valid_to"])
+                                        except:
+                                            valid_to = None
+                                    
+                                    temporal_slice = TemporalSlice(
+                                        valid_from=valid_from,
+                                        valid_to=valid_to,
+                                        season=temporal_item.get("season"),
+                                        seasonal_highlights=temporal_item.get("seasonal_highlights", {}),
+                                        special_events=temporal_item.get("special_events", []),
+                                        weather_patterns=temporal_item.get("weather_patterns"),
+                                        visitor_patterns=temporal_item.get("visitor_patterns")
+                                    )
+                                    destination.temporal_slices.append(temporal_slice)
+                            
+                            # 5. Add authentic insights
+                            insights_data = destination_dict.get("authentic_insights", [])
+                            logger.info(f"DEBUG: Found {len(insights_data)} authentic insights to add")
+                            # Insights are already AuthenticInsight objects from the analyst
+                            for insight in insights_data:
+                                if hasattr(insight, 'insight_type'):  # Already an AuthenticInsight object
+                                    destination.authentic_insights.append(insight)
+                            
+                            # 6. Add local authorities  
+                            authorities_data = destination_dict.get("local_authorities", [])
+                            logger.info(f"DEBUG: Found {len(authorities_data)} local authorities to add")
+                            # Authorities are already LocalAuthority objects from the analyst
+                            for authority in authorities_data:
+                                if hasattr(authority, 'authority_type'):  # Already a LocalAuthority object
+                                    destination.local_authorities.append(authority)
+                            
+                            logger.info(f"DEBUG: Final destination has {len(destination.themes)} themes, {len(destination.dimensions)} dimensions, {len(destination.pois)} POIs, {len(destination.temporal_slices)} temporal slices, {len(destination.authentic_insights)} insights, {len(destination.local_authorities)} authorities")
+                            
+                            analysis_metadata = {
+                                "evidence_registry": destination_data.get("evidence_registry", {}),
+                                "themes": destination_data.get("themes", []),
+                                "quality_metrics": destination_data.get("quality_metrics", {}),
+                                "evidence_summary": destination_data.get("evidence_summary", {})
+                            }
                         else:
-                            # Try to create Destination from dict (backward compatibility)
-                            logger.warning("Received dictionary instead of Destination object - limited functionality")
-                            return _store_legacy_insights(destination_data, db_mgr)
+                            logger.error(f"DEBUG: Path 2c - Invalid destination data format. Keys: {list(destination_data.keys())}")
+                            return f"Error: Invalid destination data format"
                     else:
+                        logger.error(f"DEBUG: Path 3 - Invalid input type {type(destination_data)}")
                         return f"Error: Invalid input type {type(destination_data)}"
                     
                     # Validate destination before storage
@@ -158,312 +449,19 @@ class StoreEnhancedDestinationInsightsTool(Tool):
                     logger.error(f"Error storing enhanced destination insights: {e}", exc_info=True)
                     return f"❌ Error storing enhanced destination insights: {str(e)}"
             
-            async def _astore_insights(destination_name: str = None, insights: List[Any] = None, 
-                                     destination_data: Dict[str, Any] = None, 
+            async def _astore_insights(destination_data: Dict[str, Any] = None, 
                                      config: Any = None, run_manager: Any = None, **kwargs) -> str:
-                """Async wrapper with backward compatibility and LangChain parameters"""
-                # Note: config and run_manager are required by LangChain but we don't use them
+                """Async wrapper for LangChain compatibility"""
                 
-                logger.info(f"_astore_insights called with: destination_name={destination_name}, "
-                           f"insights={type(insights) if insights else None}, destination_data={destination_data}, "
-                           f"kwargs={kwargs}")
+                logger.info(f"_astore_insights called with destination_data type: {type(destination_data)}")
                 
-                # Handle backward compatibility with basic tool interface
-                if destination_name is not None and insights is not None:
-                    # Convert basic format to enhanced format
-                    legacy_data = {
-                        "name": destination_name,
-                        "insights": insights
-                    }
-                    logger.info(f"Using legacy format with destination_name={destination_name}")
-                    # Pass as destination_data parameter
-                    return _store_insights(destination_data=legacy_data, config=config, run_manager=run_manager)
-                elif destination_data is not None:
-                    # New enhanced format
-                    logger.info("Using enhanced format with destination_data")
+                if destination_data is not None:
                     return _store_insights(destination_data=destination_data, config=config, run_manager=run_manager)
                 else:
-                    # Try to extract from kwargs
-                    if "destination_name" in kwargs and "insights" in kwargs:
-                        legacy_data = {
-                            "name": kwargs["destination_name"],
-                            "insights": kwargs["insights"]
-                        }
-                        logger.info("Using legacy format from kwargs")
-                        return _store_insights(destination_data=legacy_data, config=config, run_manager=run_manager)
-                    logger.error(f"No valid destination data found. Args: destination_name={destination_name}, "
-                               f"insights={insights}, destination_data={destination_data}, kwargs={kwargs}")
+                    logger.error(f"No valid destination data found. destination_data={destination_data}, kwargs={kwargs}")
                     return "Error: No valid destination data provided"
             
             return _store_insights, _astore_insights
-        
-        def _store_legacy_insights(destination_data: Dict[str, Any], db_mgr: EnhancedDatabaseManager) -> str:
-            """
-            Handle legacy format for backward compatibility
-            """
-            try:
-                # Extract basic info
-                name = destination_data.get("name", destination_data.get("destination_name", "Unknown"))
-                insights = destination_data.get("insights", destination_data.get("themes", []))
-                
-                logger.info(f"_store_legacy_insights called with name={name}, insights type={type(insights)}, count={len(insights) if isinstance(insights, list) else 1}")
-                
-                # Create a minimal Destination object
-                from datetime import datetime
-                from ..core.enhanced_data_models import Destination, Theme
-                
-                destination = Destination(
-                    names=[name],  # Fixed: use 'names' as a list
-                    id=f"legacy_{name.lower().replace(' ', '_').replace(',', '')}",
-                    country_code="US",  # Default, should be extracted
-                    timezone="UTC",  # Default, should be extracted
-                    admin_levels={"city": name}
-                )
-                
-                # Process insights - handle both dict and object formats
-                themes_added = 0
-                if isinstance(insights, list):
-                    for insight_item in insights:
-                        if hasattr(insight_item, 'validated_themes'):
-                            # It's a ThemeInsightOutput object
-                            logger.info(f"Processing ThemeInsightOutput with {len(insight_item.validated_themes)} validated themes and {len(insight_item.discovered_themes)} discovered themes")
-                            
-                            # Process validated themes
-                            for theme_insight in insight_item.validated_themes:
-                                # Import required models
-                                from ..core.enhanced_data_models import Evidence
-                                from ..core.evidence_hierarchy import SourceCategory, EvidenceType
-                                from ..core.confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
-                                
-                                # Extract evidence data from the DestinationInsight
-                                evidence_list = []
-                                if hasattr(theme_insight, 'evidence') and theme_insight.evidence:
-                                    for idx, evidence_text in enumerate(theme_insight.evidence):
-                                        # Create Evidence objects from the evidence strings
-                                        source_url = theme_insight.source_urls[idx] if hasattr(theme_insight, 'source_urls') and idx < len(theme_insight.source_urls) else ""
-                                        evidence = Evidence(
-                                            id=f"evidence_{idx}_{datetime.now().timestamp()}",
-                                            source_url=source_url,
-                                            source_category=SourceCategory.BLOG,  # Default to BLOG instead of NEWS
-                                            evidence_type=EvidenceType.PRIMARY,
-                                            authority_weight=0.7,  # Default authority
-                                            text_snippet=evidence_text,
-                                            timestamp=datetime.now(),
-                                            confidence=0.7,
-                                            cultural_context={}
-                                        )
-                                        evidence_list.append(evidence)
-                                
-                                # Create confidence breakdown from the single confidence score
-                                confidence_breakdown = None
-                                if hasattr(theme_insight, 'confidence_score') and theme_insight.confidence_score is not None:
-                                    # Create a simplified confidence breakdown
-                                    conf_score = theme_insight.confidence_score
-                                    confidence_breakdown = ConfidenceBreakdown(
-                                        overall_confidence=conf_score,
-                                        confidence_level=ConfidenceLevel.VERY_HIGH if conf_score > 0.85 else 
-                                                        ConfidenceLevel.HIGH if conf_score > 0.7 else
-                                                        ConfidenceLevel.MODERATE if conf_score > 0.5 else
-                                                        ConfidenceLevel.LOW if conf_score > 0.3 else
-                                                        ConfidenceLevel.INSUFFICIENT,
-                                        evidence_count=len(evidence_list),
-                                        source_diversity=conf_score,
-                                        authority_score=conf_score,
-                                        recency_score=conf_score,
-                                        consistency_score=conf_score,
-                                        factors={}
-                                    )
-                                
-                                theme = Theme(
-                                    theme_id=f"{theme_insight.insight_name.lower().replace(' ', '_')}_{datetime.now().timestamp()}",
-                                    macro_category=theme_insight.insight_type,
-                                    micro_category=theme_insight.insight_name,  # Use insight_name as micro_category for now
-                                    name=theme_insight.insight_name,
-                                    description=theme_insight.description or "",
-                                    fit_score=theme_insight.confidence_score or 0.5,
-                                    evidence=evidence_list,  # Now properly populated
-                                    confidence_breakdown=confidence_breakdown,  # Now properly populated
-                                    tags=getattr(theme_insight, 'tags', [])
-                                )
-                                destination.add_theme(theme)
-                                themes_added += 1
-                            
-                            # Process discovered themes
-                            for theme_insight in insight_item.discovered_themes:
-                                # Import required models (already imported above)
-                                
-                                # Extract evidence data from the DestinationInsight
-                                evidence_list = []
-                                if hasattr(theme_insight, 'evidence') and theme_insight.evidence:
-                                    for idx, evidence_text in enumerate(theme_insight.evidence):
-                                        # Create Evidence objects from the evidence strings
-                                        source_url = theme_insight.source_urls[idx] if hasattr(theme_insight, 'source_urls') and idx < len(theme_insight.source_urls) else ""
-                                        evidence = Evidence(
-                                            id=f"evidence_{idx}_{datetime.now().timestamp()}",
-                                            source_url=source_url,
-                                            source_category=SourceCategory.BLOG,  # Default to BLOG instead of NEWS
-                                            evidence_type=EvidenceType.PRIMARY,
-                                            authority_weight=0.7,  # Default authority
-                                            text_snippet=evidence_text,
-                                            timestamp=datetime.now(),
-                                            confidence=0.7,
-                                            cultural_context={}
-                                        )
-                                        evidence_list.append(evidence)
-                                
-                                # Create confidence breakdown from the single confidence score
-                                confidence_breakdown = None
-                                if hasattr(theme_insight, 'confidence_score') and theme_insight.confidence_score is not None:
-                                    # Create a simplified confidence breakdown
-                                    conf_score = theme_insight.confidence_score
-                                    confidence_breakdown = ConfidenceBreakdown(
-                                        overall_confidence=conf_score,
-                                        confidence_level=ConfidenceLevel.VERY_HIGH if conf_score > 0.85 else 
-                                                        ConfidenceLevel.HIGH if conf_score > 0.7 else
-                                                        ConfidenceLevel.MODERATE if conf_score > 0.5 else
-                                                        ConfidenceLevel.LOW if conf_score > 0.3 else
-                                                        ConfidenceLevel.INSUFFICIENT,
-                                        evidence_count=len(evidence_list),
-                                        source_diversity=conf_score,
-                                        authority_score=conf_score,
-                                        recency_score=conf_score,
-                                        consistency_score=conf_score,
-                                        factors={}
-                                    )
-                                
-                                theme = Theme(
-                                    theme_id=f"{theme_insight.insight_name.lower().replace(' ', '_')}_{datetime.now().timestamp()}",
-                                    macro_category=theme_insight.insight_type,
-                                    micro_category=theme_insight.insight_name,  # Use insight_name as micro_category for now
-                                    name=theme_insight.insight_name,
-                                    description=theme_insight.description or "",
-                                    fit_score=theme_insight.confidence_score or 0.5,
-                                    evidence=evidence_list,  # Now properly populated
-                                    confidence_breakdown=confidence_breakdown,  # Now properly populated
-                                    tags=getattr(theme_insight, 'tags', [])
-                                )
-                                destination.add_theme(theme)
-                                themes_added += 1
-                        elif hasattr(insight_item, 'themes'):
-                            # It's the result from enhanced theme analysis with 'themes' attribute
-                            logger.info(f"Processing enhanced theme analysis result with {len(insight_item.themes)} themes")
-                            
-                            for theme_dict in insight_item.themes:
-                                # Import required models
-                                from ..core.enhanced_data_models import Evidence
-                                from ..core.evidence_hierarchy import SourceCategory, EvidenceType
-                                from ..core.confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
-                                
-                                # Extract evidence data
-                                evidence_list = []
-                                evidence_summary = theme_dict.get('evidence_summary', [])
-                                
-                                # Convert evidence summary to Evidence objects
-                                for idx, ev_data in enumerate(evidence_summary):
-                                    evidence = Evidence(
-                                        id=ev_data.get('id', f"ev_{idx}_{datetime.now().timestamp()}"),
-                                        source_url=ev_data.get('source_url', ''),
-                                        source_category=SourceCategory[ev_data.get('source_category', 'GENERAL_MEDIA')],
-                                        evidence_type=EvidenceType.PRIMARY,  # Default
-                                        authority_weight=ev_data.get('authority_weight', 0.5),
-                                        text_snippet=ev_data.get('text_snippet', ''),
-                                        timestamp=datetime.now(),
-                                        confidence=ev_data.get('authority_weight', 0.5),
-                                        cultural_context=ev_data.get('cultural_context'),
-                                        sentiment=ev_data.get('sentiment'),
-                                        relationships=ev_data.get('relationships', {}),
-                                        agent_id=ev_data.get('agent_id'),
-                                        published_date=datetime.fromisoformat(ev_data.get('published_date').replace('Z', '+00:00')) if ev_data.get('published_date') else None
-                                    )
-                                    evidence_list.append(evidence)
-                                
-                                # Create confidence breakdown from theme data
-                                confidence_breakdown_data = theme_dict.get('confidence_breakdown', {})
-                                if confidence_breakdown_data:
-                                    confidence_breakdown = ConfidenceBreakdown(
-                                        overall_confidence=confidence_breakdown_data.get('overall_confidence', 0.5),
-                                        confidence_level=ConfidenceLevel[confidence_breakdown_data.get('confidence_level', 'MODERATE')],
-                                        evidence_count=len(evidence_list),
-                                        source_diversity=confidence_breakdown_data.get('source_diversity', 0.5),
-                                        authority_score=confidence_breakdown_data.get('authority_score', 0.5),
-                                        recency_score=confidence_breakdown_data.get('recency_score', 0.5),
-                                        consistency_score=confidence_breakdown_data.get('consistency_score', 0.5),
-                                        factors=confidence_breakdown_data.get('factors', {})
-                                    )
-                                else:
-                                    # Fallback confidence breakdown
-                                    confidence_breakdown = ConfidenceBreakdown(
-                                        overall_confidence=theme_dict.get('confidence_score', 0.5),
-                                        confidence_level=ConfidenceLevel.MODERATE,
-                                        evidence_count=len(evidence_list),
-                                        source_diversity=0.5,
-                                        authority_score=0.5,
-                                        recency_score=0.5,
-                                        consistency_score=0.5,
-                                        factors={}
-                                    )
-                                
-                                # Create Theme object with all enhanced fields including analytical data
-                                theme = Theme(
-                                    theme_id=theme_dict.get('theme_id', f"theme_{datetime.now().timestamp()}"),
-                                    macro_category=theme_dict.get('macro_category', 'Other'),
-                                    micro_category=theme_dict.get('micro_category', theme_dict.get('name', 'Unknown')),
-                                    name=theme_dict.get('name', 'Unknown Theme'),
-                                    description=theme_dict.get('description', ''),
-                                    fit_score=theme_dict.get('fit_score', 0.5),
-                                    evidence=evidence_list,
-                                    confidence_breakdown=confidence_breakdown,
-                                    tags=theme_dict.get('tags', []),
-                                    created_date=datetime.now(),
-                                    last_validated=datetime.now(),
-                                    metadata=theme_dict.get('metadata', {}),
-                                    # Enhanced fields
-                                    authentic_insights=[],  # These would be populated by specialized tools
-                                    local_authorities=[],   # These would be populated by specialized tools
-                                    seasonal_relevance=theme_dict.get('seasonal_relevance', {}),
-                                    regional_uniqueness=theme_dict.get('regional_uniqueness', 0.0),
-                                    insider_tips=theme_dict.get('insider_tips', []),
-                                    # Analytical data fields - this is the key fix!
-                                    factors=theme_dict.get('factors', {}),
-                                    cultural_summary=theme_dict.get('cultural_summary', {}),
-                                    sentiment_analysis=theme_dict.get('sentiment_analysis', {}),
-                                    temporal_analysis=theme_dict.get('temporal_analysis', {})
-                                )
-                                
-                                destination.add_theme(theme)
-                                themes_added += 1
-                        elif isinstance(insight_item, dict):
-                            # Handle plain dict format (backward compatibility)
-                            theme = Theme(
-                                theme_id=f"{insight_item.get('name', 'unknown').lower().replace(' ', '_')}_{datetime.now().timestamp()}",
-                                macro_category=insight_item.get('category', 'Other'),
-                                micro_category=insight_item.get('subcategory', insight_item.get('name', 'Other')),
-                                name=insight_item.get('name', 'Unknown'),
-                                description=insight_item.get('description', ''),
-                                fit_score=insight_item.get('confidence', 0.5),
-                                tags=insight_item.get('tags', [])
-                            )
-                            destination.add_theme(theme)
-                            themes_added += 1
-                
-                logger.info(f"Creating destination object for {name} with {themes_added} themes")
-                
-                # Store using enhanced database manager
-                results = db_mgr.store_destination(destination)
-                
-                # Fixed: Handle dict return value properly
-                if isinstance(results, dict) and results.get("database_stored"):
-                    result_parts = [f"Enhanced storage: Success - stored {len(destination.themes)} themes"]
-                    if results.get("json_files_created"):
-                        result_parts.append(f"JSON files: {len(results['json_files_created'])} exported")
-                    return " | ".join(result_parts)
-                else:
-                    error_msg = results.get("errors", ["Unknown error"]) if isinstance(results, dict) else str(results)
-                    return f"Enhanced storage: Failed - {error_msg}"
-                
-            except Exception as e:
-                logger.error(f"Error in _store_legacy_insights: {e}", exc_info=True)
-                return f"Error storing legacy insights: {str(e)}"
         
         # Create the functions with captured db_manager
         func, coroutine = create_tool_func(db_manager)
@@ -472,7 +470,7 @@ class StoreEnhancedDestinationInsightsTool(Tool):
             name="store_destination_insights",
             description=(
                 "Store enhanced destination insights in the database with evidence hierarchy, "
-                "confidence scoring, temporal data, and automatic JSON export. "
+                "confidence scoring, temporal data, and automatic consolidated JSON export. "
                 "Input should be a destination object with all enhanced data."
             ),
             func=func,

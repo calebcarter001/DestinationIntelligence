@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import re
 from collections import Counter
+import json
+import sys
 
 from .base_agent import BaseAgent, MessageBroker, AgentMessage, MessageType
 from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory
@@ -41,44 +43,47 @@ class ValidationAgent(BaseAgent):
         contradictions = []
         
         for theme_data in themes:
-            # Extract evidence
-            evidence_sources = theme_data.get("evidence_sources", [])
-            evidence_texts = theme_data.get("evidence_texts", [])
-            sentiment_scores = theme_data.get("sentiment_scores")
+            # The theme_data now contains "original_evidence_objects"
+            # These are the full Evidence objects passed from EnhancedThemeAnalysisTool
+            original_evidence_list = theme_data.get("original_evidence_objects", [])
+
+            if not original_evidence_list:
+                self.logger.warning(f"Theme '{theme_data.get('name')}' received no original evidence objects for validation. Assigning default INSUFFICIENT confidence.")
+                confidence_scorer = ConfidenceScorer()
+                confidence_breakdown = confidence_scorer.calculate_confidence([]) 
+            else:
+                confidence_scorer = ConfidenceScorer()
+                confidence_breakdown = confidence_scorer.calculate_confidence(original_evidence_list)
             
-            # Create Evidence objects from the theme data
-            evidence_list = []
-            for i, (source, text) in enumerate(zip(evidence_sources, evidence_texts)):
-                evidence = Evidence(
-                    id=f"validation_{i}",
-                    source_url=source,
-                    source_category=EvidenceHierarchy.classify_source(source),
-                    evidence_type=EvidenceHierarchy.get_source_authority(source)[1],
-                    authority_weight=EvidenceHierarchy.get_source_authority(source)[0],
-                    text_snippet=text,
-                    timestamp=datetime.now(),
-                    confidence=0.5,
-                    cultural_context={},
-                    agent_id=self.agent_id
-                )
-                evidence_list.append(evidence)
-            
-            # Calculate confidence using the actual method signature
-            confidence_scorer = ConfidenceScorer()
-            confidence_breakdown = confidence_scorer.calculate_confidence(evidence_list)
-            
-            # Check for contradictions
+            # ADDED: Debugging print and log for ConfidenceScorer's output as seen by ValidationAgent
+            diag_theme_name = theme_data.get('name', 'Unknown Theme')
+            diag_overall_conf = confidence_breakdown.overall_confidence
+            diag_conf_level = confidence_breakdown.confidence_level.value
+            diag_breakdown_dict = confidence_breakdown.to_dict()
+
+            print(f"DEBUG_VA_CONF_OUT: Theme='{diag_theme_name}', OverallConf={diag_overall_conf:.4f}, Level='{diag_conf_level}'", file=sys.stderr)
+            self.logger.info(f"VALIDATION_AGENT_CS_RESULT: Theme='{diag_theme_name}', OverallConf={diag_overall_conf:.4f}, Level='{diag_conf_level}', Breakdown={json.dumps(diag_breakdown_dict)}")
+
+            # Check for contradictions (this logic can remain, but might be more effective 
+            # if it also had access to richer evidence details if it needs to re-evaluate)
+            # For now, it uses evidence_texts which might need to be derived if not directly available
+            # from original_evidence_objects in the expected format for contradiction checks.
+            # Let's assume for now contradiction logic might need its own evidence representation if it can't use original_evidence_objects directly.
+            # We will rely on the ContradictionDetectionAgent to handle this with the data it receives.
+            evidence_texts_for_contradiction = [ev.text_snippet for ev in original_evidence_list] # Reconstruct if needed
+
             if confidence_breakdown.consistency_score < 0.5:
                 contradictions.append({
                     "theme": theme_data.get("name"),
                     "reason": "Low consistency score indicates conflicting evidence",
                     "consistency_score": confidence_breakdown.consistency_score,
-                    "evidence_snippets": evidence_texts[:3]  # First 3 as examples
+                    "evidence_snippets": evidence_texts_for_contradiction[:3]  # First 3 as examples
                 })
             
             # Add confidence to theme
             theme_data["confidence_breakdown"] = confidence_breakdown.to_dict()
             theme_data["confidence_level"] = confidence_breakdown.confidence_level.value
+            # The threshold for is_validated can remain, but its meaning is now based on richer scoring.
             theme_data["is_validated"] = confidence_breakdown.overall_confidence >= 0.2
             
             validated_themes.append(theme_data)

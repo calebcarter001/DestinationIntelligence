@@ -104,7 +104,8 @@ class DiscoverAndFetchContentTool(StructuredTool):
         
         async with web_discovery_logic as wdl:
             # Get sources from web discovery (includes priority content if enabled)
-            sources_with_metadata = await wdl.discover_real_content(destination_name)
+            sources_with_metadata = await wdl.discover_real_content(destination_name) # RESTORED Original line
+            
             all_sources.extend(sources_with_metadata)
         
         # Deduplicate by URL
@@ -173,9 +174,8 @@ class DiscoverAndFetchContentTool(StructuredTool):
                         page_content.content,
                         page_content.url
                     )
-                    # Add priority data to page content (will need to update PageContent schema)
-                    if hasattr(page_content, '__dict__'):
-                        page_content.__dict__['priority_data'] = priority_data
+                    # Properly assign priority data to PageContent field (not dynamic dict assignment)
+                    page_content.priority_data = priority_data
                         
                     logger.info(f"Semantic extraction completed for {page_content.url}: "
                                f"confidence={priority_data.get('extraction_confidence', 0):.2f}, "
@@ -196,10 +196,21 @@ class DiscoverAndFetchContentTool(StructuredTool):
             reverse=True
         )
         
-        max_sources_to_return_to_agent = self.config.get("web_discovery", {}).get("max_sources_for_agent_processing", 5)
+        # MODIFIED: Temporarily increase max_sources_for_agent_processing for more evidence
+        default_max_sources = 15 # Was 5
+        max_sources_to_return_to_agent = self.config.get("web_discovery", {}).get("max_sources_for_agent_processing", default_max_sources)
         if enable_priority_discovery:
-            max_sources_to_return_to_agent = min(max_sources_to_return_to_agent * 2, 10)
-        
+            # Ensure priority still gets a boost if defined in config, or use a higher default
+            priority_max_sources = 20 # Was 10, or min(default_max_sources * 2, 20)
+            max_sources_to_return_to_agent = self.config.get("web_discovery", {}).get(
+                "max_sources_for_agent_processing_priority", # Assuming a potential separate config for priority
+                min(max_sources_to_return_to_agent * 2, priority_max_sources) # Existing logic if no separate config
+            )
+            # If the above get() still resulted in the non-priority value due to no specific priority config, ensure it's at least our new higher default for priority
+            if max_sources_to_return_to_agent <= default_max_sources:
+                 max_sources_to_return_to_agent = priority_max_sources
+
+        logger.info(f"[Tool] DEBUG: max_sources_to_return_to_agent set to: {max_sources_to_return_to_agent}")
         final_sources_to_return = sorted_sources[:max_sources_to_return_to_agent]
         
         # Log final distribution

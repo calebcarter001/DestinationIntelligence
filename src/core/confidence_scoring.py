@@ -5,6 +5,7 @@ from datetime import datetime
 import logging
 import numpy as np
 import re
+import sys
 
 # Forward references for type hints to avoid circular imports
 if TYPE_CHECKING:
@@ -344,11 +345,18 @@ class ConfidenceScorer:
     
     def __init__(self):
         self.evidence_hierarchy = EvidenceHierarchy()
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger("app.confidence_scorer")
+        self.logger.setLevel(logging.DEBUG)
     
     def calculate_confidence(self, evidence_list: List[Any]) -> ConfidenceBreakdown:
         """Calculate comprehensive confidence breakdown"""
+        import sys
+        print(f"DEBUG_CS_ENTRY: ENTERING calculate_confidence with {len(evidence_list)} evidence items.", file=sys.stderr)
+        self.logger.debug(f"Calculating confidence for {len(evidence_list)} evidence pieces.")
+
         if not evidence_list:
+            print(f"DEBUG_CS_CALC: No evidence, returning INSUFFICIENT.", file=sys.stderr)
+            self.logger.debug("No evidence provided, returning INSUFFICIENT confidence.")
             return ConfidenceBreakdown(
                 overall_confidence=0.0,
                 confidence_level=ConfidenceLevel.INSUFFICIENT,
@@ -367,7 +375,6 @@ class ConfidenceScorer:
         recency_score = self._calculate_recency_score(evidence_list)
         consistency_score = self._calculate_consistency_score(evidence_list)
         
-        # Weight factors
         weights = {
             "evidence_count": 0.2,
             "source_diversity": 0.25,
@@ -376,10 +383,17 @@ class ConfidenceScorer:
             "consistency": 0.15
         }
         
-        # Normalize evidence count (diminishing returns)
         evidence_score = min(evidence_count / 10.0, 1.0)
         
-        # Calculate overall confidence
+        # Log and Print component scores
+        print(f"DEBUG_CS_CALC: EvCountRaw={evidence_count}, EvScoreNorm={evidence_score:.4f}, SrcDiv={source_diversity:.4f}, AuthScr={authority_score:.4f}, RecScr={recency_score:.4f}, ConsScr={consistency_score:.4f}", file=sys.stderr)
+        self.logger.debug(f"[Confidence Components] Evidence Count Raw: {evidence_count}, Evidence Score (Normalized): {evidence_score:.4f}")
+        self.logger.debug(f"[Confidence Components] Source Diversity: {source_diversity:.4f}")
+        self.logger.debug(f"[Confidence Components] Authority Score: {authority_score:.4f}")
+        self.logger.debug(f"[Confidence Components] Recency Score: {recency_score:.4f}")
+        self.logger.debug(f"[Confidence Components] Consistency Score: {consistency_score:.4f}")
+        self.logger.debug(f"[Confidence Components] Weights: {weights}")
+
         overall_confidence = (
             evidence_score * weights["evidence_count"] +
             source_diversity * weights["source_diversity"] +
@@ -388,8 +402,12 @@ class ConfidenceScorer:
             consistency_score * weights["consistency"]
         )
         
-        # Determine confidence level
+        print(f"DEBUG_CS_CALC: OverallConfidence={overall_confidence:.4f}", file=sys.stderr)
+        self.logger.debug(f"Calculated Overall Confidence: {overall_confidence:.4f}")
+        
         confidence_level = self._determine_confidence_level(overall_confidence)
+        print(f"DEBUG_CS_CALC: ConfidenceLevel='{confidence_level.value}'", file=sys.stderr)
+        self.logger.debug(f"Determined Confidence Level: {confidence_level.value}")
         
         return ConfidenceBreakdown(
             overall_confidence=overall_confidence,
@@ -412,22 +430,32 @@ class ConfidenceScorer:
     
     def _calculate_authority_score(self, evidence_list: List[Any]) -> float:
         """Calculate weighted authority score"""
+        import sys # Ensure sys is imported here if not globally
         if not evidence_list:
+            print("DEBUG_CS_AUTH: No evidence for authority score.", file=sys.stderr)
             return 0.0
         
-        total_weighted_authority = sum(
-            evidence.authority_weight * self._evidence_quality_score(evidence)
-            for evidence in evidence_list
-        )
-        
-        return total_weighted_authority / len(evidence_list)
+        weighted_authorities = []
+        for i, evidence in enumerate(evidence_list):
+            quality_score = self._evidence_quality_score(evidence)
+            weighted_authority = evidence.authority_weight * quality_score
+            weighted_authorities.append(weighted_authority)
+            if i < 3: 
+                print(f"DEBUG_CS_AUTH_EV[{i}]: ev.auth_w={evidence.authority_weight:.4f}, ev.conf(used_by_qual)={evidence.confidence:.4f}, qual_score={quality_score:.4f}, combined={weighted_authority:.4f}", file=sys.stderr)
+                self.logger.debug(f"  AuthCalc Ev[{i}]: authority_weight={evidence.authority_weight:.4f}, ev.confidence(used_by_qual)={evidence.confidence:.4f}, quality_score={quality_score:.4f}, combined_ev_auth={weighted_authority:.4f}")
+
+        total_weighted_authority = sum(weighted_authorities)
+        calculated_authority_score = total_weighted_authority / len(evidence_list) if evidence_list else 0.0
+        print(f"DEBUG_CS_AUTH: TotalWeightedAuth={total_weighted_authority:.4f}, NumEv={len(evidence_list)}, AvgAuthScore={calculated_authority_score:.4f}", file=sys.stderr)
+        self.logger.debug(f"  AuthCalc: TotalWeightedAuth={total_weighted_authority:.4f}, NumEvidence={len(evidence_list)}, AvgAuthorityScore={calculated_authority_score:.4f}")
+        return calculated_authority_score
     
     def _evidence_quality_score(self, evidence: Any) -> float:
         """Calculate quality score for individual evidence"""
-        # Base score from evidence type and source category
-        base_score = evidence.confidence
+        base_score = evidence.confidence 
+        category_str = evidence.source_category.name if hasattr(evidence.source_category, 'name') else str(evidence.source_category)
         
-        # Adjust for source category
+        # REINSTATED: category_multipliers dictionary
         category_multipliers = {
             'GOVERNMENT': 1.0,
             'ACADEMIC': 0.95,
@@ -437,47 +465,72 @@ class ConfidenceScorer:
             'SOCIAL': 0.4,
             'UNKNOWN': 0.3
         }
-        
-        category_str = evidence.source_category.name if hasattr(evidence.source_category, 'name') else str(evidence.source_category)
         multiplier = category_multipliers.get(category_str, 0.5)
         
-        return base_score * multiplier
+        final_quality_score = base_score * multiplier
+        # self.logger.debug(f"    EvQuality: base_score(ev.confidence)={base_score:.4f}, category={category_str}, multiplier={multiplier:.4f}, final_ev_quality={final_quality_score:.4f}") # Too verbose for every piece
+        return final_quality_score
     
     def _calculate_recency_score(self, evidence_list: List[Any]) -> float:
         """Calculate score based on recency of evidence"""
+        import sys # Ensure sys is imported here if not globally
         if not evidence_list:
+            print("DEBUG_CS_RECENCY: No evidence for recency score.", file=sys.stderr)
             return 0.0
         
         current_time = datetime.now()
         recency_scores = []
         
-        for evidence in evidence_list:
+        for i, evidence in enumerate(evidence_list):
             if evidence.timestamp:
-                days_old = (current_time - evidence.timestamp).days
-                # Score decreases with age (half-life of ~365 days)
-                recency_score = max(0.1, 0.5 ** (days_old / 365))
-                recency_scores.append(recency_score)
+                try:
+                    # Attempt to parse if it's a string, otherwise assume it's a datetime object
+                    timestamp_obj = evidence.timestamp
+                    if isinstance(evidence.timestamp, str):
+                        timestamp_obj = datetime.fromisoformat(evidence.timestamp.replace('Z', '+00:00'))
+                    
+                    days_old = (current_time - timestamp_obj).days
+                    recency_score_val = max(0.1, 0.5 ** (days_old / 365))
+                    recency_scores.append(recency_score_val)
+                    if i < 3:
+                        print(f"DEBUG_CS_RECENCY_EV[{i}]: ts={evidence.timestamp}, days_old={days_old}, score={recency_score_val:.4f}", file=sys.stderr)
+                        self.logger.debug(f"  RecencyCalc Ev[{i}]: timestamp={evidence.timestamp}, days_old={days_old}, recency_score_val={recency_score_val:.4f}")
+                except Exception as e:
+                    recency_scores.append(0.2) # Penalize unparseable/problematic timestamps
+                    if i < 3:
+                        print(f"DEBUG_CS_RECENCY_EV[{i}]: ts={evidence.timestamp}, ERROR parsing: {e}, score=0.2000", file=sys.stderr)
+                        self.logger.warning(f"  RecencyCalc Ev[{i}]: Error parsing timestamp '{evidence.timestamp}': {e}. Assigning low score.")
             else:
-                recency_scores.append(0.3)  # Default for unknown age
+                recency_scores.append(0.3)
+                if i < 3:
+                    print(f"DEBUG_CS_RECENCY_EV[{i}]: ts=NULL, score=0.3000", file=sys.stderr)
+                    self.logger.debug(f"  RecencyCalc Ev[{i}]: timestamp=NULL, recency_score_val=0.3000")
         
-        return sum(recency_scores) / len(recency_scores)
+        avg_recency = sum(recency_scores) / len(recency_scores) if recency_scores else 0.0
+        print(f"DEBUG_CS_RECENCY: AvgRecency={avg_recency:.4f}", file=sys.stderr)
+        self.logger.debug(f"  RecencyCalc: AvgRecency={avg_recency:.4f}")
+        return avg_recency
     
     def _calculate_consistency_score(self, evidence_list: List[Any]) -> float:
         """Calculate consistency across evidence sources"""
+        import sys # Ensure sys is imported here if not globally
         if len(evidence_list) < 2:
-            return 1.0  # Single source is perfectly consistent
+            print(f"DEBUG_CS_CONSIST: <2 evidence, consistency=1.0", file=sys.stderr)
+            return 1.0
         
         # For now, use confidence variance as a proxy for consistency
         confidences = [evidence.confidence for evidence in evidence_list]
         
         # Calculate variance
-        mean_confidence = sum(confidences) / len(confidences)
-        variance = sum((c - mean_confidence) ** 2 for c in confidences) / len(confidences)
+        mean_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+        variance = sum((c - mean_confidence) ** 2 for c in confidences) / len(confidences) if confidences else 0.0
         
         # Convert variance to consistency score (lower variance = higher consistency)
-        consistency_score = max(0.1, 1.0 - variance)
+        consistency_score_val = max(0.1, 1.0 - variance)
         
-        return consistency_score
+        print(f"DEBUG_CS_CONSIST: NumConf={len(confidences)}, MeanConf={mean_confidence:.4f}, Var={variance:.4f}, Score={consistency_score_val:.4f}", file=sys.stderr)
+        self.logger.debug(f"  ConsistencyCalc: NumConfidences={len(confidences)}, MeanConfidence={mean_confidence:.4f}, Variance={variance:.4f}, ConsistencyScore={consistency_score_val:.4f}")
+        return consistency_score_val
     
     def _determine_confidence_level(self, overall_confidence: float) -> ConfidenceLevel:
         """Determine confidence level from overall score"""

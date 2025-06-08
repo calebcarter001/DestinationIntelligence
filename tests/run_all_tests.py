@@ -31,6 +31,7 @@ def run_all_tests():
     
     # Complete list of ALL available unit test files
     unit_test_files = [
+        'test_adaptive_intelligence.py',                # NEW: Adaptive intelligence system
         'test_cache_utilities.py',
         'test_confidence_scoring.py',
         'test_destination_classifier.py',
@@ -90,7 +91,8 @@ def run_all_tests():
     print(f"\n📋 TEST BREAKDOWN:")
     print(f"   Unit Tests: {len(found_unit_tests)} files")
     for test in found_unit_tests:
-        category = "Priority Data" if "priority" in test else \
+        category = "Adaptive Intelligence" if "adaptive" in test else \
+                  "Priority Data" if "priority" in test else \
                   "Enhanced Theme" if "theme" in test else \
                   "Cache System" if "cache" in test else \
                   "Core Framework" if test in ['test_schemas.py', 'test_enhanced_data_models.py'] else \
@@ -184,6 +186,7 @@ def run_all_tests():
         
         # Show what was tested
         print(f"\n📊 COVERAGE SUMMARY:")
+        print(f"   ✅ Adaptive Intelligence System")
         print(f"   ✅ Semantic Priority Data Extraction")
         print(f"   ✅ Enhanced Theme Analysis")  
         print(f"   ✅ Cache Utilities & Performance")

@@ -70,7 +70,7 @@ main_log_file_path = os.path.join(LOGS_DIR, f"enhanced_app_run_{run_timestamp_fo
 
 # Configure root logger
 app_logger = logging.getLogger()
-app_logger.setLevel(logging.INFO)
+app_logger.setLevel(logging.DEBUG)
 if app_logger.hasHandlers(): 
     app_logger.handlers.clear()
 
@@ -81,10 +81,31 @@ console_handler.setFormatter(formatter)
 console_handler.setLevel(logging.INFO)
 app_logger.addHandler(console_handler)
 
+# Main application file log (captures root logger at DEBUG)
 file_handler_main = logging.FileHandler(main_log_file_path)
 file_handler_main.setFormatter(formatter)
-file_handler_main.setLevel(logging.INFO)
+file_handler_main.setLevel(logging.DEBUG)
 app_logger.addHandler(file_handler_main)
+
+# --- Dedicated File Log for ConfidenceScorer ---
+pcs_log_path = os.path.join(LOGS_DIR, f"confidence_scorer_{run_timestamp_for_log}.log")
+cs_file_handler = logging.FileHandler(pcs_log_path)
+cs_file_handler.setFormatter(formatter)
+cs_file_handler.setLevel(logging.DEBUG)
+cs_logger = logging.getLogger("app.confidence_scorer") # Use the new prefixed name
+cs_logger.setLevel(logging.DEBUG)
+cs_logger.addHandler(cs_file_handler)
+cs_logger.propagate = False # Do not propagate to root logger to avoid duplicate file entries
+
+# --- Dedicated File Log for WebDiscoveryLogic ---
+wd_log_path = os.path.join(LOGS_DIR, f"web_discovery_{run_timestamp_for_log}.log")
+wd_file_handler = logging.FileHandler(wd_log_path)
+wd_file_handler.setFormatter(formatter)
+wd_file_handler.setLevel(logging.DEBUG)
+wd_logger = logging.getLogger("app.web_discovery") # Use the new prefixed name
+wd_logger.setLevel(logging.DEBUG)
+wd_logger.addHandler(wd_file_handler)
+wd_logger.propagate = False # Do not propagate to root logger
 
 # Configure LangChain logger
 langchain_log_file_path = os.path.join(LOGS_DIR, f"enhanced_langchain_agent_trace_{run_timestamp_for_log}.log")
@@ -259,7 +280,8 @@ async def main_agent_orchestration():
         db_path = app_config.get("database", {}).get("path", "enhanced_destination_intelligence.db")
         db_manager = EnhancedDatabaseManager(
             db_path=db_path,
-            json_export_path=insights_export_dir
+            json_export_path=insights_export_dir,
+            config=app_config  # Pass full app config for adaptive processing
         )
 
         # Initialize ChromaDB Manager
@@ -296,15 +318,25 @@ async def main_agent_orchestration():
                 brave_api_key=brave_api_key,
                 config=processing_settings
             ),
-            ProcessContentWithVectorizeTool(config=processing_settings),
-            AddChunksToChromaDBTool(chroma_manager=chroma_manager_instance),
-            SemanticSearchChromaDBTool(chroma_manager=chroma_manager_instance),
-            EnhancedContentAnalysisTool(llm=llm),  # Pass LLM to enhanced tools
+            ProcessContentWithVectorizeTool(
+                config=processing_settings
+            ),
+            AddChunksToChromaDBTool(
+                chroma_manager=chroma_manager_instance
+            ),
+            SemanticSearchChromaDBTool(
+                chroma_manager=chroma_manager_instance
+            ),
+            EnhancedContentAnalysisTool(
+                llm=llm
+            ),
             EnhancedAnalyzeThemesFromEvidenceTool(
                 agent_orchestrator=orchestrator,
-                llm=llm  # Pass LLM here too
+                llm=llm
             ),
-            StoreEnhancedDestinationInsightsTool(db_manager=db_manager)
+            StoreEnhancedDestinationInsightsTool(
+                db_manager=db_manager
+            )
         ]
         
         # Create Enhanced CrewAI analyst
@@ -322,7 +354,28 @@ async def main_agent_orchestration():
 
         for dest_name in tqdm(destinations_to_process, desc="Processing Destinations", file=sys.stderr):
             destination_result_data = await run_enhanced_analysis_for_destination(enhanced_analyst, dest_name, processing_settings)
-            overall_results["destinations_processed_details"].append(destination_result_data)
+            
+            # Extract only metadata for run summary (remove detailed insights to prevent duplication)
+            destination_summary = {
+                "status": destination_result_data.get("status"),
+                "destination_name": destination_result_data.get("destination_name"),
+                "execution_method": destination_result_data.get("execution_method"),
+                "pages_processed": destination_result_data.get("pages_processed", 0),
+                "chunks_created": destination_result_data.get("chunks_created", 0),
+                "total_themes": destination_result_data.get("total_themes", 0),
+                "validated_themes": destination_result_data.get("validated_themes", 0),
+                "discovered_themes": destination_result_data.get("discovered_themes", 0),
+                "priority_insights": destination_result_data.get("priority_insights", 0),
+                "attractions_found": destination_result_data.get("attractions_found", 0),
+                "hotels_found": destination_result_data.get("hotels_found", 0),
+                "restaurants_found": destination_result_data.get("restaurants_found", 0),
+                "execution_duration_seconds": destination_result_data.get("execution_duration_seconds", 0),
+                "error": destination_result_data.get("error")  # Only include if there was an error
+                # NOTE: Deliberately excluding "enhanced_insights" and "theme_analysis" to prevent duplication
+                # These detailed insights are stored via the consolidated export system in destination_insights/
+            }
+            
+            overall_results["destinations_processed_details"].append(destination_summary)
             
             if destination_result_data.get("status") == "Success":
                 overall_results["successful_destinations"] += 1

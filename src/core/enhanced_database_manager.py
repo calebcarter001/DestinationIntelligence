@@ -6,9 +6,9 @@ from typing import Optional, List, Dict, Any
 import os
 import uuid
 
-from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority
+from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority, PointOfInterest
 from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
-from .json_export_manager import JsonExportManager
+from .consolidated_json_export_manager import ConsolidatedJsonExportManager
 from src.schemas import InsightType, LocationExclusivity, AuthorityType
 
 class EnhancedDatabaseManager:
@@ -16,21 +16,45 @@ class EnhancedDatabaseManager:
     
     def __init__(self, db_path: str = "enhanced_destination_intelligence.db", 
                  enable_json_export: bool = True,
-                 json_export_path: Optional[str] = None):
+                 json_export_path: Optional[str] = None,
+                 config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize database manager with adaptive configuration support
+        
+        Args:
+            db_path: Path to the SQLite database file
+            enable_json_export: Whether to enable JSON export
+            json_export_path: Path for JSON exports
+            config: Application configuration dictionary for adaptive processing
+        """
         project_root = os.path.join(os.path.dirname(__file__), '..', '..')
         self.db_path = os.path.join(project_root, db_path)
         self.conn = None
         self.logger = logging.getLogger(__name__)
         
-        # Initialize JSON export manager if enabled
+        # Store configuration for adaptive processing
+        self.config = config or {}
+        
+        # Initialize consolidated JSON export manager if enabled
         self.enable_json_export = enable_json_export
         self.json_export_manager = None
         
         if enable_json_export:
-            if json_export_path is None:
-                json_export_path = os.path.join(project_root, "destination_insights")
-            self.json_export_manager = JsonExportManager(json_export_path)
-            self.logger.info(f"JSON export enabled. Files will be saved to: {json_export_path}")
+            effective_export_path = json_export_path # Capture the path being used
+            if effective_export_path is None:
+                effective_export_path = os.path.join(project_root, "destination_insights")
+            
+            # ADDED DEBUG LOG
+            self.logger.info(f"[EnhancedDBManager INIT] Received json_export_path: {json_export_path}")
+            self.logger.info(f"[EnhancedDBManager INIT] Effective export_base_path for ConsolidatedManager: {effective_export_path}")
+            
+            # Pass configuration to export manager for adaptive processing
+            self.json_export_manager = ConsolidatedJsonExportManager(
+                export_base_path=effective_export_path,
+                config=self.config
+            )
+            # Original log message, now uses effective_export_path for clarity
+            self.logger.info(f"Consolidated JSON export enabled with adaptive intelligence. Files will be saved to: {self.json_export_manager.consolidated_path}")
         
         self.init_database()
         
@@ -239,8 +263,55 @@ class EnhancedDatabaseManager:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_authorities_destination ON local_authorities(destination_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_authorities_type ON local_authorities(authority_type)")
             
+            # Additional normalized relationship tables for optimal queries
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS theme_insight_relationships (
+                    theme_id TEXT,
+                    insight_id TEXT,
+                    relationship_strength REAL DEFAULT 1.0,
+                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (theme_id, insight_id),
+                    FOREIGN KEY (theme_id) REFERENCES themes(theme_id),
+                    FOREIGN KEY (insight_id) REFERENCES authentic_insights(id)
+                )
+            """)
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS insight_authority_relationships (
+                    insight_id TEXT,
+                    authority_id TEXT,
+                    validation_strength REAL DEFAULT 1.0,
+                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (insight_id, authority_id),
+                    FOREIGN KEY (insight_id) REFERENCES authentic_insights(id),
+                    FOREIGN KEY (authority_id) REFERENCES local_authorities(id)
+                )
+            """)
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS temporal_theme_relationships (
+                    temporal_slice_id INTEGER,
+                    theme_id TEXT,
+                    relevance_score REAL DEFAULT 1.0,
+                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (temporal_slice_id, theme_id),
+                    FOREIGN KEY (temporal_slice_id) REFERENCES temporal_slices(id),
+                    FOREIGN KEY (theme_id) REFERENCES themes(theme_id)
+                )
+            """)
+            
+            # Indices for relationship tables
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_evidence_theme ON theme_evidence(theme_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_evidence_evidence ON theme_evidence(evidence_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_insight_theme ON theme_insight_relationships(theme_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_insight_insight ON theme_insight_relationships(insight_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_insight_authority_insight ON insight_authority_relationships(insight_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_insight_authority_authority ON insight_authority_relationships(authority_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_theme_temporal ON temporal_theme_relationships(temporal_slice_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_theme_theme ON temporal_theme_relationships(theme_id)")
+            
             self.conn.commit()
-            self.logger.info("Enhanced database schema initialized with performance indices")
+            self.logger.info("Enhanced database schema initialized with performance indices and normalized relationships")
             
         except sqlite3.Error as e:
             self.logger.error(f"Failed to initialize database: {e}")
@@ -341,6 +412,23 @@ class EnhancedDatabaseManager:
                 except sqlite3.Error as e:
                     results["warnings"].append(f"Failed to store theme {theme.theme_id}: {e}")
                     
+            # Store destination-level authentic insights
+            for insight in destination.authentic_insights:
+                try:
+                    seasonal_window_id = self._store_seasonal_window(cursor, insight.seasonal_window)
+                    self._store_authentic_insight(cursor, destination.id, insight, seasonal_window_id)
+                    insights_stored += 1
+                except sqlite3.Error as e:
+                    results["warnings"].append(f"Failed to store destination-level insight: {e}")
+
+            # Store destination-level local authorities
+            for authority in destination.local_authorities:
+                try:
+                    self._store_local_authority(cursor, destination.id, authority)
+                    authorities_stored += 1
+                except sqlite3.Error as e:
+                    results["warnings"].append(f"Failed to store destination-level authority: {e}")
+            
             # Store dimensions with validation
             dimensions_stored = 0
             for dim_name, dim_value in destination.dimensions.items():
@@ -392,12 +480,15 @@ class EnhancedDatabaseManager:
             # Export to JSON if enabled
             if self.enable_json_export and self.json_export_manager:
                 try:
-                    json_files = self.json_export_manager.export_destination_insights(
+                    # Use consolidated export with evidence registry
+                    evidence_registry = analysis_metadata.get("evidence_registry", {})
+                    json_file_path = self.json_export_manager.export_destination_insights(
                         destination, 
-                        analysis_metadata
+                        analysis_metadata,
+                        evidence_registry
                     )
-                    results["json_files_created"] = json_files
-                    self.logger.info(f"Exported {len(json_files)} JSON files for {destination.names[0] if destination.names else destination.id}")
+                    results["json_files_created"] = {"comprehensive": json_file_path}
+                    self.logger.info(f"Exported consolidated JSON file: {os.path.basename(json_file_path)}")
                 except Exception as json_error:
                     error_msg = f"JSON export error: {str(json_error)}"
                     self.logger.error(error_msg)
@@ -464,6 +555,19 @@ class EnhancedDatabaseManager:
 
     def _store_theme(self, cursor, destination_id: str, theme: Theme):
         """Store or update a theme"""
+        
+        level_obj = theme.get_confidence_level()
+        confidence_level_value_to_store = None
+
+        if isinstance(level_obj, ConfidenceLevel): # Check against the imported enum
+            confidence_level_value_to_store = level_obj.value
+        elif isinstance(level_obj, str):
+            self.logger.warning(f"Theme {theme.theme_id if hasattr(theme, 'theme_id') else 'Unknown_ID'}: get_confidence_level() returned a string: '{level_obj}'. Using it directly for DB.")
+            confidence_level_value_to_store = level_obj
+        else:
+            self.logger.error(f"Theme {theme.theme_id if hasattr(theme, 'theme_id') else 'Unknown_ID'}: get_confidence_level() returned unexpected type: {type(level_obj)} with value '{level_obj}'. Defaulting confidence to 'unknown'.")
+            confidence_level_value_to_store = "unknown"
+
         cursor.execute("""
             INSERT OR REPLACE INTO themes 
             (theme_id, destination_id, macro_category, micro_category, name, description,
@@ -481,7 +585,7 @@ class EnhancedDatabaseManager:
             json.dumps(theme.tags),
             json.dumps(theme.sentiment_analysis) if theme.sentiment_analysis else None,
             json.dumps(theme.temporal_analysis) if theme.temporal_analysis else None,
-            theme.get_confidence_level().value,
+            confidence_level_value_to_store, # Use the processed value
             json.dumps(theme.confidence_breakdown.to_dict()) if theme.confidence_breakdown else None,
             json.dumps([ai.to_dict() for ai in theme.authentic_insights]),
             json.dumps([la.to_dict() for la in theme.local_authorities]),
@@ -946,4 +1050,148 @@ class EnhancedDatabaseManager:
         """Close database connection"""
         if self.conn:
             self.conn.close()
-            self.logger.info("Database connection closed.") 
+            self.logger.info("Database connection closed.")
+
+    def export_from_normalized_schema(self, destination_id: str) -> Dict[str, Any]:
+        """
+        Export destination data directly from normalized database relationships
+        This bypasses object loading and provides maximum efficiency
+        """
+        if not self.conn:
+            raise ValueError("No database connection")
+            
+        cursor = self.conn.cursor()
+        
+        try:
+            # Get destination basic info
+            cursor.execute("""
+                SELECT id, names, admin_levels, timezone, population, country_code,
+                       core_geo, lineage, meta, last_updated, destination_revision
+                FROM destinations WHERE id = ?
+            """, (destination_id,))
+            
+            dest_row = cursor.fetchone()
+            if not dest_row:
+                raise ValueError(f"Destination {destination_id} not found")
+            
+            destination_data = {
+                "id": dest_row[0],
+                "names": json.loads(dest_row[1]),
+                "admin_levels": json.loads(dest_row[2]),
+                "timezone": dest_row[3],
+                "population": dest_row[4],
+                "country_code": dest_row[5],
+                "core_geo": json.loads(dest_row[6]) if dest_row[6] else {},
+                "lineage": json.loads(dest_row[7]) if dest_row[7] else {},
+                "meta": json.loads(dest_row[8]) if dest_row[8] else {},
+                "last_updated": dest_row[9],
+                "destination_revision": dest_row[10]
+            }
+            
+            # Get all evidence (normalized source of truth)
+            cursor.execute("""
+                SELECT id, source_url, source_category, evidence_type, authority_weight,
+                       text_snippet, timestamp, confidence, sentiment, cultural_context,
+                       relationships, agent_id, published_date, factors
+                FROM evidence WHERE destination_id = ?
+            """, (destination_id,))
+            
+            evidence_registry = {}
+            for ev_row in cursor.fetchall():
+                evidence_registry[ev_row[0]] = {
+                    "id": ev_row[0],
+                    "source_url": ev_row[1],
+                    "source_category": ev_row[2],
+                    "evidence_type": ev_row[3],
+                    "authority_weight": ev_row[4],
+                    "text_snippet": ev_row[5],
+                    "timestamp": ev_row[6],
+                    "confidence": ev_row[7],
+                    "sentiment": ev_row[8],
+                    "cultural_context": json.loads(ev_row[9]) if ev_row[9] else {},
+                    "relationships": json.loads(ev_row[10]) if ev_row[10] else [],
+                    "agent_id": ev_row[11],
+                    "published_date": ev_row[12],
+                    "factors": json.loads(ev_row[13]) if ev_row[13] else {}
+                }
+            
+            # Get themes with evidence references
+            cursor.execute("""
+                SELECT t.theme_id, t.macro_category, t.micro_category, t.name, t.description,
+                       t.fit_score, t.tags, t.sentiment_analysis, t.temporal_analysis,
+                       t.confidence_level, t.confidence_breakdown, t.authentic_insights,
+                       t.local_authorities, t.source_evidence_ids
+                FROM themes t WHERE t.destination_id = ?
+            """, (destination_id,))
+            
+            themes_data = {}
+            theme_evidence_relationships = {}
+            
+            for theme_row in cursor.fetchall():
+                theme_id = theme_row[0]
+                themes_data[theme_id] = {
+                    "theme_id": theme_id,
+                    "macro_category": theme_row[1],
+                    "micro_category": theme_row[2],
+                    "name": theme_row[3],
+                    "description": theme_row[4],
+                    "fit_score": theme_row[5],
+                    "tags": json.loads(theme_row[6]) if theme_row[6] else [],
+                    "sentiment_analysis": json.loads(theme_row[7]) if theme_row[7] else {},
+                    "temporal_analysis": json.loads(theme_row[8]) if theme_row[8] else {},
+                    "confidence_level": theme_row[9],
+                    "confidence_breakdown": json.loads(theme_row[10]) if theme_row[10] else {},
+                    "authentic_insights": json.loads(theme_row[11]) if theme_row[11] else [],
+                    "local_authorities": json.loads(theme_row[12]) if theme_row[12] else [],
+                    "evidence_references": json.loads(theme_row[13]) if theme_row[13] else []
+                }
+                
+                # Get evidence relationships from normalized table
+                cursor.execute("""
+                    SELECT evidence_id FROM theme_evidence WHERE theme_id = ?
+                """, (theme_id,))
+                evidence_ids = [row[0] for row in cursor.fetchall()]
+                theme_evidence_relationships[theme_id] = evidence_ids
+            
+            # Get relationships from normalized tables
+            cursor.execute("""
+                SELECT theme_id, insight_id, relationship_strength
+                FROM theme_insight_relationships WHERE theme_id IN ({})
+            """.format(','.join('?' for _ in themes_data.keys())), list(themes_data.keys()))
+            
+            theme_insight_relationships = {}
+            for rel_row in cursor.fetchall():
+                theme_id = rel_row[0]
+                if theme_id not in theme_insight_relationships:
+                    theme_insight_relationships[theme_id] = []
+                theme_insight_relationships[theme_id].append({
+                    "insight_id": rel_row[1],
+                    "strength": rel_row[2]
+                })
+            
+            return {
+                "export_metadata": {
+                    "version": "3.1",
+                    "export_method": "normalized_schema_direct",
+                    "export_timestamp": datetime.now().isoformat(),
+                    "format": "reference_based_optimized"
+                },
+                "destination": destination_data,
+                "data": {
+                    "evidence": evidence_registry,
+                    "themes": themes_data,
+                },
+                "relationships": {
+                    "theme_evidence": theme_evidence_relationships,
+                    "theme_insights": theme_insight_relationships,
+                },
+                "optimization_stats": {
+                    "evidence_count": len(evidence_registry),
+                    "themes_count": len(themes_data),
+                    "relationships_count": len(theme_evidence_relationships) + len(theme_insight_relationships)
+                }
+            }
+            
+        except sqlite3.Error as e:
+            self.logger.error(f"Error exporting from normalized schema: {e}")
+            raise 

@@ -310,6 +310,15 @@ class TestEnhancedThemeAnalysisTool:
         
         result = await tool.analyze_themes(input_data)
         
+        # Debug: Print the actual result structure
+        print(f"\nDEBUG: Total themes found: {len(result['themes'])}")
+        for i, theme in enumerate(result["themes"]):
+            print(f"Theme {i}: {theme.get('name', 'Unknown')} - Keys: {list(theme.keys())}")
+            if 'local_authorities' in theme:
+                print(f"  Local authorities: {theme['local_authorities']}")
+            else:
+                print(f"  No local_authorities key found")
+        
         # Check that some themes have local authorities
         found_local_authorities = False
         for theme in result["themes"]:

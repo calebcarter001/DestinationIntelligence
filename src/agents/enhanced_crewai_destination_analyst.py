@@ -200,11 +200,24 @@ class EnhancedCrewAIDestinationAnalyst:
                 parts = destination_name.split(",")
                 if len(parts) >= 2:
                     country_part = parts[-1].strip()
-                    # Map common country names to codes
+                    # Map common country names to codes - EXPANDED with Australia and others
                     country_mapping = {
                         "France": "FR", "United States": "US", "USA": "US",
                         "United Kingdom": "GB", "UK": "GB", "Germany": "DE",
-                        "Italy": "IT", "Spain": "ES", "Japan": "JP"
+                        "Italy": "IT", "Spain": "ES", "Japan": "JP",
+                        "Australia": "AU", "Canada": "CA", "Brazil": "BR",
+                        "Mexico": "MX", "Netherlands": "NL", "Switzerland": "CH",
+                        "Sweden": "SE", "Norway": "NO", "Denmark": "DK",
+                        "Austria": "AT", "Belgium": "BE", "Portugal": "PT",
+                        "Greece": "GR", "Turkey": "TR", "Poland": "PL",
+                        "Czech Republic": "CZ", "Hungary": "HU", "Ireland": "IE",
+                        "New Zealand": "NZ", "South Korea": "KR", "China": "CN",
+                        "India": "IN", "Thailand": "TH", "Singapore": "SG",
+                        "Malaysia": "MY", "Indonesia": "ID", "Philippines": "PH",
+                        "Vietnam": "VN", "South Africa": "ZA", "Egypt": "EG",
+                        "Morocco": "MA", "Argentina": "AR", "Chile": "CL",
+                        "Peru": "PE", "Colombia": "CO", "Ecuador": "EC",
+                        "Russia": "RU", "Finland": "FI", "Iceland": "IS"
                     }
                     country_code = country_mapping.get(country_part, "US")
             
@@ -216,9 +229,27 @@ class EnhancedCrewAIDestinationAnalyst:
                 config=processing_settings
             )
             
-            validated_themes = len(theme_analysis_result.validated_themes) if hasattr(theme_analysis_result, 'validated_themes') else 0
-            discovered_themes = len(theme_analysis_result.discovered_themes) if hasattr(theme_analysis_result, 'discovered_themes') else 0
-            priority_insights = len(theme_analysis_result.priority_insights) if hasattr(theme_analysis_result, 'priority_insights') else 0
+            # Fix: theme_analysis_result is a dictionary, not an object with attributes
+            # Extract count from the correct structure
+            if isinstance(theme_analysis_result, dict):
+                total_themes = len(theme_analysis_result.get('themes', []))
+                priority_insights = len(theme_analysis_result.get('priority_insights', []))
+                # For reporting purposes, treat all themes as discovered since they're generated from content
+                validated_themes = 0  # Legacy concept - not used in new enhanced format
+                discovered_themes = total_themes
+                
+                # Log the quality metrics if available
+                if 'quality_metrics' in theme_analysis_result:
+                    qm = theme_analysis_result['quality_metrics']
+                    self.logger.info(f"Quality metrics: {qm.get('themes_discovered', 0)} themes discovered, "
+                                   f"{qm.get('themes_validated', 0)} validated, "
+                                   f"avg confidence: {qm.get('average_confidence', 0):.3f}")
+            else:
+                # Fallback for old format (backward compatibility)
+                validated_themes = len(theme_analysis_result.validated_themes) if hasattr(theme_analysis_result, 'validated_themes') else 0
+                discovered_themes = len(theme_analysis_result.discovered_themes) if hasattr(theme_analysis_result, 'discovered_themes') else 0
+                priority_insights = len(theme_analysis_result.priority_insights) if hasattr(theme_analysis_result, 'priority_insights') else 0
+                total_themes = validated_themes + discovered_themes
             
             self.logger.info(f"Step 6 completed: Generated {validated_themes} validated themes, {discovered_themes} discovered themes, and {priority_insights} priority insights")
             
@@ -228,27 +259,60 @@ class EnhancedCrewAIDestinationAnalyst:
             storage_tool = self.tools_dict.get(storage_tool_name)
             
             if storage_tool:
-                # Pass the theme analysis result which contains the themes
-                # The enhanced analysis result contains POIs (attractions, hotels, restaurants)
-                # We need to pass themes from theme_analysis_result
+                # Create proper destination data structure that the storage tool expects
+                # The storage tool expects either a Destination object or a dict with "destination" key
                 
-                # Check if theme_analysis_result has raw themes data
+                # Extract themes from theme_analysis_result - PRESERVE ENHANCED DATA
+                themes_data = []
+                evidence_registry = {}
+                quality_metrics = {}
+                evidence_summary = {}
+                
+                # Handle different possible formats of theme_analysis_result
                 if hasattr(theme_analysis_result, 'themes'):
-                    # It's the raw result dict from analyze_themes - pass it directly
-                    logger.info("Passing raw theme analysis result with 'themes' attribute")
-                    storage_result = await storage_tool._arun(
-                        destination_name=destination_name,
-                        insights=[theme_analysis_result],  # Pass as insights list for legacy format
-                        config=processing_settings
-                    )
-                else:
-                    # It's a ThemeInsightOutput - pass it as before
-                    logger.info("Passing ThemeInsightOutput format")
-                    storage_result = await storage_tool._arun(
-                        destination_name=destination_name,
-                        insights=[theme_analysis_result],  # Pass as insights list for legacy format
-                        config=processing_settings
-                    )
+                    # If it has a 'themes' attribute directly (enhanced format)
+                    themes_data = theme_analysis_result.themes
+                elif isinstance(theme_analysis_result, dict):
+                    # If it's a dictionary, extract enhanced themes properly
+                    themes_data = theme_analysis_result.get('themes', [])
+                    evidence_registry = theme_analysis_result.get('evidence_registry', {})
+                    quality_metrics = theme_analysis_result.get('quality_metrics', {})
+                    evidence_summary = theme_analysis_result.get('evidence_summary', {})
+                    
+                    # If no enhanced themes found, fall back to validated + discovered
+                    if not themes_data:
+                        themes_data = theme_analysis_result.get('validated_themes', [])
+                        themes_data.extend(theme_analysis_result.get('discovered_themes', []))
+                elif hasattr(theme_analysis_result, 'validated_themes'):
+                    # If it has validated_themes and discovered_themes (fallback)
+                    themes_data.extend(theme_analysis_result.validated_themes)
+                    if hasattr(theme_analysis_result, 'discovered_themes'):
+                        themes_data.extend(theme_analysis_result.discovered_themes)
+                
+                self.logger.info(f"Extracted {len(themes_data)} themes for storage")
+                self.logger.info(f"Evidence registry contains {len(evidence_registry)} items")
+                
+                # Create destination data structure with enhanced data preserved
+                destination_data = {
+                    "destination": {
+                        "destination_name": destination_name,
+                        "country_code": country_code,
+                        "themes": themes_data
+                    },
+                    "analysis_metadata": {
+                        "evidence_registry": evidence_registry,  # Preserve evidence registry
+                        "themes": themes_data,  # Enhanced themes with evidence
+                        "quality_metrics": quality_metrics,
+                        "evidence_summary": evidence_summary
+                    }
+                }
+                
+                self.logger.info(f"Passing destination data with {len(themes_data)} enhanced themes to storage tool")
+                
+                storage_result = await storage_tool._arun(
+                    destination_data=destination_data,
+                    config=processing_settings
+                )
                 
                 self.logger.info(f"Step 7 completed: {storage_result}")
             else:
@@ -258,9 +322,21 @@ class EnhancedCrewAIDestinationAnalyst:
             end_time = datetime.now()
             duration_seconds = (end_time - start_time).total_seconds()
             
-            # Extract priority metrics for summary
+            # Extract priority metrics for summary - Fix: use dict access instead of attributes
             priority_summary = {}
-            if hasattr(theme_analysis_result, 'priority_metrics') and theme_analysis_result.priority_metrics:
+            if isinstance(theme_analysis_result, dict) and 'priority_metrics' in theme_analysis_result:
+                pm = theme_analysis_result['priority_metrics']
+                if pm:  # Only process if priority_metrics is not None/empty
+                    priority_summary = {
+                        "safety_score": pm.get('safety_score') if hasattr(pm, 'get') else getattr(pm, 'safety_score', None),
+                        "crime_index": pm.get('crime_index') if hasattr(pm, 'get') else getattr(pm, 'crime_index', None),
+                        "budget_per_day_low": pm.get('budget_per_day_low') if hasattr(pm, 'get') else getattr(pm, 'budget_per_day_low', None),
+                        "budget_per_day_mid": pm.get('budget_per_day_mid') if hasattr(pm, 'get') else getattr(pm, 'budget_per_day_mid', None),
+                        "visa_required": pm.get('visa_required') if hasattr(pm, 'get') else getattr(pm, 'visa_required', None),
+                        "required_vaccinations": pm.get('required_vaccinations', []) if hasattr(pm, 'get') else getattr(pm, 'required_vaccinations', [])
+                    }
+            elif hasattr(theme_analysis_result, 'priority_metrics') and theme_analysis_result.priority_metrics:
+                # Fallback for old format (backward compatibility)
                 pm = theme_analysis_result.priority_metrics
                 priority_summary = {
                     "safety_score": getattr(pm, 'safety_score', None),
@@ -278,7 +354,7 @@ class EnhancedCrewAIDestinationAnalyst:
                 "execution_method": "Enhanced CrewAI Direct Execution",
                 "pages_processed": pages_processed,
                 "chunks_created": chunks_created,
-                "total_themes": validated_themes + discovered_themes,
+                "total_themes": total_themes,
                 "validated_themes": validated_themes,
                 "discovered_themes": discovered_themes,
                 "priority_insights": priority_insights,
