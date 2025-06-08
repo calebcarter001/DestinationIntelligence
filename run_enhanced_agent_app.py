@@ -84,8 +84,14 @@ app_logger.addHandler(console_handler)
 # Main application file log (captures root logger at DEBUG)
 file_handler_main = logging.FileHandler(main_log_file_path)
 file_handler_main.setFormatter(formatter)
-file_handler_main.setLevel(logging.DEBUG)
+file_handler_main.setLevel(logging.INFO)
 app_logger.addHandler(file_handler_main)
+
+# --- Dedicated File Log for src.tools to ensure DEBUG from enhanced_theme_analysis_tool ---
+tools_logger = logging.getLogger("src.tools")
+tools_logger.setLevel(logging.DEBUG)
+tools_logger.addHandler(file_handler_main) # Send to the same main log file
+tools_logger.propagate = False # Prevent duplicate messages if root logger also handles it
 
 # --- Dedicated File Log for ConfidenceScorer ---
 pcs_log_path = os.path.join(LOGS_DIR, f"confidence_scorer_{run_timestamp_for_log}.log")

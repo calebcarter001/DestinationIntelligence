@@ -86,6 +86,14 @@ class ValidationAgent(BaseAgent):
             # The threshold for is_validated can remain, but its meaning is now based on richer scoring.
             theme_data["is_validated"] = confidence_breakdown.overall_confidence >= 0.2
             
+            # --- CRITICAL DEBUG & FIX: Preserve the original fit_score --- 
+            original_fit_score_from_input = theme_data.get("fit_score") # Get what was passed in
+            
+            if original_fit_score_from_input is not None:
+                theme_data["fit_score"] = original_fit_score_from_input # Ensure it is preserved
+            else:
+                theme_data["fit_score"] = 0.0 # Fallback, though this indicates a problem upstream
+            
             validated_themes.append(theme_data)
             
         # Emit contradictions if found

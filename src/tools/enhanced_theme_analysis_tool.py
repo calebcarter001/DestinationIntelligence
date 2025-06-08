@@ -8,6 +8,7 @@ import uuid
 import re
 from collections import Counter
 import sys # Add at the top of the file
+import os # Added for path joining
 
 from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory, EvidenceType
 from ..core.confidence_scoring import ConfidenceScorer, AuthenticityScorer, UniquenessScorer, ActionabilityScorer, MultiDimensionalScore
@@ -134,16 +135,45 @@ class EnhancedThemeAnalysisTool:
     Advanced theme analysis with evidence hierarchy, confidence scoring, and multi-agent validation
     """
     
-    def __init__(self):
+    def __init__(self, agent_orchestrator=None, llm=None, config=None): # Add config if needed for paths
+        # Existing initializations
+        self.agent_orchestrator = agent_orchestrator
+        self.llm = llm
+        self.config = config if config else {} # Ensure config is a dict
+        self.logger = logging.getLogger(__name__) # Standard logger for general class messages
+        self.evidence_registry = EvidenceRegistry()
+
+        # --- Dedicated Diagnostic Logger ---
+        # self.diag_logger = logging.getLogger('EnhancedThemeAnalysisTool_DIAGNOSTIC')
+        # self.diag_logger.setLevel(logging.DEBUG)
+        
+        # Construct path to the log file relative to the project root
+        # Assuming this script (enhanced_theme_analysis_tool.py) is in src/tools/
+        # Project root is two levels up from 'tools', then down to 'logs'
+        # project_root_approx = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
+        # diagnostic_log_file_path = os.path.join(project_root_approx, 'logs', 'enhanced_theme_analysis_diagnostic.log')
+        
+        # Ensure the logs directory exists (though run_enhanced_agent_app.py should also do this)
+        # os.makedirs(os.path.dirname(diagnostic_log_file_path), exist_ok=True)
+
+        # Remove existing handlers for this specific logger to avoid duplication if script is re-imported/re-run in some contexts
+        # for handler in self.diag_logger.handlers[:]:
+        #     self.diag_logger.removeHandler(handler)
+
+        # fh_diag = logging.FileHandler(diagnostic_log_file_path)
+        # fh_diag.setLevel(logging.DEBUG)
+        # formatter_diag = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - MESSAGE: %(message)s')
+        # fh_diag.setFormatter(formatter_diag)
+        # self.diag_logger.addHandler(fh_diag)
+        # self.diag_logger.propagate = False # Do not send to parent/root loggers
+        # self.diag_logger.info("Diagnostic logger initialized for EnhancedThemeAnalysisTool.")
+        # --- End Dedicated Diagnostic Logger ---
+
         self.name = "enhanced_theme_analysis"
         self.description = (
             "Perform advanced theme analysis with evidence classification, "
             "confidence scoring, cultural perspective, and contradiction detection"
         )
-        self.logger = self._setup_logger()
-        
-        # Initialize evidence registry for deduplication
-        self.evidence_registry = EvidenceRegistry()
         
         # Initialize specialized agents
         self.validation_agent = ValidationAgent()
@@ -151,52 +181,55 @@ class EnhancedThemeAnalysisTool:
         self.contradiction_agent = ContradictionDetectionAgent()
         
         # Enhanced taxonomy with generic themes + destination-specific ones
-        self.theme_taxonomy = {
-            "Nature & Outdoor": [
-                "Hiking & Trails", "Mountains & Peaks", "Parks & Recreation", "Nature Viewing",
-                "Outdoor Adventures", "Rivers & Lakes", "Scenic Views", "Wildlife",
-                "Camping & RV", "Rock Climbing", "Kayaking & Rafting", "Fishing",
-                "Biking & Cycling", "Cross-Country Skiing", "Snowshoeing"
-            ],
-            "Cultural & Arts": [
-                "Museums & Galleries", "Architecture", "Historic Sites", "Local Arts",
-                "Cultural Heritage", "Music & Performances", "Festivals & Events",
-                "Art Studios", "Public Art", "Cultural Centers"
-            ],
-            "Food & Dining": [
-                "Restaurants", "Local Cuisine", "Breweries & Distilleries", "Cafes & Coffee",
-                "Food Markets", "Farm-to-Table", "Fine Dining", "Food Festivals",
-                "Local Specialties", "Wine Tasting", "Food Tours"
-            ],
-            "Entertainment & Nightlife": [
-                "Nightlife", "Bars & Pubs", "Live Music Venues", "Dance Clubs",
-                "Comedy Shows", "Theater & Performances", "Casinos", "Rooftop Bars",
-                "Entertainment Districts", "Social Venues"
-            ],
-            "Adventure & Sports": [
-                "Adventure Sports", "Water Sports", "Winter Sports", "Extreme Sports",
-                "Golf", "Tennis", "Fitness & Wellness", "Sports Events",
-                "Adventure Tours", "Outdoor Recreation", "Skiing & Snowboarding"
-            ],
-            "Shopping & Local Craft": [
-                "Shopping", "Local Markets", "Boutiques", "Craft Shops", "Artisan Goods",
-                "Farmers Markets", "Antiques", "Local Products", "Specialty Stores",
-                "Shopping Districts", "Handmade Crafts"
-            ],
-            "Family & Education": [
-                "Family Activities", "Kid-Friendly", "Educational", "Science Centers",
-                "Zoos & Aquariums", "Children's Museums", "Playgrounds",
-                "Family Entertainment", "Learning Experiences"
-            ],
-            "Health & Wellness": [
-                "Spas & Wellness", "Hot Springs", "Yoga & Meditation", "Fitness",
-                "Health Retreats", "Therapeutic", "Natural Healing", "Relaxation"
-            ],
-            "Transportation & Access": [
-                "Transportation", "Accessibility", "Getting Around", "Parking",
-                "Public Transit", "Walkability", "Bike-Friendly"
-            ]
-        }
+        self.theme_taxonomy = self.config.get(
+            "theme_taxonomy", 
+            {
+                "Nature & Outdoor": [
+                    "Hiking & Trails", "Mountains & Peaks", "Parks & Recreation", "Nature Viewing",
+                    "Outdoor Adventures", "Rivers & Lakes", "Scenic Views", "Wildlife",
+                    "Camping & RV", "Rock Climbing", "Kayaking & Rafting", "Fishing",
+                    "Biking & Cycling", "Cross-Country Skiing", "Snowshoeing"
+                ],
+                "Cultural & Arts": [
+                    "Museums & Galleries", "Architecture", "Historic Sites", "Local Arts",
+                    "Cultural Heritage", "Music & Performances", "Festivals & Events",
+                    "Art Studios", "Public Art", "Cultural Centers"
+                ],
+                "Food & Dining": [
+                    "Restaurants", "Local Cuisine", "Breweries & Distilleries", "Cafes & Coffee",
+                    "Food Markets", "Farm-to-Table", "Fine Dining", "Food Festivals",
+                    "Local Specialties", "Wine Tasting", "Food Tours"
+                ],
+                "Entertainment & Nightlife": [
+                    "Nightlife", "Bars & Pubs", "Live Music Venues", "Dance Clubs",
+                    "Comedy Shows", "Theater & Performances", "Casinos", "Rooftop Bars",
+                    "Entertainment Districts", "Social Venues"
+                ],
+                "Adventure & Sports": [
+                    "Adventure Sports", "Water Sports", "Winter Sports", "Extreme Sports",
+                    "Golf", "Tennis", "Fitness & Wellness", "Sports Events",
+                    "Adventure Tours", "Outdoor Recreation", "Skiing & Snowboarding"
+                ],
+                "Shopping & Local Craft": [
+                    "Shopping", "Local Markets", "Boutiques", "Craft Shops", "Artisan Goods",
+                    "Farmers Markets", "Antiques", "Local Products", "Specialty Stores",
+                    "Shopping Districts", "Handmade Crafts"
+                ],
+                "Family & Education": [
+                    "Family Activities", "Kid-Friendly", "Educational", "Science Centers",
+                    "Zoos & Aquariums", "Children's Museums", "Playgrounds",
+                    "Family Entertainment", "Learning Experiences"
+                ],
+                "Health & Wellness": [
+                    "Spas & Wellness", "Hot Springs", "Yoga & Meditation", "Fitness",
+                    "Health Retreats", "Therapeutic", "Natural Healing", "Relaxation"
+                ],
+                "Transportation & Access": [
+                    "Transportation", "Accessibility", "Getting Around", "Parking",
+                    "Public Transit", "Walkability", "Bike-Friendly"
+                ]
+            }
+        )
         
     async def analyze_themes(self, input_data: EnhancedThemeAnalysisInput) -> Dict[str, Any]:
         """
@@ -1126,26 +1159,45 @@ class EnhancedThemeAnalysisTool:
     def _categorize_local_theme(
         self, local_theme: str, context: str, cultural_context: Dict[str, Any]
     ) -> str:
-        """Categorize a local theme into the best fitting macro category"""
-        # Check content type first
+        """Categorize a local theme into a suitable macro category.
+        This function will prioritize specific matches from the theme_taxonomy
+        before falling back to broader categories or a 'General Interest' tag.
+        """
+        theme_name_lower = local_theme.lower()
+
+        # Try to match against existing micro-categories in the taxonomy
+        for macro, micros in self.theme_taxonomy.items():
+            if any(micro.lower() in theme_name_lower or theme_name_lower in micro.lower() for micro in micros):
+                return macro
+
+        # If no direct micro-category match, try to match against macro-category names
+        for macro_category in self.theme_taxonomy.keys():
+            if macro_category.lower() in theme_name_lower or theme_name_lower in macro_category.lower():
+                return macro_category
+
+        # Fallback to general content type if still no match and content type is relevant
         content_type = cultural_context.get("content_type", "general")
-        if content_type == "activity":
-            return "Adventure & Sports"
-        elif content_type == "location":
-            return "Nature & Outdoor"
-        
-        # Check context against taxonomy
-        best_category = None
-        best_score = 0
-        
-        for macro_category, keywords in self.theme_taxonomy.items():
-            score = sum(1 for keyword in keywords if keyword.lower() in context.lower())
-            if score > best_score:
-                best_score = score
-                best_category = macro_category
-        
-        return best_category or "Other"
-        
+        if content_type and content_type != "general": # Only use if a specific content_type is detected
+            # Map common content types to macro categories
+            content_type_mapping = {
+                "activity": "Adventure & Sports",
+                "location": "Cultural & Arts", # Locations can be historic sites, architecture etc.
+                "culinary": "Food & Dining",
+                "entertainment": "Entertainment & Nightlife",
+                "shopping": "Shopping & Local Craft",
+                "family": "Family & Education",
+                "health": "Health & Wellness",
+                "transportation": "Transportation & Access",
+                "historic": "Cultural & Arts",
+                "nature": "Nature & Outdoor"
+            }
+            if content_type in content_type_mapping:
+                return content_type_mapping[content_type]
+
+        # If still no specific category, fallback to a general category
+        # This is the most robust fallback to prevent miscategorization
+        return "General Interest"
+    
     def _calculate_enhanced_confidence(
         self,
         evidence_list: List[Evidence],
@@ -1153,7 +1205,6 @@ class EnhancedThemeAnalysisTool:
         local_context: Set[str],
         temporal_aspects: Set[str]
     ) -> Dict[str, float]:
-        """Calculate enhanced confidence scores with multiple components"""
         components = {
             "evidence_quality": 0.0,
             "source_diversity": 0.0,
@@ -1177,14 +1228,18 @@ class EnhancedThemeAnalysisTool:
         # Local relevance
         if local_context:
             components["local_relevance"] = min(len(local_context) * 0.3, 1.0)
+        else:
+            components["local_relevance"] = 0.1 # Small default if no local context found
         
-        # Temporal coverage
+        # Temporal coverage - Corrected default application
         if temporal_aspects:
             season_count = len([
                 aspect for aspect in temporal_aspects
                 if aspect in ["summer", "winter", "spring", "fall"]
             ])
-            components["temporal_coverage"] = min(season_count / 4, 1.0)
+            components["temporal_coverage"] = min(season_count / 4.0, 1.0) # ensure float division
+        else:
+            components["temporal_coverage"] = 0.1 # Small default if no temporal aspects found
         
         # Content completeness
         content_type_scores = {
@@ -1203,13 +1258,13 @@ class EnhancedThemeAnalysisTool:
         
         # Calculate total score with weighted components
         components["total_score"] = (
-            components["evidence_quality"] * 0.3 +
-            components["source_diversity"] * 0.2 +
-            components["local_relevance"] * 0.2 +
-            components["temporal_coverage"] * 0.15 +
-            components["content_completeness"] * 0.15
+            components["evidence_quality"] * 0.25 +
+            components["source_diversity"] * 0.20 +
+            components["local_relevance"] * 0.25 +
+            components["temporal_coverage"] * 0.20 +
+            components["content_completeness"] * 0.10
         )
-        
+
         return components
         
     def _generate_rich_description(
@@ -1537,13 +1592,19 @@ class EnhancedThemeAnalysisTool:
             # Calculate theme-level factors using evidence references
             theme_factors = self._calculate_theme_factors_from_refs(theme_evidence_refs)
             
+            # --- DIAGNOSTIC LOG for received fit_score ---
+            # received_fit_score = theme_data.get('fit_score')
+            # self.diag_logger.debug(f"BUILD_ENHANCED_THEMES_FIT_SCORE_DEBUG: Theme '{theme_name}' - Received fit_score in theme_data: {received_fit_score}")
+            # --- END DIAGNOSTIC LOG ---
+
             enhanced_theme = {
                 "theme_id": hashlib.md5(theme_name.encode()).hexdigest()[:12],
                 "name": theme_name,
                 "macro_category": macro_category,
                 "micro_category": micro_category,
                 "confidence_level": theme_data.get("confidence_level", "unknown"),
-                "confidence_score": confidence_breakdown.get("overall_confidence", 0.0),
+                "fit_score": theme_data.get('fit_score', 0.0), # Correctly use .get() for dict
+                "confidence_score": theme_data.get('fit_score', 0.0), # Maintain consistency, use original fit_score
                 "confidence_breakdown": confidence_breakdown,
                 "factors": theme_factors,
                 "evidence_count": len(theme_evidence_refs),

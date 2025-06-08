@@ -4,6 +4,13 @@ An advanced AI-powered system for discovering, analyzing, and providing comprehe
 
 ## 🚀 **Latest Updates**
 
+### **🎉 June 2025: Fit Score & Categorization Overhaul** *(NEW)*
+- **✨ Discriminatory Fit Score**: Implemented a refined `fit_score` calculation based on a weighted average of `evidence_quality`, `source_diversity`, `local_relevance`, `temporal_coverage`, and `content_completeness`. This score now provides a nuanced and varied measure of theme relevance, moving away from previous default or zero values.
+- **🔎 Accurate Score Propagation**: Resolved issues in the data pipeline (including `ValidationAgent` and theme dictionary construction) to ensure the correctly calculated `fit_score` is preserved and accurately stored in the database.
+- ** nuanced Theme Categorization**: Enhanced the `_categorize_local_theme` logic and its fallback to "General Interest", resulting in a more diverse and relevant distribution of macro-categories for themes, reducing previous over-concentration in single categories.
+- **🛠️ Robust Diagnostic Logging**: Implemented dedicated diagnostic logging for `EnhancedThemeAnalysisTool` and added detailed tracing in `ValidationAgent` to provide clear visibility into the `fit_score` calculation and propagation, crucial for debugging and verification.
+- **🧹 Log File Management**: Adjusted main application log level to `INFO` to reduce verbosity while ensuring detailed diagnostic logs are captured in their dedicated files.
+
 ### **🎉 January 2025: Adaptive Intelligence System** *(NEW)*
 - **🧠 Adaptive Data Quality Classification**: Automatically analyzes evidence and content to classify destinations as `rich_data`, `medium_data`, or `poor_data`
 - **📊 Intelligent Export Optimization**: Adapts export behavior based on data quality - minimal exports for rich data, comprehensive for poor data
