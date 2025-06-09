@@ -202,23 +202,58 @@ class PriorityDataExtractor:
     
     def calculate_source_credibility(self, url: str) -> float:
         """Calculate source credibility score."""
+        if not url:
+            return 0.5
+            
         try:
             domain = urlparse(url).netloc.lower()
             
-            # Check high authority domains
-            if any(auth_domain in domain for auth_domain in self.high_authority_domains):
-                return 0.9
+            # Government domains (including both .gov and travel.state.gov patterns)
+            government_patterns = [
+                '.gov', 'travel.state.gov', 'gov.uk', 'gov.ca', 'gov.au',
+                'embassy.org', 'state.gov', 'cdc.gov', 'who.int'
+            ]
             
-            # Check medium authority domains
-            if any(auth_domain in domain for auth_domain in self.medium_authority_domains):
-                return 0.7
+            # Check for government sources first (highest priority)
+            for pattern in government_patterns:
+                if pattern in domain:
+                    return 0.9
+            
+            # Travel platform sources
+            travel_platforms = [
+                'tripadvisor.com', 'lonelyplanet.com', 'booking.com',
+                'timeout.com', 'frommers.com', 'fodors.com'
+            ]
+            
+            for platform in travel_platforms:
+                if platform in domain:
+                    return 0.85
+            
+            # News sources
+            news_sources = [
+                'cnn.com', 'bbc.com', 'reuters.com', 'nytimes.com',
+                'theguardian.com', 'nationalgeographic.com'
+            ]
+            
+            for source in news_sources:
+                if source in domain:
+                    return 0.8
+            
+            # Community sources
+            community_sources = [
+                'reddit.com', 'blog', 'forum'
+            ]
+            
+            for source in community_sources:
+                if source in domain:
+                    return 0.5
             
             # Default credibility for unknown sources
-            return 0.5
+            return 0.6
             
         except Exception as e:
             self.logger.error(f"Error calculating source credibility: {e}")
-            return 0.3
+            return 0.5
     
     def determine_temporal_relevance(self, content: str) -> float:
         """Determine temporal relevance of content."""

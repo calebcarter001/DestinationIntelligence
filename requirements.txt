@@ -36,4 +36,7 @@ pytest-asyncio==1.0.0
 
 # Additional testing utilities
 pytest-timeout==2.3.1  # For timeout handling tests
-pytest-mock==3.14.0    # For enhanced mocking capabilities 
+pytest-mock==3.14.0    # For enhanced mocking capabilities
+
+# Added from the code block
+nltk==3.8.1 

@@ -34,7 +34,6 @@ def read_from_cache(key_parts: List[str], expiry_days: int) -> Optional[Any]:
                 try:
                     timestamp = datetime.fromisoformat(timestamp_str)
                     if datetime.now() - timestamp < timedelta(days=expiry_days):
-                        logging.info(f"CACHE HIT: Using cached data for key {'_'.join(key_parts)}")
                         return cached_data.get("data")
                     else:
                         logging.info(f"CACHE EXPIRED: Cached data for key {'_'.join(key_parts)} is too old.")
@@ -45,7 +44,6 @@ def read_from_cache(key_parts: List[str], expiry_days: int) -> Optional[Any]:
                  return cached_data 
         except (json.JSONDecodeError, IOError) as e:
             logging.warning(f"CACHE ERROR: Could not read or decode cache file {cache_file}: {e}")
-    logging.info(f"CACHE MISS: No valid cache found for key {'_'.join(key_parts)}")
     return None
 
 def write_to_cache(key_parts: List[str], data: Any):
@@ -54,6 +52,6 @@ def write_to_cache(key_parts: List[str], data: Any):
     try:
         with open(cache_file, 'w') as f:
             json.dump({"timestamp": datetime.now().isoformat(), "data": data}, f, indent=4)
-        logging.info(f"CACHE WRITE: Saved data to cache for key {'_'.join(key_parts)}")
+        pass
     except IOError as e:
         logging.warning(f"CACHE ERROR: Could not write to cache file {cache_file}: {e}") 

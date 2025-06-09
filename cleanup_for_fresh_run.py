@@ -44,33 +44,97 @@ def main():
     # Define cleanup targets
     cleanup_targets = [
         ("logs", "Application logs"),
-        ("cache", "File-based cache"),
+        ("cache", "File-based cache"), 
         ("chroma_db", "ChromaDB vector database"),
         ("outputs", "Previous output files"),
         ("destination_insights", "Previous destination insights"),
         ("test_destination_insights", "Test destination insights"),
+        (".pytest_cache", "Pytest cache directory"),
     ]
     
-    # Database files
+    # Database files and large data files
     db_files = [
         "enhanced_destination_intelligence.db",
-        "test_enhanced_destination_intelligence.db"
+        "test_enhanced_destination_intelligence.db", 
+        ":memory:",  # SQLite memory database file
+        "comprehensive_database_report.json",  # Large 2GB+ report file
+    ]
+    
+    # Generated output files that should be cleaned
+    generated_files = [
+        "dynamic_database_viewer.html",
+        "results_viewer.html", 
+        "run_enhanced_agent_app.py.lprof",  # Profiling output
     ]
     
     # Clean directories
     for dir_path, description in cleanup_targets:
         clean_directory(dir_path, description)
     
-    # Clean database files
+    # Clean database files and large data files
     for db_file in db_files:
         if os.path.exists(db_file):
             try:
+                file_size = os.path.getsize(db_file) / (1024*1024)  # Size in MB
                 os.remove(db_file)
-                print(f"✅ Removed database: {db_file}")
+                if file_size > 100:  # Show size for large files
+                    print(f"✅ Removed large file: {db_file} ({file_size:.1f}MB)")
+                else:
+                    print(f"✅ Removed file: {db_file}")
             except Exception as e:
                 print(f"⚠️  Error removing {db_file}: {e}")
         else:
-            print(f"✅ Database file {db_file}: doesn't exist (clean)")
+            print(f"✅ File {db_file}: doesn't exist (clean)")
+    
+    # Clean generated output files
+    for gen_file in generated_files:
+        if os.path.exists(gen_file):
+            try:
+                os.remove(gen_file)
+                print(f"✅ Removed generated file: {gen_file}")
+            except Exception as e:
+                print(f"⚠️  Error removing {gen_file}: {e}")
+    
+    # Clean Python cache files recursively
+    print("🧹 Cleaning Python cache files...")
+    cache_cleaned = 0
+    
+    # Remove __pycache__ directories recursively
+    for root, dirs, files in os.walk('.'):
+        if '__pycache__' in dirs:
+            pycache_path = os.path.join(root, '__pycache__')
+            try:
+                shutil.rmtree(pycache_path)
+                cache_cleaned += 1
+            except Exception as e:
+                print(f"⚠️  Error removing {pycache_path}: {e}")
+    
+    # Remove .pyc and .pyo files recursively
+    pyc_files = glob.glob('**/*.pyc', recursive=True) + glob.glob('**/*.pyo', recursive=True)
+    for pyc_file in pyc_files:
+        try:
+            os.remove(pyc_file)
+            cache_cleaned += 1
+        except Exception as e:
+            print(f"⚠️  Error removing {pyc_file}: {e}")
+    
+    if cache_cleaned > 0:
+        print(f"✅ Cleaned Python cache: removed {cache_cleaned} items")
+    else:
+        print("✅ Python cache: already clean")
+    
+    # Clean system files
+    system_files = glob.glob('.DS_Store') + glob.glob('**/.DS_Store', recursive=True)
+    system_files += glob.glob('.coverage') + glob.glob('**/*.db-journal', recursive=True)
+    system_files += glob.glob('**/*.sqlite', recursive=True) + glob.glob('**/*.sqlite3', recursive=True)
+    
+    if system_files:
+        for sys_file in system_files:
+            try:
+                os.remove(sys_file)
+                print(f"✅ Removed system file: {sys_file}")
+            except Exception as e:
+                print(f"⚠️  Error removing {sys_file}: {e}")
     
     # Clean any stray log files in root
     log_files = glob.glob("*.log")
@@ -82,9 +146,11 @@ def main():
             except Exception as e:
                 print(f"⚠️  Error removing {log_file}: {e}")
     
-    # Clean any temporary test files
-    temp_files = glob.glob("debug_*.py") + glob.glob("temp_*.py") + glob.glob("test_*.py")
-    temp_files = [f for f in temp_files if f not in ["test_storage_theme_conversion.py"]]  # Keep legitimate test files
+    # Clean any temporary test files (but preserve legitimate ones)
+    temp_files = glob.glob("debug_*.py") + glob.glob("temp_*.py")
+    # Be more selective with test files - only remove obvious temporary ones
+    temp_test_files = [f for f in glob.glob("test_*.py") if any(pattern in f for pattern in ["temp_", "debug_", "_tmp", "_test_run"])]
+    temp_files.extend(temp_test_files)
     
     if temp_files:
         for temp_file in temp_files:
@@ -98,8 +164,8 @@ def main():
     print("🎉 Cleanup completed! System ready for fresh run.")
     print("\n📊 Post-cleanup status:")
     
-    # Verify cleanup
-    verification_dirs = ["logs", "cache", "chroma_db", "outputs", "destination_insights"]
+    # Verify cleanup of directories
+    verification_dirs = ["logs", "cache", "chroma_db", "outputs", "destination_insights", ".pytest_cache"]
     for dir_name in verification_dirs:
         if os.path.exists(dir_name):
             item_count = len(os.listdir(dir_name))
@@ -108,10 +174,26 @@ def main():
         else:
             print(f"   {dir_name}/: ✅ Directory doesn't exist")
     
-    # Check database files
+    # Check database and large files
     for db_file in db_files:
         status = "✅ Removed" if not os.path.exists(db_file) else "⚠️  Still exists"
         print(f"   {db_file}: {status}")
+    
+    # Check generated files
+    for gen_file in generated_files:
+        status = "✅ Removed" if not os.path.exists(gen_file) else "⚠️  Still exists"
+        print(f"   {gen_file}: {status}")
+    
+    # Check for remaining cache files
+    remaining_pycache = len(glob.glob('**/__pycache__', recursive=True))
+    remaining_pyc = len(glob.glob('**/*.pyc', recursive=True))
+    remaining_ds_store = len(glob.glob('**/.DS_Store', recursive=True))
+    
+    cache_status = "✅ Clean" if (remaining_pycache + remaining_pyc + remaining_ds_store) == 0 else f"⚠️  {remaining_pycache + remaining_pyc + remaining_ds_store} items remaining"
+    print(f"   Python cache files: {cache_status}")
+    
+    if remaining_ds_store > 0:
+        print(f"   .DS_Store files: ⚠️  {remaining_ds_store} remaining")
     
     print("\n🚀 Ready for fresh run with: python run_enhanced_agent_app.py")
 

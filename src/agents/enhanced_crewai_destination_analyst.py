@@ -7,7 +7,11 @@ Supports both Gemini and OpenAI models via configurable LLM parameter
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.core.enhanced_database_manager import EnhancedDatabaseManager
+
 from src.schemas import PageContent
 
 logger = logging.getLogger(__name__)
@@ -15,16 +19,18 @@ logger = logging.getLogger(__name__)
 class EnhancedCrewAIDestinationAnalyst:
     """Enhanced CrewAI-inspired destination analyst with configurable LLM support"""
     
-    def __init__(self, llm, tools: List):
+    def __init__(self, llm, tools: List, db_manager: 'EnhancedDatabaseManager'):
         """
-        Initialize with LLM and tools
+        Initialize with LLM, tools, and a database manager instance
         
         Args:
             llm: Configured LLM instance (Gemini or OpenAI)
             tools: List of tools for the agent
+            db_manager: Instance of EnhancedDatabaseManager
         """
         self.llm = llm
         self.tools = tools
+        self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
         
         # Create tool mapping with correct names
@@ -33,6 +39,10 @@ class EnhancedCrewAIDestinationAnalyst:
             tool_name = getattr(tool, 'name', str(tool))
             self.tools_dict[tool_name] = tool
             
+        # ---- TEMPORARY DEBUG ----
+        self.logger.info(f"DEBUG: Populated self.tools_dict keys: {list(self.tools_dict.keys())}")
+        # ---- END TEMPORARY DEBUG ----
+        
         # Create simplified name mappings for easier access
         self.tool_mappings = {
             "discover_and_fetch_content": "discover_and_fetch_web_content_for_destination",
@@ -48,20 +58,14 @@ class EnhancedCrewAIDestinationAnalyst:
         self.logger.info(f"Available tools: {list(self.tools_dict.keys())}")
         self.logger.info(f"Tool mappings: {self.tool_mappings}")
         
-        # Validate required tools
-        required_tools = [
-            "discover_and_fetch_content",
-            "process_content_with_vectorize", 
-            "add_chunks_to_chromadb",
-            "semantic_search_chromadb",
-            "enhanced_content_analysis",
-            "analyze_themes_from_evidence",
-            "store_enhanced_destination_insights"
-        ]
+        # Validate required tools are present in the provided tools list
+        missing_tools = []
+        for simplified_name, actual_name in self.tool_mappings.items():
+            if actual_name not in self.tools_dict:
+                missing_tools.append(f"'{simplified_name}' (expected: '{actual_name}')")
         
-        missing_tools = [tool_name for tool_name in required_tools if tool_name not in self.tools_dict]
         if missing_tools:
-            self.logger.warning(f"Missing tools: {missing_tools}")
+            self.logger.warning(f"Could not find registered tools for the following mappings: {', '.join(missing_tools)}")
     
     async def analyze_destination(self, destination_name: str, processing_settings: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -229,6 +233,21 @@ class EnhancedCrewAIDestinationAnalyst:
                 config=processing_settings
             )
             
+            # DEBUG LOGGING: Track theme analysis result
+            self.logger.info(f"🔍 DEBUG_TAR_HANDOFF: Theme analysis result type: {type(theme_analysis_result)}")
+            if isinstance(theme_analysis_result, dict):
+                themes_count = len(theme_analysis_result.get('themes', []))
+                self.logger.info(f"🔍 DEBUG_TAR_HANDOFF: Raw themes from Enhanced Theme Analysis Tool: {themes_count}")
+                if themes_count > 0:
+                    themes = theme_analysis_result.get('themes', [])
+                    first_theme = themes[0]
+                    # Handle both Theme objects and dictionaries
+                    if hasattr(first_theme, 'name'):  # Theme object
+                        theme_name = first_theme.name
+                    else:  # Dictionary
+                        theme_name = first_theme.get('name', 'NO_NAME')
+                    self.logger.info(f"🔍 DEBUG_TAR_SAMPLE: First theme type: {type(first_theme)}, name: {theme_name}")
+            
             # Fix: theme_analysis_result is a dictionary, not an object with attributes
             # Extract count from the correct structure
             if isinstance(theme_analysis_result, dict):
@@ -253,70 +272,70 @@ class EnhancedCrewAIDestinationAnalyst:
             
             self.logger.info(f"Step 6 completed: Generated {validated_themes} validated themes, {discovered_themes} discovered themes, and {priority_insights} priority insights")
             
-            # Step 7: Store enhanced results
-            self.logger.info("Step 7: Storing enhanced analysis results in database")
-            storage_tool_name = self.tool_mappings.get("store_enhanced_destination_insights")
-            storage_tool = self.tools_dict.get(storage_tool_name)
+            # Extract themes from theme_analysis_result
+            themes_data = []
+            if isinstance(theme_analysis_result, dict):
+                # Ensure we are getting the list of Theme objects
+                themes_data = theme_analysis_result.get('themes', [])
+                self.logger.info(f"DEBUG_THEME_HANDOFF: Extracted {len(themes_data)} themes from analysis result")
+                
+                # Also check if themes are in the enhanced format with different structure
+                if not themes_data and 'enhanced_themes' in theme_analysis_result:
+                    themes_data = theme_analysis_result.get('enhanced_themes', [])
+                    self.logger.info(f"DEBUG_THEME_HANDOFF: Found {len(themes_data)} enhanced themes instead")
             
-            if storage_tool:
-                # Create proper destination data structure that the storage tool expects
-                # The storage tool expects either a Destination object or a dict with "destination" key
+            # Create the Destination object
+            from src.core.enhanced_data_models import Destination, Theme
+            
+            # Handle different theme formats: Theme objects, dictionaries, or mixed
+            if themes_data:
+                themes_obj_list = []
+                for i, theme_item in enumerate(themes_data):
+                    try:
+                        if hasattr(theme_item, 'name'):  # Already a Theme object
+                            themes_obj_list.append(theme_item)
+                            self.logger.debug(f"DEBUG_THEME_HANDOFF: Theme {i} '{theme_item.name}' is already an object")
+                        elif isinstance(theme_item, dict):  # Dictionary format
+                            # More robust re-hydration with all available fields
+                            theme_obj = Theme(
+                                theme_id=theme_item.get('theme_id', f"theme_{i}"),
+                                name=theme_item.get('name', f"Theme {i}"),
+                                macro_category=theme_item.get('macro_category', 'General'),
+                                micro_category=theme_item.get('micro_category', 'General'),
+                                description=theme_item.get('description', ''),
+                                fit_score=theme_item.get('fit_score', 0.0),
+                                # Include enhanced fields if available
+                                confidence_breakdown=theme_item.get('confidence_breakdown'),
+                                evidence=theme_item.get('evidence', []),
+                                tags=theme_item.get('tags', []),
+                                authentic_insights=theme_item.get('authentic_insights', []),
+                                local_authorities=theme_item.get('local_authorities', []),
+                                seasonal_relevance=theme_item.get('seasonal_relevance', {}),
+                                factors=theme_item.get('factors', {}),
+                                cultural_summary=theme_item.get('cultural_summary', {}),
+                                sentiment_analysis=theme_item.get('sentiment_analysis', {}),
+                                temporal_analysis=theme_item.get('temporal_analysis', {})
+                            )
+                            themes_obj_list.append(theme_obj)
+                            self.logger.debug(f"DEBUG_THEME_HANDOFF: Theme {i} '{theme_obj.name}' converted from dict")
+                        else:
+                            self.logger.warning(f"DEBUG_THEME_HANDOFF: Skipping theme {i} - unknown format: {type(theme_item)}")
+                    except Exception as e:
+                        self.logger.error(f"DEBUG_THEME_HANDOFF: Error processing theme {i}: {e}")
                 
-                # Extract themes from theme_analysis_result - PRESERVE ENHANCED DATA
-                themes_data = []
-                evidence_registry = {}
-                quality_metrics = {}
-                evidence_summary = {}
-                
-                # Handle different possible formats of theme_analysis_result
-                if hasattr(theme_analysis_result, 'themes'):
-                    # If it has a 'themes' attribute directly (enhanced format)
-                    themes_data = theme_analysis_result.themes
-                elif isinstance(theme_analysis_result, dict):
-                    # If it's a dictionary, extract enhanced themes properly
-                    themes_data = theme_analysis_result.get('themes', [])
-                    evidence_registry = theme_analysis_result.get('evidence_registry', {})
-                    quality_metrics = theme_analysis_result.get('quality_metrics', {})
-                    evidence_summary = theme_analysis_result.get('evidence_summary', {})
-                    
-                    # If no enhanced themes found, fall back to validated + discovered
-                    if not themes_data:
-                        themes_data = theme_analysis_result.get('validated_themes', [])
-                        themes_data.extend(theme_analysis_result.get('discovered_themes', []))
-                elif hasattr(theme_analysis_result, 'validated_themes'):
-                    # If it has validated_themes and discovered_themes (fallback)
-                    themes_data.extend(theme_analysis_result.validated_themes)
-                    if hasattr(theme_analysis_result, 'discovered_themes'):
-                        themes_data.extend(theme_analysis_result.discovered_themes)
-                
-                self.logger.info(f"Extracted {len(themes_data)} themes for storage")
-                self.logger.info(f"Evidence registry contains {len(evidence_registry)} items")
-                
-                # Create destination data structure with enhanced data preserved
-                destination_data = {
-                    "destination": {
-                        "destination_name": destination_name,
-                        "country_code": country_code,
-                        "themes": themes_data
-                    },
-                    "analysis_metadata": {
-                        "evidence_registry": evidence_registry,  # Preserve evidence registry
-                        "themes": themes_data,  # Enhanced themes with evidence
-                        "quality_metrics": quality_metrics,
-                        "evidence_summary": evidence_summary
-                    }
-                }
-                
-                self.logger.info(f"Passing destination data with {len(themes_data)} enhanced themes to storage tool")
-                
-                storage_result = await storage_tool._arun(
-                    destination_data=destination_data,
-                    config=processing_settings
-                )
-                
-                self.logger.info(f"Step 7 completed: {storage_result}")
+                themes_data = themes_obj_list
+                self.logger.info(f"DEBUG_THEME_HANDOFF: Final themes_data contains {len(themes_data)} Theme objects")
             else:
-                self.logger.warning(f"No database manager found - skipping enhanced storage. Looking for: {storage_tool_name}, Available: {list(self.tools_dict.keys())}")
+                self.logger.warning("DEBUG_THEME_HANDOFF: No themes found in theme_analysis_result")
+
+            destination_object = Destination(
+                id=f"dest_{destination_name.replace(' ', '_').replace(',', '').lower()}",
+                names=[destination_name],
+                country_code=country_code,
+                admin_levels={"country": country_code}, # Simplified
+                timezone="UTC", # Placeholder
+                themes=themes_data
+            )
             
             # Calculate execution time
             end_time = datetime.now()
@@ -351,6 +370,7 @@ class EnhancedCrewAIDestinationAnalyst:
             result = {
                 "status": "Success",
                 "destination_name": destination_name,
+                "destination_object": destination_object,
                 "execution_method": "Enhanced CrewAI Direct Execution",
                 "pages_processed": pages_processed,
                 "chunks_created": chunks_created,
@@ -390,15 +410,16 @@ class EnhancedCrewAIDestinationAnalyst:
                 "priority_insights": 0
             }
 
-def create_enhanced_crewai_destination_analyst(llm, tools: List) -> EnhancedCrewAIDestinationAnalyst:
+def create_enhanced_crewai_destination_analyst(llm, tools: List, db_manager: 'EnhancedDatabaseManager') -> EnhancedCrewAIDestinationAnalyst:
     """
     Factory function to create enhanced CrewAI destination analyst
     
     Args:
         llm: Configured LLM instance (Gemini or OpenAI)
         tools: List of tools for the agent
+        db_manager: Instance of EnhancedDatabaseManager
         
     Returns:
         EnhancedCrewAIDestinationAnalyst instance
     """
-    return EnhancedCrewAIDestinationAnalyst(llm=llm, tools=tools) 
+    return EnhancedCrewAIDestinationAnalyst(llm=llm, tools=tools, db_manager=db_manager) 

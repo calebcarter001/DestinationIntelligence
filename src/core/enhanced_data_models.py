@@ -13,6 +13,27 @@ from .evidence_hierarchy import EvidenceType, SourceCategory
 from src.schemas import InsightType, AuthorityType, LocationExclusivity
 
 @dataclass
+class SpecialEvent:
+    """Represents a specific event happening at a destination."""
+    name: str
+    start_date: date
+    end_date: date
+    genre: Optional[str] = None  # e.g., "Music", "Culture", "Sports"
+    scale: Optional[str] = None  # e.g., "Local", "National", "International"
+    description: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for storage/serialization."""
+        return {
+            "name": self.name,
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat(),
+            "genre": self.genre,
+            "scale": self.scale,
+            "description": self.description
+        }
+
+@dataclass
 class Evidence:
     """Evidence supporting a theme or insight"""
     id: str
@@ -141,6 +162,10 @@ class Theme:
     cultural_summary: Dict[str, Any] = field(default_factory=dict)  # Cultural analysis
     sentiment_analysis: Dict[str, Any] = field(default_factory=dict)  # Sentiment patterns
     temporal_analysis: Dict[str, Any] = field(default_factory=dict)  # Temporal patterns
+
+    # NEW RELEVANCE FIELDS
+    traveler_relevance_factor: Optional[float] = None
+    adjusted_overall_confidence: Optional[float] = None
     
     def add_evidence(self, evidence: Evidence):
         """Add evidence and update confidence"""
@@ -150,14 +175,55 @@ class Theme:
     def get_confidence_level(self):
         """Get the confidence level from the confidence breakdown"""
         if self.confidence_breakdown:
-            return self.confidence_breakdown.confidence_level
-        else:
-            # Import here to avoid circular import
-            from .confidence_scoring import ConfidenceLevel
-            return ConfidenceLevel.INSUFFICIENT
+            # Handle both ConfidenceBreakdown objects and dictionaries
+            if hasattr(self.confidence_breakdown, 'confidence_level'):
+                # ConfidenceBreakdown object
+                return self.confidence_breakdown.confidence_level
+            elif isinstance(self.confidence_breakdown, dict):
+                # Dictionary format - get confidence_level or default
+                confidence_level_value = self.confidence_breakdown.get('confidence_level')
+                if confidence_level_value:
+                    # Import here to avoid circular import
+                    from .confidence_scoring import ConfidenceLevel
+                    # If it's a string, convert to enum
+                    if isinstance(confidence_level_value, str):
+                        try:
+                            return ConfidenceLevel(confidence_level_value)
+                        except ValueError:
+                            return ConfidenceLevel.INSUFFICIENT
+                    else:
+                        return confidence_level_value
+                else:
+                    # Fallback to overall_confidence if available
+                    overall_confidence = self.confidence_breakdown.get('overall_confidence', 0.0)
+                    from .confidence_scoring import ConfidenceLevel
+                    if overall_confidence >= 0.8:
+                        return ConfidenceLevel.HIGH
+                    elif overall_confidence >= 0.6:
+                        return ConfidenceLevel.MEDIUM
+                    elif overall_confidence >= 0.3:
+                        return ConfidenceLevel.LOW
+                    else:
+                        return ConfidenceLevel.INSUFFICIENT
+        
+        # No confidence breakdown available
+        from .confidence_scoring import ConfidenceLevel
+        return ConfidenceLevel.INSUFFICIENT
         
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage/serialization"""
+        # Handle confidence_breakdown compatibility (both object and dict)
+        confidence_breakdown_dict = None
+        if self.confidence_breakdown:
+            # Proper type checking for confidence_breakdown
+            if isinstance(self.confidence_breakdown, dict):
+                confidence_breakdown_dict = self.confidence_breakdown
+            elif hasattr(self.confidence_breakdown, 'to_dict') and callable(getattr(self.confidence_breakdown, 'to_dict')):
+                confidence_breakdown_dict = self.confidence_breakdown.to_dict()
+            else:
+                # Fallback for unexpected types
+                confidence_breakdown_dict = {"error": "unexpected_confidence_breakdown_type", "type": str(type(self.confidence_breakdown))}
+        
         return {
             "theme_id": self.theme_id,
             "macro_category": self.macro_category,
@@ -166,7 +232,7 @@ class Theme:
             "description": self.description,
             "fit_score": self.fit_score,
             "evidence": [e.to_dict() for e in self.evidence],
-            "confidence_breakdown": self.confidence_breakdown.to_dict() if self.confidence_breakdown else None,
+            "confidence_breakdown": confidence_breakdown_dict,
             "tags": self.tags,
             "created_date": self.created_date.isoformat(),
             "last_validated": self.last_validated.isoformat() if self.last_validated else None,
@@ -179,7 +245,9 @@ class Theme:
             "factors": self.factors,
             "cultural_summary": self.cultural_summary,
             "sentiment_analysis": self.sentiment_analysis,
-            "temporal_analysis": self.temporal_analysis
+            "temporal_analysis": self.temporal_analysis,
+            "traveler_relevance_factor": self.traveler_relevance_factor,
+            "adjusted_overall_confidence": self.adjusted_overall_confidence
         }
 
 @dataclass
@@ -207,9 +275,10 @@ class TemporalSlice:
     valid_to: Optional[datetime] = None  # None = current
     season: Optional[str] = None  # spring, summer, fall, winter
     seasonal_highlights: Dict[str, Any] = field(default_factory=dict)
-    special_events: List[Dict[str, Any]] = field(default_factory=list)
+    special_events: List[SpecialEvent] = field(default_factory=list)
     weather_patterns: Optional[Dict[str, Any]] = None
     visitor_patterns: Optional[Dict[str, Any]] = None
+    average_price_level: Optional[str] = None # e.g., "low", "shoulder", "peak"
     
     def is_current(self) -> bool:
         """Check if this slice is currently valid"""
@@ -236,8 +305,21 @@ class Destination:
     population: Optional[int] = None
     country_code: str = ""  # ISO 2-letter code
     
+    # Heuristic-driven enrichments
+    vibe_descriptors: List[str] = field(default_factory=list)
+    area_km2: Optional[float] = None
+    primary_language: Optional[str] = None
+    dominant_religions: List[str] = field(default_factory=list)
+    unesco_sites: List[str] = field(default_factory=list)
+    historical_summary: Optional[str] = None
+    annual_tourist_arrivals: Optional[int] = None
+    popularity_stage: Optional[str] = None  # e.g., "emerging", "mature", "overtouristed"
+    visa_info_url: Optional[str] = None
+    gdp_per_capita_usd: Optional[float] = None
+    hdi: Optional[float] = None # Human Development Index
+
     # Geography
-    core_geo: Dict[str, Any] = field(default_factory=dict)  # bbox, elevation, Köppen zone
+    core_geo: Dict[str, Any] = field(default_factory=dict)  # bbox, elevation, Köppen zone, topography
     
     # Themes with full evidence
     themes: List[Theme] = field(default_factory=list)
@@ -286,6 +368,9 @@ class Destination:
             "healthcare_quality", "air_quality_index", "noise_level",
             "green_space_percentage", "cultural_diversity_index",
             
+            # Heuristic-driven additions
+            "median_hotel_rate_usd", "consumer_price_index", "big_mac_index",
+
             # Vacation-specific additions
             "beach_cleanliness_index", "instagram_worthiness", 
             "scam_hassle_prevalence", "kid_attraction_density",
@@ -381,6 +466,20 @@ class Destination:
             "timezone": self.timezone,
             "population": self.population,
             "country_code": self.country_code,
+
+            # Enriched data
+            "vibe_descriptors": self.vibe_descriptors,
+            "area_km2": self.area_km2,
+            "primary_language": self.primary_language,
+            "dominant_religions": self.dominant_religions,
+            "unesco_sites": self.unesco_sites,
+            "historical_summary": self.historical_summary,
+            "annual_tourist_arrivals": self.annual_tourist_arrivals,
+            "popularity_stage": self.popularity_stage,
+            "visa_info_url": self.visa_info_url,
+            "gdp_per_capita_usd": self.gdp_per_capita_usd,
+            "hdi": self.hdi,
+
             "core_geo": self.core_geo,
             "themes": [
                 {

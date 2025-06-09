@@ -228,10 +228,14 @@ class EnhancedThemeTestRunner:
             if field_name == "authentic_insights":
                 assert isinstance(field_value, list), f"authentic_insights should be list"
                 if field_value:  # If not empty
-                    insight = field_value[0]
-                    required_keys = ["insight_type", "authenticity_score", "uniqueness_score", "actionability_score"]
-                    for key in required_keys:
-                        assert key in insight, f"authentic_insights missing {key}"
+                    for insight in field_value:
+                        required_keys = ["insight_type", "authenticity_score", "uniqueness_score", "actionability_score"]
+                        for key in required_keys:
+                            # Handle both AuthenticInsight objects and dictionaries
+                            if hasattr(insight, 'insight_type'):  # AuthenticInsight object
+                                assert hasattr(insight, key), f"authentic_insights missing {key}"
+                            else:  # Dictionary
+                                assert key in insight, f"authentic_insights missing {key}"
                     print(f"            ✅ authentic_insights structure validated")
                         
             elif field_name == "local_authorities":

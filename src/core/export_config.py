@@ -118,18 +118,40 @@ class SmartViewGenerator:
         # Filter high confidence themes
         high_confidence_themes = []
         for theme_id, theme in themes_data.items():
-            confidence_breakdown = theme.get("confidence_breakdown", {})
-            # Handle None confidence_breakdown
-            if confidence_breakdown is None:
-                confidence_breakdown = {}
-            confidence = confidence_breakdown.get("overall_confidence", 0)
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'confidence_breakdown'):  # Theme object
+                confidence_breakdown = theme.confidence_breakdown
+                if confidence_breakdown and hasattr(confidence_breakdown, 'overall_confidence'):
+                    confidence = confidence_breakdown.overall_confidence
+                elif confidence_breakdown and isinstance(confidence_breakdown, dict):
+                    confidence = confidence_breakdown.get('overall_confidence', 0)
+                else:
+                    confidence = 0
+            else:  # Dictionary
+                confidence_breakdown = theme.get("confidence_breakdown", {})
+                # Handle None confidence_breakdown
+                if confidence_breakdown:
+                    confidence = confidence_breakdown.get('overall_confidence', 0)
+                else:
+                    confidence = 0
+            
             if confidence >= 0.7:  # High confidence threshold
+                # Handle both Theme objects and dictionaries
+                if hasattr(theme, 'name'):  # Theme object
+                    theme_name = theme.name
+                    theme_category = theme.macro_category
+                    theme_fit_score = theme.fit_score
+                else:  # Dictionary
+                    theme_name = theme.get("name", "Unknown")
+                    theme_category = theme.get("macro_category", "General")
+                    theme_fit_score = theme.get("fit_score", 0.0)
+                
                 high_confidence_themes.append({
                     "theme_id": theme_id,
-                    "name": theme["name"],
-                    "category": theme["macro_category"],
+                    "name": theme_name,
+                    "category": theme_category,
                     "confidence": confidence,
-                    "fit_score": theme["fit_score"]
+                    "fit_score": theme_fit_score
                 })
         
         # Sort by confidence and fit score
@@ -152,14 +174,28 @@ class SmartViewGenerator:
         """Generate themes organized by category"""
         categories = {}
         for theme_id, theme in themes_data.items():
-            category = theme["macro_category"]
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'macro_category'):  # Theme object
+                category = theme.macro_category
+            else:  # Dictionary
+                category = theme.get("macro_category", "General")
+            
             if category not in categories:
                 categories[category] = []
             categories[category].append(theme_id)
             
         # Sort themes within each category by fit score
         for category in categories:
-            theme_scores = [(tid, themes_data[tid]["fit_score"]) for tid in categories[category]]
+            theme_scores = []
+            for tid in categories[category]:
+                theme = themes_data[tid]
+                # Handle both Theme objects and dictionaries
+                if hasattr(theme, 'fit_score'):  # Theme object
+                    fit_score = theme.fit_score
+                else:  # Dictionary
+                    fit_score = theme.get("fit_score", 0.0)
+                theme_scores.append((tid, fit_score))
+            
             theme_scores.sort(key=lambda x: x[1], reverse=True)
             categories[category] = [tid for tid, _ in theme_scores]
             
@@ -189,7 +225,14 @@ class SmartViewGenerator:
         current_season_themes = []
         
         for theme_id, theme in themes_data.items():
-            seasonal_relevance = theme.get("seasonal_relevance", {})
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'seasonal_relevance'):  # Theme object
+                seasonal_relevance = theme.seasonal_relevance or {}
+                theme_name = theme.name
+            else:  # Dictionary
+                seasonal_relevance = theme.get("seasonal_relevance", {})
+                theme_name = theme.get("name", "Unknown")
+            
             if seasonal_relevance:
                 for season, relevance in seasonal_relevance.items():
                     if relevance > 0.5:  # Significant seasonal relevance
@@ -197,7 +240,7 @@ class SmartViewGenerator:
                             seasonal_themes[season] = []
                         seasonal_themes[season].append({
                             "theme_id": theme_id,
-                            "name": theme["name"],
+                            "name": theme_name,
                             "relevance": relevance
                         })
                         
@@ -206,7 +249,7 @@ class SmartViewGenerator:
                 if current_relevance > 0.7:
                     current_season_themes.append({
                         "theme_id": theme_id,
-                        "name": theme["name"],
+                        "name": theme_name,  # Already extracted above
                         "current_relevance": current_relevance
                     })
         
@@ -234,13 +277,28 @@ class SmartViewGenerator:
         theme_confidences = []
         theme_fit_scores = []
         for theme in themes_data.values():
-            confidence_breakdown = theme.get("confidence_breakdown", {})
-            # Handle None confidence_breakdown
-            if confidence_breakdown is not None:
-                theme_confidences.append(confidence_breakdown.get("overall_confidence", 0))
-            else:
-                theme_confidences.append(0)  # Default confidence if breakdown is None
-            theme_fit_scores.append(theme.get("fit_score", 0))
+            # Handle both Theme objects and dictionaries for confidence_breakdown
+            if hasattr(theme, 'confidence_breakdown'):  # Theme object
+                confidence_breakdown = theme.confidence_breakdown
+                if confidence_breakdown and hasattr(confidence_breakdown, 'overall_confidence'):
+                    theme_confidences.append(confidence_breakdown.overall_confidence)
+                elif confidence_breakdown and isinstance(confidence_breakdown, dict):
+                    theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                else:
+                    theme_confidences.append(0)
+            else:  # Dictionary
+                confidence_breakdown = theme.get("confidence_breakdown", {})
+                # Handle None confidence_breakdown
+                if confidence_breakdown:
+                    theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                else:
+                    theme_confidences.append(0)  # Default confidence if breakdown is None
+            
+            # Handle both Theme objects and dictionaries for fit_score
+            if hasattr(theme, 'fit_score'):  # Theme object
+                theme_fit_scores.append(theme.fit_score)
+            else:  # Dictionary
+                theme_fit_scores.append(theme.get("fit_score", 0))
         
         # Source diversity
         source_types = set(ev.get("source_category") for ev in evidence_registry.values())
@@ -285,13 +343,28 @@ class SmartViewGenerator:
             
             filtered_themes = {}
             for theme_id, theme in themes_data.items():
-                confidence_breakdown = theme.get("confidence_breakdown", {})
-                # Handle None confidence_breakdown
-                if confidence_breakdown is not None:
-                    confidence = confidence_breakdown.get("overall_confidence", 0)
-                else:
-                    confidence = 0
-                category = theme.get("macro_category", "")
+                # Handle both Theme objects and dictionaries for confidence_breakdown
+                if hasattr(theme, 'confidence_breakdown'):  # Theme object
+                    confidence_breakdown = theme.confidence_breakdown
+                    if confidence_breakdown and hasattr(confidence_breakdown, 'overall_confidence'):
+                        confidence = confidence_breakdown.overall_confidence
+                    elif confidence_breakdown and isinstance(confidence_breakdown, dict):
+                        confidence = confidence_breakdown.get('overall_confidence', 0)
+                    else:
+                        confidence = 0
+                else:  # Dictionary
+                    confidence_breakdown = theme.get("confidence_breakdown", {})
+                    # Handle None confidence_breakdown
+                    if confidence_breakdown:
+                        confidence = confidence_breakdown.get("overall_confidence", 0)
+                    else:
+                        confidence = 0
+                
+                # Handle both Theme objects and dictionaries for macro_category
+                if hasattr(theme, 'macro_category'):  # Theme object
+                    category = theme.macro_category
+                else:  # Dictionary
+                    category = theme.get("macro_category", "")
                 
                 if confidence >= min_confidence and (not categories or category in categories):
                     filtered_themes[theme_id] = theme
@@ -325,6 +398,132 @@ class SmartViewGenerator:
         scores.append(diversity_score)
         
         return sum(scores) / len(scores) if scores else 0.0
+
+    def apply_confidence_filter(self, themes: List[Any]) -> List[Any]:
+        """Filter themes by confidence threshold"""
+        filtered = []
+        for theme in themes:
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'confidence_breakdown'):  # Theme object
+                confidence_breakdown = theme.confidence_breakdown
+            else:  # Dictionary
+                confidence_breakdown = theme.get("confidence_breakdown", {})
+            
+            if confidence_breakdown:
+                if hasattr(confidence_breakdown, 'overall_confidence'):  # ConfidenceBreakdown object
+                    overall_confidence = confidence_breakdown.overall_confidence
+                else:  # Dictionary
+                    overall_confidence = confidence_breakdown.get("overall_confidence", 0.0)
+                
+                if overall_confidence >= self.min_confidence_threshold:
+                    filtered.append(theme)
+            else:
+                # No confidence breakdown, use fit_score as fallback
+                if hasattr(theme, 'fit_score'):  # Theme object
+                    fit_score = theme.fit_score
+                else:  # Dictionary
+                    fit_score = theme.get("fit_score", 0.0)
+                
+                if fit_score >= self.min_confidence_threshold:
+                    filtered.append(theme)
+        return filtered
+    
+    def apply_theme_limits(self, themes: List[Any]) -> List[Any]:
+        """Limit themes per category and overall"""
+        # Handle both Theme objects and dictionaries
+        theme_name = ""
+        theme_category = ""
+        theme_fit_score = 0.0
+        
+        if themes:
+            theme = themes[0]
+            if hasattr(theme, 'name'):  # Theme object
+                theme_name = theme.name
+                theme_category = theme.macro_category
+                theme_fit_score = theme.fit_score
+            else:  # Dictionary
+                theme_name = theme.get("name", "Unknown")
+                theme_category = theme.get("macro_category", "General")
+                theme_fit_score = theme.get("fit_score", 0.0)
+        
+        if self.max_themes_per_category:
+            # Group by category and limit each
+            category_themes = {}
+            for theme in themes:
+                if hasattr(theme, 'macro_category'):  # Theme object
+                    category = theme.macro_category
+                else:  # Dictionary
+                    category = theme.get("macro_category", "General")
+                
+                if category not in category_themes:
+                    category_themes[category] = []
+                category_themes[category].append(theme)
+            
+            # Sort each category by fit_score and limit
+            limited_themes = []
+            for category, cat_themes in category_themes.items():
+                sorted_themes = sorted(cat_themes, key=lambda t: (
+                    t.fit_score if hasattr(t, 'fit_score') else t.get("fit_score", 0.0)
+                ), reverse=True)
+                limited_themes.extend(sorted_themes[:self.max_themes_per_category])
+            
+            themes = limited_themes
+        
+        # Apply overall limit
+        if self.max_themes_overall:
+            themes = sorted(themes, key=lambda t: (
+                t.fit_score if hasattr(t, 'fit_score') else t.get("fit_score", 0.0)
+            ), reverse=True)[:self.max_themes_overall]
+        
+        return themes
+    
+    def group_evidence_by_source(self, themes: List[Any]) -> Dict[str, List[Any]]:
+        """Group evidence by source type"""
+        source_groups = {}
+        
+        for theme in themes:
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'evidence'):  # Theme object
+                evidence_list = theme.evidence
+            else:  # Dictionary
+                evidence_list = theme.get("evidence", [])
+            
+            for evidence in evidence_list:
+                # Handle both Evidence objects and dictionaries
+                if hasattr(evidence, 'source_category'):  # Evidence object
+                    source_type = evidence.source_category.value if hasattr(evidence.source_category, 'value') else str(evidence.source_category)
+                else:  # Dictionary
+                    source_type = evidence.get("source_category", "unknown")
+                
+                if source_type not in source_groups:
+                    source_groups[source_type] = []
+                source_groups[source_type].append(evidence)
+        
+        return source_groups
+    
+    def extract_seasonal_themes(self, themes: List[Any]) -> Dict[str, List[Any]]:
+        """Extract seasonal relevance patterns"""
+        seasonal_themes = {}
+        
+        for theme in themes:
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'seasonal_relevance'):  # Theme object
+                seasonal_relevance = theme.seasonal_relevance
+                theme_name = theme.name
+            else:  # Dictionary
+                seasonal_relevance = theme.get("seasonal_relevance", {})
+                theme_name = theme.get("name", "Unknown")
+            
+            for season, relevance in seasonal_relevance.items():
+                if relevance > 0.5:  # Significant seasonal relevance
+                    if season not in seasonal_themes:
+                        seasonal_themes[season] = []
+                    seasonal_themes[season].append({
+                        "name": theme_name,
+                        "relevance": relevance
+                    })
+        
+        return seasonal_themes
 
 
 def create_export_config_from_yaml(config_dict: Dict[str, Any]) -> ExportConfig:

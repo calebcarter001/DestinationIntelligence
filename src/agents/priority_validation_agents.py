@@ -10,7 +10,6 @@ import re
 from dataclasses import dataclass
 
 from .base_agent import BaseAgent, AgentMessage, MessageType
-from src.core.ai_interface import AIInterface
 from src.schemas import PriorityMetrics
 
 logger = logging.getLogger(__name__)

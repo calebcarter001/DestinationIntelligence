@@ -23,9 +23,11 @@ class SeasonalIntelligence:
         
         # Handle both list and string inputs
         if isinstance(content, list):
-            content_text = " ".join(content)
+            # Filter out None values before joining
+            valid_content = [item for item in content if item is not None]
+            content_text = " ".join(valid_content)
         else:
-            content_text = content
+            content_text = content or ""
             
         content_lower = content_text.lower()
 
@@ -39,7 +41,7 @@ class SeasonalIntelligence:
             patterns.append({
                 "type": "seasonal_window",
                 "seasonal_window": seasonal_window,
-                "timing": f"Month {seasonal_window.start_month} to {seasonal_window.end_month}"
+                "timing": f"Month {getattr(seasonal_window, 'start_month', 'N/A')} to {getattr(seasonal_window, 'end_month', 'N/A')}"
             })
 
         # Simple regex for common seasonal phrases
@@ -69,8 +71,8 @@ class SeasonalIntelligence:
         relevance = 0.0
 
         # Handle invalid months gracefully
-        start_month = seasonal_window.start_month
-        end_month = seasonal_window.end_month
+        start_month = getattr(seasonal_window, 'start_month', 1)
+        end_month = getattr(seasonal_window, 'end_month', 12)
         
         if start_month < 1 or start_month > 12:
             start_month = 1
@@ -96,12 +98,14 @@ class SeasonalIntelligence:
                 relevance = max(0.1, 1.0 - (distance / 6.0))
         
         # Further refine based on peak weeks, specific dates
-        if seasonal_window.peak_weeks and datetime.now().isocalendar()[1] in seasonal_window.peak_weeks:
+        peak_weeks = getattr(seasonal_window, 'peak_weeks', [])
+        if peak_weeks and datetime.now().isocalendar()[1] in peak_weeks:
             relevance = min(1.0, relevance + 0.2)  # Boost if in peak week
         
-        if seasonal_window.specific_dates:
+        specific_dates = getattr(seasonal_window, 'specific_dates', [])
+        if specific_dates:
             today_str = datetime.now().strftime("%m/%d")
-            if today_str in seasonal_window.specific_dates or datetime.now().strftime("%m/%d/%Y") in seasonal_window.specific_dates:
+            if today_str in specific_dates or datetime.now().strftime("%m/%d/%Y") in specific_dates:
                 relevance = 1.0
 
         return relevance
@@ -118,8 +122,8 @@ class SeasonalIntelligence:
         current_relevance = self.calculate_current_relevance(seasonal_window)
         
         # Handle invalid months gracefully
-        start_month = seasonal_window.start_month
-        end_month = seasonal_window.end_month
+        start_month = getattr(seasonal_window, 'start_month', 1)
+        end_month = getattr(seasonal_window, 'end_month', 12)
         
         if start_month < 1 or start_month > 12:
             start_month = 1
@@ -149,8 +153,9 @@ class SeasonalIntelligence:
                 recommendations.append(f"Plan ahead for {activity} - the season starts in {month_name}." if activity else f"Plan ahead - the season starts in {month_name}.")
 
         # Booking recommendations
-        if seasonal_window.booking_lead_time:
-            recommendations.append(f"Book {seasonal_window.booking_lead_time} for the best {activity} experience." if activity else f"Book {seasonal_window.booking_lead_time} for the best experience.")
+        booking_lead_time = getattr(seasonal_window, 'booking_lead_time', None)
+        if booking_lead_time:
+            recommendations.append(f"Book {booking_lead_time} for the best {activity} experience." if activity else f"Book {booking_lead_time} for the best experience.")
 
         return recommendations
 

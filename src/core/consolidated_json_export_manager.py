@@ -208,17 +208,32 @@ class ConsolidatedJsonExportManager:
         # Filter and limit themes
         filtered_themes = []
         for theme in destination.themes:
-            # Check confidence threshold
-            theme_confidence = 0.5  # Default
+            # Calculate confidence
             if theme.confidence_breakdown:
-                theme_confidence = theme.confidence_breakdown.overall_confidence
+                # Handle both ConfidenceBreakdown objects and dictionaries
+                if hasattr(theme.confidence_breakdown, 'overall_confidence'):
+                    theme_confidence = theme.confidence_breakdown.overall_confidence
+                elif isinstance(theme.confidence_breakdown, dict):
+                    theme_confidence = theme.confidence_breakdown.get('overall_confidence', 0.5)
+                else:
+                    theme_confidence = 0.5
+            else:
+                theme_confidence = 0.5
             
             if theme_confidence >= confidence_threshold:
                 filtered_themes.append(theme)
         
-        # Sort by confidence and limit count
+        # Sort themes by confidence
         filtered_themes.sort(
-            key=lambda t: t.confidence_breakdown.overall_confidence if t.confidence_breakdown else 0.5,
+            key=lambda t: (
+                t.confidence_breakdown.overall_confidence 
+                if t.confidence_breakdown and hasattr(t.confidence_breakdown, 'overall_confidence')
+                else (
+                    t.confidence_breakdown.get('overall_confidence', 0) 
+                    if t.confidence_breakdown and isinstance(t.confidence_breakdown, dict)
+                    else 0.5
+                )
+            ),
             reverse=True
         )
         
@@ -273,7 +288,13 @@ class ConsolidatedJsonExportManager:
         for theme in destination.themes:
             for evidence in theme.evidence:
                 if evidence.id not in evidence_registry:
-                    evidence_registry[evidence.id] = evidence.to_dict()
+                    # Proper type checking for evidence
+                    if isinstance(evidence, dict):
+                        evidence_registry[evidence.id] = evidence
+                    elif hasattr(evidence, 'to_dict') and callable(getattr(evidence, 'to_dict')):
+                        evidence_registry[evidence.id] = evidence.to_dict()
+                    else:
+                        evidence_registry[evidence.id] = {"error": "unexpected_evidence_type", "type": str(type(evidence))}
         
         return evidence_registry
     
@@ -314,7 +335,13 @@ class ConsolidatedJsonExportManager:
             for theme in destination.themes:
                 for ev in theme.evidence:
                     if ev.id not in temp_registry:
-                        temp_registry[ev.id] = ev.to_dict() # Use Evidence.to_dict()
+                        # Proper type checking for evidence
+                        if isinstance(ev, dict):
+                            temp_registry[ev.id] = ev
+                        elif hasattr(ev, 'to_dict') and callable(getattr(ev, 'to_dict')):
+                            temp_registry[ev.id] = ev.to_dict()
+                        else:
+                            temp_registry[ev.id] = {"error": "unexpected_evidence_type", "type": str(type(ev))}
             current_evidence_registry = temp_registry
             self.logger.info(f"Built evidence registry with {len(current_evidence_registry)} items.")
         
@@ -529,21 +556,36 @@ class ConsolidatedJsonExportManager:
         }
     
     def _format_destination_data(self, destination: Destination) -> Dict[str, Any]:
-        """Format destination core data"""
+        """Formats the main destination object for export, including all new enrichment fields."""
         return {
             "id": destination.id,
             "names": destination.names,
-            "primary_name": destination.names[0] if destination.names else "Unknown",
             "admin_levels": destination.admin_levels,
-            "country_code": destination.country_code,
             "timezone": destination.timezone,
             "population": destination.population,
-            "geography": destination.core_geo,
-            "last_updated": destination.last_updated.isoformat()
+            "country_code": destination.country_code,
+            "core_geo": destination.core_geo,
+            # New heuristic-driven enrichment fields
+            "vibe_descriptors": destination.vibe_descriptors,
+            "area_km2": destination.area_km2,
+            "primary_language": destination.primary_language,
+            "dominant_religions": destination.dominant_religions,
+            "unesco_sites": destination.unesco_sites,
+            "historical_summary": destination.historical_summary,
+            "annual_tourist_arrivals": destination.annual_tourist_arrivals,
+            "popularity_stage": destination.popularity_stage,
+            "visa_info_url": destination.visa_info_url,
+            "gdp_per_capita_usd": destination.gdp_per_capita_usd,
+            "hdi": destination.hdi,
+            # Metadata
+            "last_updated": destination.last_updated.isoformat(),
+            "destination_revision": destination.destination_revision,
+            "lineage": destination.lineage,
+            "meta": destination.meta
         }
 
     def _format_single_theme(self, theme: Theme) -> Dict[str, Any]:
-        """Format a single theme with references"""
+        """Formats a single theme object for export"""
         # Extract evidence references if they exist
         evidence_refs = []
         if hasattr(theme, 'evidence_references'):
@@ -556,7 +598,13 @@ class ConsolidatedJsonExportManager:
         # Format confidence breakdown - ensure it's never None
         confidence_breakdown_dict = {}
         if theme.confidence_breakdown:
-            confidence_breakdown_dict = theme.confidence_breakdown.to_dict()
+            # Proper type checking for confidence_breakdown
+            if isinstance(theme.confidence_breakdown, dict):
+                confidence_breakdown_dict = theme.confidence_breakdown
+            elif hasattr(theme.confidence_breakdown, 'to_dict') and callable(getattr(theme.confidence_breakdown, 'to_dict')):
+                confidence_breakdown_dict = theme.confidence_breakdown.to_dict()
+            else:
+                confidence_breakdown_dict = {"error": "unexpected_confidence_breakdown_type", "type": str(type(theme.confidence_breakdown))}
         else:
             # Provide default confidence breakdown structure
             confidence_breakdown_dict = {
@@ -604,41 +652,58 @@ class ConsolidatedJsonExportManager:
         
         for i, insight in enumerate(insights):
             insight_id = f"ai_{i}"
-            insights_dict[insight_id] = insight.to_dict() if hasattr(insight, 'to_dict') else insight
+            # Proper type checking for insights
+            if isinstance(insight, dict):
+                insights_dict[insight_id] = insight
+            elif hasattr(insight, 'to_dict') and callable(getattr(insight, 'to_dict')):
+                insights_dict[insight_id] = insight.to_dict()
+            else:
+                insights_dict[insight_id] = {"error": "unexpected_insight_type", "type": str(type(insight))}
         
         return insights_dict
     
     def _format_local_authorities(self, authorities: List[Any]) -> Dict[str, Dict[str, Any]]:
-        """Format local authorities with unique IDs"""
+        """Format local authorities with safe ID generation"""
         authorities_dict = {}
-        
-        for i, authority in enumerate(authorities):
-            authority_id = f"la_{i}"
-            authorities_dict[authority_id] = authority.to_dict() if hasattr(authority, 'to_dict') else authority
-        
+        for i, auth in enumerate(authorities):
+            # Generate safe ID if authority doesn't have one
+            auth_id = getattr(auth, 'id', None) or f"la_{i}"
+            # Proper type checking for authorities
+            if isinstance(auth, dict):
+                authorities_dict[str(auth_id)] = auth
+            elif hasattr(auth, 'to_dict') and callable(getattr(auth, 'to_dict')):
+                authorities_dict[str(auth_id)] = auth.to_dict()
+            else:
+                authorities_dict[str(auth_id)] = {"error": "unexpected_authority_type", "type": str(type(auth))}
         return authorities_dict
     
     def _format_temporal_slices(self, slices: List[TemporalSlice]) -> Dict[str, Dict[str, Any]]:
-        """Format temporal slices with unique IDs"""
-        slices_dict = {}
-        
-        for i, slice_obj in enumerate(slices):
-            slice_id = f"ts_{i}"
-            slices_dict[slice_id] = {
-                "valid_from": slice_obj.valid_from.isoformat(),
-                "valid_to": slice_obj.valid_to.isoformat() if slice_obj.valid_to else "current",
-                "season": slice_obj.season,
-                "seasonal_highlights": slice_obj.seasonal_highlights,
-                "special_events": slice_obj.special_events,
-                "weather_patterns": slice_obj.weather_patterns,
-                "visitor_patterns": slice_obj.visitor_patterns,
-                "is_current": slice_obj.is_current()
-            }
-        
-        return slices_dict
+        """Formats temporal slices for export, ensuring SpecialEvent objects are serialized."""
+        formatted_slices = {}
+        for i, sl in enumerate(slices):
+            # Proper type checking for temporal slice
+            if isinstance(sl, dict):
+                slice_dict = sl
+            elif hasattr(sl, 'to_dict') and callable(getattr(sl, 'to_dict')):
+                slice_dict = sl.to_dict()
+            else:
+                slice_dict = {"error": "unexpected_slice_type", "type": str(type(sl))}
+            
+            # Ensure special_events are dictionaries with proper type checking
+            if 'special_events' in slice_dict or hasattr(sl, 'special_events'):
+                special_events = slice_dict.get('special_events', []) if isinstance(sl, dict) else getattr(sl, 'special_events', [])
+                slice_dict['special_events'] = [
+                    event if isinstance(event, dict)
+                    else event.to_dict() if hasattr(event, 'to_dict') and callable(getattr(event, 'to_dict'))
+                    else {"error": "unexpected_event_type", "type": str(type(event))}
+                    for event in special_events
+                ]
+            
+            formatted_slices[f"slice_{i}"] = slice_dict
+        return formatted_slices
     
     def _format_dimensions(self, dimensions: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-        """Format dimensions with only populated values"""
+        """Formats dimension data for export"""
         dimensions_dict = {}
         
         for name, dim in dimensions.items():
@@ -743,11 +808,16 @@ class ConsolidatedJsonExportManager:
         """Calculate comprehensive quality metrics"""
         total_evidence = len(evidence_registry)
         
-        confidence_scores = [
-            t.confidence_breakdown.overall_confidence 
-            for t in destination.themes 
-            if t.confidence_breakdown
-        ]
+        confidence_scores = []
+        for t in destination.themes:
+            if t.confidence_breakdown:
+                # Handle both ConfidenceBreakdown objects and dictionaries
+                if hasattr(t.confidence_breakdown, 'overall_confidence'):
+                    confidence_scores.append(t.confidence_breakdown.overall_confidence)
+                elif isinstance(t.confidence_breakdown, dict):
+                    confidence_scores.append(t.confidence_breakdown.get('overall_confidence', 0))
+                else:
+                    confidence_scores.append(0)
         
         return {
             "total_themes": len(destination.themes),

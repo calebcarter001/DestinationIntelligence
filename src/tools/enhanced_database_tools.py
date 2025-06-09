@@ -217,6 +217,15 @@ class StoreEnhancedDestinationInsightsTool(Tool):
                                                     elif isinstance(la_data, LocalAuthority):
                                                         reconstructed_local_authorities.append(la_data)
                                             
+                                            # Ensure new relevance fields from theme_data get float defaults if None/missing
+                                            raw_relevance = theme_data.get("traveler_relevance_factor")
+                                            final_relevance_factor = raw_relevance if isinstance(raw_relevance, float) else 0.5 # Default to 0.5
+
+                                            raw_adj_conf = theme_data.get("adjusted_overall_confidence")
+                                            final_adj_confidence = raw_adj_conf if isinstance(raw_adj_conf, float) else None 
+                                            # If None, EnhancedDBManager will attempt to calculate it based on original confidence and relevance factor
+                                            # Or, if already calculated by ValidationAgent, it will be a float here.
+
                                             theme = Theme(
                                                 theme_id=theme_data.get("theme_id", f"theme_{i}_{theme_data.get('name', 'unknown').lower().replace(' ', '_')}") ,
                                                 name=theme_data.get("name", "Unknown Theme"),
@@ -238,7 +247,9 @@ class StoreEnhancedDestinationInsightsTool(Tool):
                                                 factors=theme_data.get("factors", {}),
                                                 cultural_summary=theme_data.get("cultural_summary", {}),
                                                 sentiment_analysis=theme_data.get("sentiment_analysis", {}),
-                                                temporal_analysis=theme_data.get("temporal_analysis", {})
+                                                temporal_analysis=theme_data.get("temporal_analysis", {}),
+                                                traveler_relevance_factor=final_relevance_factor, # Use processed value
+                                                adjusted_overall_confidence=final_adj_confidence # Use processed value
                                             )
                                             destination.themes.append(theme)
                                             themes_added += 1

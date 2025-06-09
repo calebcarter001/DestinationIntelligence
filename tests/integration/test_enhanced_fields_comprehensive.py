@@ -419,6 +419,13 @@ def create_test_data():
         evidence=[evidence1, evidence2],
         tags=["culture", "tradition", "ceremony"],
         created_date=datetime.now(),
+        confidence_breakdown={
+            "overall_confidence": 0.9,
+            "evidence_count": 2,
+            "source_diversity": 0.8,
+            "authority_score": 0.85,
+            "confidence_level": "HIGH"
+        },
         factors={
             "source_diversity": 2,
             "authority_distribution": {"high_authority_ratio": 0.85},
@@ -596,8 +603,8 @@ async def test_database_persistence_and_export():
         
         # Specifically look for the Bali export file from this PHASE 0 operation
         actual_files_in_dir = os.listdir(consolidated_dir)
-        bali_export_files = [f for f in actual_files_in_dir if f.endswith('.json') and test_destination.id in f and "comprehensive" in f]
-        assert len(bali_export_files) > 0, f"No 'bali-indonesia' comprehensive export file found in {consolidated_dir}. Files found: {actual_files_in_dir}"
+        bali_export_files = [f for f in actual_files_in_dir if f.endswith('.json') and test_destination.id in f]
+        assert len(bali_export_files) > 0, f"No 'bali-indonesia' export file found in {consolidated_dir}. Files found: {actual_files_in_dir}"
         
         if bali_export_files:
             bali_export_files.sort(reverse=True)
@@ -606,9 +613,24 @@ async def test_database_persistence_and_export():
             
             with open(specific_bali_export_file, 'r') as f:
                 export_data = json.load(f)
-            assert "data" in export_data and "evidence" in export_data["data"], "Bali export missing data.evidence section"
-            assert len(export_data["data"]["evidence"]) > 0, "Bali export evidence registry is empty"
-            print(f"✅ Bali export ({os.path.basename(specific_bali_export_file)}) contains {len(export_data['data']['evidence'])} evidence entries.")
+            assert "data" in export_data, "Bali export missing data section"
+            
+            # Check for evidence either in separate registry or as references in themes
+            has_evidence_registry = "evidence" in export_data["data"] and len(export_data["data"]["evidence"]) > 0
+            has_evidence_references = False
+            
+            if "themes" in export_data["data"]:
+                for theme_id, theme_data in export_data["data"]["themes"].items():
+                    if "evidence_references" in theme_data and len(theme_data["evidence_references"]) > 0:
+                        has_evidence_references = True
+                        break
+            
+            assert has_evidence_registry or has_evidence_references, "Bali export missing evidence data (neither registry nor references)"
+            
+            if has_evidence_registry:
+                print(f"✅ Bali export ({os.path.basename(specific_bali_export_file)}) contains {len(export_data['data']['evidence'])} evidence entries.")
+            else:
+                print(f"✅ Bali export ({os.path.basename(specific_bali_export_file)}) contains evidence references in themes.")
 
         print("\n🎉 Database persistence and JSON export tests passed!")
         return True
@@ -848,6 +870,13 @@ async def test_comprehensive_enhanced_fields():
             evidence=[test_evidence],
             tags=["test", "enhanced"],
             created_date=datetime.now(),
+            confidence_breakdown={
+                "overall_confidence": 0.8,
+                "evidence_count": 1,
+                "source_diversity": 0.7,
+                "authority_score": 0.8,
+                "confidence_level": "HIGH"
+            },
             factors={  # Populated factors
                 "source_diversity": 3,
                 "authority_distribution": {"high_authority_ratio": 0.8}

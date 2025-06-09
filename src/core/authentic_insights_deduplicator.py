@@ -112,23 +112,48 @@ class AuthenticInsightsRegistry:
     
     def _calculate_insight_hash(self, insight: AuthenticInsight) -> str:
         """Calculate content-based hash for insight deduplication"""
-        # Create hash based on core content (exclude metadata like timestamps)
-        content_parts = [
-            str(insight.insight_type.value),
-            str(insight.authenticity_score),
-            str(insight.uniqueness_score),
-            str(insight.actionability_score),
-            str(insight.location_exclusivity.value),
-            str(insight.local_validation_count)
-        ]
-        
-        # Add seasonal window if present
-        if insight.seasonal_window:
-            content_parts.extend([
-                str(insight.seasonal_window.start_month),
-                str(insight.seasonal_window.end_month),
-                str(insight.seasonal_window.booking_lead_time)
-            ])
+        # Handle both object and dictionary formats
+        if isinstance(insight, dict):
+            # Create hash based on core content for dictionary format
+            content_parts = [
+                str(insight.get('insight_type', {}).get('value', insight.get('insight_type', ''))),
+                str(insight.get('authenticity_score', 0)),
+                str(insight.get('uniqueness_score', 0)),
+                str(insight.get('actionability_score', 0)),
+                str(insight.get('location_exclusivity', {}).get('value', insight.get('location_exclusivity', ''))),
+                str(insight.get('local_validation_count', 0))
+            ]
+            
+            # Add seasonal window if present
+            seasonal_window = insight.get('seasonal_window')
+            if seasonal_window:
+                content_parts.extend([
+                    str(seasonal_window.get('start_month', '')),
+                    str(seasonal_window.get('end_month', '')),
+                    str(seasonal_window.get('booking_lead_time', ''))
+                ])
+        else:
+            # Handle object format - use safe attribute access
+            insight_type = getattr(insight, 'insight_type', None)
+            location_exclusivity = getattr(insight, 'location_exclusivity', None)
+            
+            content_parts = [
+                str(insight_type.value if hasattr(insight_type, 'value') else insight_type),
+                str(getattr(insight, 'authenticity_score', 0)),
+                str(getattr(insight, 'uniqueness_score', 0)),
+                str(getattr(insight, 'actionability_score', 0)),
+                str(location_exclusivity.value if hasattr(location_exclusivity, 'value') else location_exclusivity),
+                str(getattr(insight, 'local_validation_count', 0))
+            ]
+            
+            # Add seasonal window if present - safe access
+            seasonal_window = getattr(insight, 'seasonal_window', None)
+            if seasonal_window:
+                content_parts.extend([
+                    str(getattr(seasonal_window, 'start_month', '')),
+                    str(getattr(seasonal_window, 'end_month', '')),
+                    str(getattr(seasonal_window, 'booking_lead_time', ''))
+                ])
         
         content_string = "|".join(content_parts)
         return hashlib.sha256(content_string.encode()).hexdigest()
@@ -201,12 +226,12 @@ class AuthenticInsightsDeduplicator:
         
         # Process theme-level insights
         for theme in destination.themes:
-            theme_id = theme.theme_id
+            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else theme.get('theme_id', None) if isinstance(theme, dict) else None
             
-            # Process insights associated with this theme
-            if hasattr(theme, 'authentic_insights'):
-                for insight in theme.authentic_insights:
-                    self.registry.add_insight(insight, theme_id=theme_id, destination_id=destination.id)
+            # Process insights associated with this theme - safe access
+            authentic_insights = getattr(theme, 'authentic_insights', []) if hasattr(theme, 'authentic_insights') else theme.get('authentic_insights', []) if isinstance(theme, dict) else []
+            for insight in authentic_insights:
+                self.registry.add_insight(insight, theme_id=theme_id, destination_id=destination.id)
         
         # Get all unique insights
         insights_registry = self.registry.get_all_insights()
@@ -242,18 +267,24 @@ class AuthenticInsightsDeduplicator:
         
         # Update themes to use insight references instead of duplicating insights
         for theme in destination.themes:
-            theme_id = theme.theme_id
+            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else theme.get('theme_id', None) if isinstance(theme, dict) else None
             
-            # Clear theme-level authentic insights to avoid duplication
-            if hasattr(theme, 'authentic_insights'):
+            # Clear theme-level authentic insights to avoid duplication - safe access
+            if isinstance(theme, dict):
+                theme['authentic_insights'] = []
+            elif hasattr(theme, 'authentic_insights'):
                 theme.authentic_insights = []
             
-            # Add insight references instead
+            # Add insight references instead - safe access
             insight_ids = self.registry.get_insights_for_theme(theme_id)
-            if not hasattr(theme, 'insight_references'):
-                theme.insight_references = []
-            theme.insight_references = [{"insight_id": insight_id, "relevance_score": 1.0} 
-                                       for insight_id in insight_ids]
+            if isinstance(theme, dict):
+                theme['insight_references'] = [{"insight_id": insight_id, "relevance_score": 1.0} 
+                                             for insight_id in insight_ids]
+            else:
+                if not hasattr(theme, 'insight_references'):
+                    theme.insight_references = []
+                theme.insight_references = [{"insight_id": insight_id, "relevance_score": 1.0} 
+                                           for insight_id in insight_ids]
         
         return destination
     
@@ -279,9 +310,15 @@ def deduplicate_authentic_insights_for_export(destination: Destination) -> Tuple
     deduplicator = AuthenticInsightsDeduplicator()
     insights_registry, cross_refs = deduplicator.process_destination(destination)
     
-    # Convert insights to export format
+    # Export insights as dictionaries
     insights_for_export = {}
     for insight_id, insight in insights_registry.items():
-        insights_for_export[insight_id] = insight.to_dict() if hasattr(insight, 'to_dict') else insight
+        # Proper type checking for insights
+        if isinstance(insight, dict):
+            insights_for_export[insight_id] = insight
+        elif hasattr(insight, 'to_dict') and callable(getattr(insight, 'to_dict')):
+            insights_for_export[insight_id] = insight.to_dict()
+        else:
+            insights_for_export[insight_id] = {"error": "unexpected_insight_type", "type": str(type(insight))}
     
     return insights_for_export, cross_refs 

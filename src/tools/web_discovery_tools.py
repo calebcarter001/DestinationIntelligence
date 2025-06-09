@@ -41,30 +41,33 @@ class DiscoverAndFetchContentTool(StructuredTool):
         priority_type = source_metadata.get("priority_type", None)
         priority_weight = source_metadata.get("priority_weight", 1.0)
 
+        logger.info(f"[Tool] Attempting to fetch content for URL: {url} (Title: {source_title}, MinLen: {min_len})")
+
         # Try Jina Reader first
         try:
             logger.info(f"[Tool] Attempting Jina Reader for URL: {url}")
-            # Instantiate JinaReaderTool without API key, using endpoint from config
             jina_tool = JinaReaderTool(jina_reader_endpoint_template=jina_reader_endpoint) 
             page_content_str = await jina_tool._arun(url=url)
             
-            if page_content_str and not page_content_str.startswith("Error:") and len(page_content_str) >= min_len:
-                logger.info(f"[Tool] Jina Reader successful for {url}, length {len(page_content_str)}.")
+            jina_content_len = len(page_content_str) if page_content_str else 0
+            if page_content_str and not page_content_str.startswith("Error:") and jina_content_len >= min_len:
+                logger.info(f"[Tool] Jina Reader successful for {url}, Length: {jina_content_len}.")
                 page_content = PageContent(
                     url=url, 
                     title=source_title, 
                     content=page_content_str, 
-                    content_length=len(page_content_str)
+                    content_length=jina_content_len
                 )
-                # Add priority metadata if available
                 if priority_type:
                     page_content.priority_type = priority_type
                     page_content.priority_weight = priority_weight
                 return page_content
             elif page_content_str and page_content_str.startswith("Error:"):
                 logger.warning(f"[Tool] Jina Reader reported an error for {url}: {page_content_str}")
-            else:
-                logger.info(f"[Tool] Jina Reader content for {url} too short or empty (length {len(page_content_str or '')}). Will try BeautifulSoup fallback.")
+            elif page_content_str: # Content was fetched but was too short
+                logger.info(f"[Tool] Jina Reader content for {url} too short (Length: {jina_content_len}, MinLen: {min_len}). Will try BeautifulSoup fallback.")
+            else: # No content string returned
+                logger.info(f"[Tool] Jina Reader returned no content for {url}. Will try BeautifulSoup fallback.")
             page_content_str = None # Ensure fallback if Jina didn't meet criteria
         except Exception as e:
             logger.warning(f"[Tool] Jina Reader failed unexpectedly for {url}: {e}. Will try BeautifulSoup fallback.", exc_info=True)
@@ -73,25 +76,31 @@ class DiscoverAndFetchContentTool(StructuredTool):
         # Fallback to BeautifulSoup via WebDiscoveryLogic
         if page_content_str is None:
             logger.info(f"[Tool] Using BeautifulSoup fallback for URL: {url}")
-            wd_logic_for_fallback = WebDiscoveryLogic(api_key=self.brave_api_key, config=self.config)
+            # Pass the full config to the fallback logic instance
+            wd_logic_for_fallback = WebDiscoveryLogic(api_key=self.brave_api_key, config=self.config) 
             async with wd_logic_for_fallback as wdl:
-                page_content_str = await wdl._fetch_page_content(url)
+                # Make sure _fetch_page_content in WebDiscoveryLogic has necessary context if it needs self.config
+                page_content_str = await wdl._fetch_page_content(url, destination_name=source_metadata.get("destination_name", "")) # Pass destination_name
             
-            if page_content_str and len(page_content_str) >= min_len:
-                logger.info(f"[Tool] BeautifulSoup fallback successful for {url}, length {len(page_content_str)}.")
+            bs4_content_len = len(page_content_str) if page_content_str else 0
+            if page_content_str and bs4_content_len >= min_len:
+                logger.info(f"[Tool] BeautifulSoup fallback successful for {url}, Length: {bs4_content_len}.")
                 page_content = PageContent(
                     url=url, 
                     title=source_title, 
                     content=page_content_str, 
-                    content_length=len(page_content_str)
+                    content_length=bs4_content_len
                 )
-                # Add priority metadata if available
                 if priority_type:
                     page_content.priority_type = priority_type
                     page_content.priority_weight = priority_weight
                 return page_content
-            else:
-                logger.info(f"[Tool] BeautifulSoup fallback for {url} yielded content too short or empty (length {len(page_content_str or '')}).")
+            elif page_content_str: # Content was fetched by BS4 but was too short
+                logger.info(f"[Tool] BeautifulSoup fallback for {url} yielded content too short (Length: {bs4_content_len}, MinLen: {min_len}). Discarding URL.")
+            else: # No content string returned by BS4
+                 logger.info(f"[Tool] BeautifulSoup fallback for {url} yielded no content. Discarding URL.")
+        
+        logger.warning(f"[Tool] Failed to fetch valid content for URL: {url} after all attempts.")
         return None
 
     async def _arun(self, destination_name: str) -> List[PageContent]:
@@ -197,7 +206,7 @@ class DiscoverAndFetchContentTool(StructuredTool):
         )
         
         # MODIFIED: Temporarily increase max_sources_for_agent_processing for more evidence
-        default_max_sources = 15 # Was 5
+        default_max_sources = 5 # Was 5, changed to 15, reverting to 5
         max_sources_to_return_to_agent = self.config.get("web_discovery", {}).get("max_sources_for_agent_processing", default_max_sources)
         if enable_priority_discovery:
             # Ensure priority still gets a boost if defined in config, or use a higher default

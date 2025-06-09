@@ -176,13 +176,11 @@ class AdaptiveDataQualityClassifier:
         high_authority_sources = 0
         
         for evidence in evidence_list:
-            # Extract domain from source URL
-            if hasattr(evidence, 'source_url'):
+            # Handle both Evidence objects and dictionaries
+            if hasattr(evidence, 'source_url'):  # Evidence object
                 url = evidence.source_url
-            elif isinstance(evidence, dict):
+            else:  # Dictionary
                 url = evidence.get('source_url', '')
-            else:
-                url = str(evidence)
             
             domain = self._extract_domain(url)
             if domain:

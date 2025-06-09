@@ -34,6 +34,15 @@ from src.tools.enhanced_theme_analysis_tool import EnhancedAnalyzeThemesFromEvid
 from src.agents.enhanced_crewai_destination_analyst import create_enhanced_crewai_destination_analyst
 from src.agents.base_agent import MessageBroker, AgentOrchestrator
 from src.agents.specialized_agents import ValidationAgent, CulturalPerspectiveAgent, ContradictionDetectionAgent
+# Import the new enrichment agents
+from src.agents.enrichment_agents import (
+    VibeAndGastronomyAgent,
+    DemographicAndGeographicAgent,
+    HistoricalAndCulturalAgent,
+    EconomicAndDevelopmentAgent,
+    TourismAndTrendAgent,
+    EventCalendarAgent
+)
 
 def parse_arguments():
     """Parse command line arguments for LLM provider selection"""
@@ -138,6 +147,83 @@ for logger_name in langchain_loggers:
 
 logger = logging.getLogger(__name__)
 
+async def run_enrichment_pipeline(destination_object, config, llm):
+    """
+    Runs the destination object through a pipeline of enrichment agents.
+    """
+    logger.info(f"Starting data enrichment pipeline for: {destination_object.names[0]}")
+    
+    enrichment_agents = [
+        VibeAndGastronomyAgent(config, llm),
+        DemographicAndGeographicAgent(config, llm),
+        HistoricalAndCulturalAgent(config, llm),
+        EconomicAndDevelopmentAgent(config, llm),
+        TourismAndTrendAgent(config, llm),
+        EventCalendarAgent(config, llm)
+    ]
+    
+    enriched_destination = destination_object
+    for agent in enrichment_agents:
+        # We are calling a sync function in a thread, so it doesn't block the event loop.
+        enriched_destination = await asyncio.to_thread(agent.run, enriched_destination)
+
+    logger.info(f"Data enrichment pipeline completed for: {destination_object.names[0]}")
+    return enriched_destination
+
+async def process_single_destination(destination_name: str, enhanced_analyst, app_config: Dict[str, Any], llm, db_manager: 'EnhancedDatabaseManager'):
+    """
+    Runs the full analysis and enrichment pipeline for a single destination.
+    """
+    logger.info(f"🚀 Kicking off full pipeline for: {destination_name}")
+    destination_result = await run_enhanced_analysis_for_destination(
+        enhanced_analyst,
+        destination_name,
+        app_config.get("processing_settings", {})
+    )
+
+    if destination_result and destination_result.get("status") == "Success":
+        logger.info(f"✅ Successfully processed: {destination_name}")
+        
+        # --- Run Enrichment Pipeline ---
+        destination_object = destination_result.get("destination_object")
+        if destination_object:
+            enriched_destination = await run_enrichment_pipeline(destination_object, app_config, llm)
+            
+            # --- VALIDATION LOGGING ---
+            logger.info(f"--- Enriched Data Validation for {enriched_destination.names[0]} ---")
+            logger.info(f"Vibe Descriptors: {enriched_destination.vibe_descriptors}")
+            logger.info(f"Area (km²): {enriched_destination.area_km2}")
+            logger.info(f"Primary Language: {enriched_destination.primary_language}")
+            logger.info(f"GDP per Capita: {enriched_destination.gdp_per_capita_usd}")
+            logger.info(f"HDI: {enriched_destination.hdi}")
+            logger.info(f"Annual Tourists: {enriched_destination.annual_tourist_arrivals}")
+            logger.info(f"Popularity Stage: {enriched_destination.popularity_stage}")
+            logger.info(f"--------------------------------------------------")
+
+            # Save final results after enrichment
+            try:
+                save_path = db_manager.store_destination(
+                    destination=enriched_destination,
+                    analysis_metadata=destination_result
+                )
+                logger.info(f"📜 Destination report for {destination_name} saved to: {save_path}")
+                destination_result["final_save_path"] = save_path
+                destination_result.pop("destination_object", None) # Remove object before returning summary
+                return destination_result
+            except Exception as e:
+                logger.error(f"❌ Could not save destination report for {destination_name}: {e}", exc_info=True)
+                destination_result["status"] = "Failed - Save Error"
+                destination_result["error"] = str(e)
+                return destination_result
+        else:
+            logger.warning(f"No destination object returned from analyst for {destination_name}, skipping enrichment and storage.")
+            destination_result["status"] = "Failed - No Object from Analyst"
+            return destination_result
+    else:
+        error = destination_result.get("error", "Unknown analysis failure") if destination_result else "Unknown analysis failure"
+        logger.error(f"❌ Pipeline failed for {destination_name}: {error}")
+        return destination_result
+
 async def run_enhanced_analysis_for_destination(enhanced_analyst, destination_name: str, processing_settings: Dict[str, Any]):
     """Execute enhanced destination analysis using CrewAI workflow orchestration."""
     logger.info(f"Starting enhanced CrewAI destination analysis for: {destination_name}")
@@ -192,6 +278,12 @@ async def main_agent_orchestration():
         except IOError:
             logger.error(f"❌ Could not save configuration error results to JSON.")
         return
+
+    # TEMPORARY DEBUG: Print the Brave API Key the script is seeing
+    api_keys_debug = app_config.get("api_keys", {})
+    brave_api_key_debug = api_keys_debug.get("brave_search", "BRAVE_KEY_NOT_FOUND_IN_CONFIG")
+    logger.info(f"DEBUG_BRAVE_API_KEY: Loaded key: {brave_api_key_debug[:10]}... (showing first 10 chars)")
+    print(f"DEBUG_BRAVE_API_KEY: Loaded key: {brave_api_key_debug[:10]}... (showing first 10 chars)")
 
     # Handle --list-providers argument
     if args.list_providers:
@@ -345,71 +437,46 @@ async def main_agent_orchestration():
             )
         ]
         
-        # Create Enhanced CrewAI analyst
+        # Create the enhanced analyst
         enhanced_analyst = create_enhanced_crewai_destination_analyst(
-            llm=llm,  # Pass the LLM instance directly
-            tools=tools
+            llm=llm,
+            tools=tools,
+            db_manager=db_manager
         )
         
-        all_destinations = app_config.get("destinations_to_process", ["Paris, France"])
-        max_dest = processing_settings.get("max_destinations_to_process", 1)
-        destinations_to_process = all_destinations[:max_dest] if max_dest > 0 and max_dest <= len(all_destinations) else all_destinations
-        
-        logger.info(f"Enhanced agent will process {len(destinations_to_process)} destinations: {', '.join(destinations_to_process)}")
-        overall_results["total_destinations"] = len(destinations_to_process)
+        # Prepare for processing
+        destinations_to_process = app_config.get("destinations", [])
+        if not destinations_to_process:
+            logger.warning("No destinations specified in config.yaml. Exiting.")
+            return
 
-        for dest_name in tqdm(destinations_to_process, desc="Processing Destinations", file=sys.stderr):
-            destination_result_data = await run_enhanced_analysis_for_destination(enhanced_analyst, dest_name, processing_settings)
-            
-            # Extract only metadata for run summary (remove detailed insights to prevent duplication)
-            destination_summary = {
-                "status": destination_result_data.get("status"),
-                "destination_name": destination_result_data.get("destination_name"),
-                "execution_method": destination_result_data.get("execution_method"),
-                "pages_processed": destination_result_data.get("pages_processed", 0),
-                "chunks_created": destination_result_data.get("chunks_created", 0),
-                "total_themes": destination_result_data.get("total_themes", 0),
-                "validated_themes": destination_result_data.get("validated_themes", 0),
-                "discovered_themes": destination_result_data.get("discovered_themes", 0),
-                "priority_insights": destination_result_data.get("priority_insights", 0),
-                "attractions_found": destination_result_data.get("attractions_found", 0),
-                "hotels_found": destination_result_data.get("hotels_found", 0),
-                "restaurants_found": destination_result_data.get("restaurants_found", 0),
-                "execution_duration_seconds": destination_result_data.get("execution_duration_seconds", 0),
-                "error": destination_result_data.get("error")  # Only include if there was an error
-                # NOTE: Deliberately excluding "enhanced_insights" and "theme_analysis" to prevent duplication
-                # These detailed insights are stored via the consolidated export system in destination_insights/
-            }
-            
-            overall_results["destinations_processed_details"].append(destination_summary)
-            
-            if destination_result_data.get("status") == "Success":
+        overall_results["total_destinations"] = len(destinations_to_process)
+        
+        # --- NEW: Process all destinations concurrently ---
+        logger.info(f"Starting concurrent processing for {len(destinations_to_process)} destinations...")
+        tasks = [
+            process_single_destination(dest_name, enhanced_analyst, app_config, llm, db_manager)
+            for dest_name in destinations_to_process
+        ]
+        
+        processed_results = []
+        for future in asyncio_tqdm.as_completed(tasks, desc="Processing All Destinations"):
+            result = await future
+            processed_results.append(result)
+
+        # Process results for summary
+        for result in processed_results:
+            if result and result.get("status") == "Success":
                 overall_results["successful_destinations"] += 1
             else:
                 overall_results["failed_destinations"] += 1
-
-            # Enhanced summary display
-            if destination_result_data.get("status") == "Success":
-                pages_processed = destination_result_data.get("pages_processed", 0)
-                chunks_created = destination_result_data.get("chunks_created", 0)
-                validated_themes = destination_result_data.get("validated_themes", 0)
-                total_themes = destination_result_data.get("total_themes", 0)
-                duration = destination_result_data.get("execution_duration_seconds", 0)
-                
-                logger.info(f"--- Enhanced Summary for {dest_name} ---")
-                logger.info(f"✅ Status: SUCCESS")
-                logger.info(f"📄 Pages processed: {pages_processed}")
-                logger.info(f"📦 Chunks created: {chunks_created}")
-                logger.info(f"🎯 Total themes: {total_themes} ({validated_themes} validated)")
-                logger.info(f"⏱️  Execution time: {duration:.2f} seconds")
-                logger.info(f"🤖 LLM Provider: {selected_provider.upper()}")
-            else:
-                error = destination_result_data.get("error", "Unknown error")
-                logger.error(f"--- Enhanced Summary for {dest_name} ---")
-                logger.error(f"❌ Status: FAILED")
-                logger.error(f"🚨 Error: {error}")
-                
-            logger.info("=" * 50)
+            
+            # Remove detailed object data before adding to summary
+            if result:
+                result.pop("destination_object", None)
+                result.pop("theme_analysis", None)
+                result.pop("enhanced_insights", None)
+                overall_results["destinations_processed_details"].append(result)
 
         # Determine overall status
         if overall_results["total_destinations"] > 0:

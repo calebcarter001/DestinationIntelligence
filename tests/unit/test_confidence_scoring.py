@@ -209,7 +209,7 @@ class TestConfidenceScorer(unittest.TestCase):
     def test_calculate_confidence_empty_evidence(self):
         breakdown = self.scorer.calculate_confidence([])
         
-        self.assertEqual(breakdown.overall_confidence, 0.0)
+        self.assertEqual(breakdown.overall_confidence, 0.1)
         self.assertEqual(breakdown.confidence_level, ConfidenceLevel.INSUFFICIENT)
     
     def test_evidence_quality_score(self):

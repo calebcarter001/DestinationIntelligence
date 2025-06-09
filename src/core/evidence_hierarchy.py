@@ -167,6 +167,26 @@ class EvidenceHierarchy:
         
         # Apply temporal decay if timestamp provided
         if timestamp:
+            # Handle both datetime objects and string timestamps
+            if isinstance(timestamp, str):
+                try:
+                    # Try common timestamp formats
+                    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%SZ']:
+                        try:
+                            timestamp = datetime.strptime(timestamp, fmt)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        # If all parsing fails, log warning and use base weight
+                        logger.warning(f"Could not parse timestamp '{timestamp}', using base authority weight")
+                        weight = base_weight
+                        return weight, evidence_type
+                except Exception as e:
+                    logger.warning(f"Error parsing timestamp '{timestamp}': {e}, using base authority weight")
+                    weight = base_weight
+                    return weight, evidence_type
+            
             days_old = (datetime.now() - timestamp).days
             decay_factor = 0.5 ** (days_old / config.decay_half_life_days)
             weight = base_weight * decay_factor

@@ -181,6 +181,24 @@ processing_settings:
     min_content_length_chars: 200  # Minimum content length to process
     vectorize_api_endpoint: ""  # Optional: Vectorize API endpoint
     vectorize_api_key: ""       # Optional: Vectorize API key
+
+    # Brave Search API specific parameters
+    brave_search_lang: "en"         # Language for search results
+    brave_ui_lang: "en-US"          # Language for UI elements in response
+    brave_search_count: 20          # Number of search results (max 20 for web)
+    brave_search_offset: 0          # Zero-based offset for pagination
+    brave_safesearch: "moderate"    # Safesearch level: off, moderate, strict
+    brave_text_decorations: true  # Include highlighting in snippets
+    brave_spellcheck: true        # Enable spellchecker
+    brave_result_filter: "web,discussions,locations,news" # Comma-separated: web,discussions,faq,infobox,news,videos,locations
+    brave_extra_snippets: false     # Retrieve additional snippets (boolean)
+    brave_freshness: "pw"           # Filter by discovery date: "pd" (day), "pw" (week), "pm" (month), or a specific date range "YYYY-MM-DD..YYYY-MM-DD"
+
+    # Brave Local Search API specific parameters (if locations are fetched)
+    brave_fetch_local_descriptions: false # New: if true, fetches AI-generated descriptions for locations found via local search
+    brave_local_search_lang: "en"   # Language for local search results
+    brave_local_ui_lang: "en-US"    # Language for UI elements in local search response
+    brave_local_units: "metric"     # Measurement units: metric, imperial (optional, API defaults from country)
     
     # Content extraction settings (enhanced with adaptive logic)
     content_extraction:
@@ -225,6 +243,22 @@ processing_settings:
         min_paragraph_length: 20  # Minimum words per paragraph
         max_boilerplate_ratio: 0.3  # Maximum ratio of boilerplate content
   
+  # =============================================================================
+  # DATA ENRICHMENT SERVICES (for destination comparison heuristics)
+  # =============================================================================
+  data_enrichment:
+    # Master switch for all enrichment services
+    enabled: true
+
+    # Enable/disable individual enrichment modules
+    enrichment_modules:
+      vibe_and_gastronomy_analysis: true
+      demographic_and_geographic_lookup: true  # Fetches area, language, population
+      historical_and_cultural_lookup: true   # Fetches UNESCO sites, history summary, religion
+      economic_and_development_lookup: true    # Fetches GDP, HDI, price indices
+      tourism_and_trend_analysis: true       # Fetches arrivals, popularity, visa info
+      event_calendar_extraction: true
+
   content_intelligence:
     # Base settings (will be overridden by adaptive logic)
     min_validated_theme_confidence: 0.60

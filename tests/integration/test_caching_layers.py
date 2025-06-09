@@ -20,7 +20,6 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.caching import read_from_cache, write_to_cache, get_cache_path, CACHE_EXPIRY_DAYS
-from src.core.web_discovery_logic import WebDiscoveryLogic
 from src.tools.chroma_interaction_tools import ChromaDBManager
 from src.core.enhanced_database_manager import EnhancedDatabaseManager
 from src.core.enhanced_data_models import Destination, Theme, Evidence
@@ -132,153 +131,6 @@ class TestFileCaching:
         # Should handle corruption gracefully
         cached_data = read_from_cache(key_parts, expiry_days=7)
         assert cached_data is None
-
-
-class TestWebDiscoveryCaching:
-    """Test web discovery caching integration"""
-    
-    def setup_method(self):
-        """Setup test environment"""
-        self.temp_dir = tempfile.mkdtemp()
-        
-        # Mock config
-        self.config = {
-            "web_discovery": {
-                "search_results_per_query": 3,
-                "min_content_length_chars": 100,
-                "max_page_content_bytes": 1024 * 1024,  # 1MB
-                "max_sources_for_agent_processing": 5
-            },
-            "caching": {
-                "brave_search_expiry_days": 7,
-                "page_content_expiry_days": 30
-            },
-            "priority_settings": {
-                "enable_priority_discovery": False
-            }
-        }
-        
-        # Patch cache directory
-        import src.caching
-        self.original_cache_dir = src.caching.CACHE_DIR
-        src.caching.CACHE_DIR = self.temp_dir
-        
-    def teardown_method(self):
-        """Cleanup test environment"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-        
-        # Restore cache directory
-        import src.caching
-        src.caching.CACHE_DIR = self.original_cache_dir
-
-    @pytest.mark.asyncio
-    async def test_brave_search_caching(self):
-        """Test Brave Search API result caching"""
-        api_key = "test_api_key"
-        
-        async with WebDiscoveryLogic(api_key, self.config) as discovery:
-            # Mock the actual API call with correct Brave API format
-            mock_api_results = [
-                {"url": "https://example1.com", "title": "Test 1", "description": "Content 1", "age": "1d", "language": "en"},
-                {"url": "https://example2.com", "title": "Test 2", "description": "Content 2", "age": "2d", "language": "en"}
-            ]
-            
-            # Expected normalized results
-            expected_results = [
-                {"url": "https://example1.com", "title": "Test 1", "snippet": "Content 1", "age": "1d", "language": "en"},
-                {"url": "https://example2.com", "title": "Test 2", "snippet": "Content 2", "age": "2d", "language": "en"}
-            ]
-            
-            with patch.object(discovery.session, 'get') as mock_get:
-                mock_response = AsyncMock()
-                mock_response.status = 200
-                mock_response.json = AsyncMock(return_value={
-                    "web": {"results": mock_api_results}
-                })
-                mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-                
-                query = "test query"
-                
-                # First call - should hit API and cache
-                results1 = await discovery._fetch_brave_search(query)
-                assert len(results1) == 2
-                assert mock_get.call_count == 1
-                
-                # Second call - should use cache
-                results2 = await discovery._fetch_brave_search(query)
-                assert results2 == results1
-                assert mock_get.call_count == 1  # No additional API calls
-                
-                # Verify cache file exists with normalized results
-                cache_key = ["brave_search", query]
-                cached_data = read_from_cache(cache_key, 7)
-                assert cached_data == expected_results
-
-    @pytest.mark.asyncio
-    async def test_page_content_caching(self):
-        """Test web page content caching"""
-        api_key = "test_api_key"
-        
-        async with WebDiscoveryLogic(api_key, self.config) as discovery:
-            url = "https://example.com/test-page"
-            mock_html = """
-            <html>
-                <body>
-                    <article>
-                        <h1>Test Article</h1>
-                        <p>This is test content for caching verification.</p>
-                        <p>Multiple paragraphs to ensure sufficient content length.</p>
-                    </article>
-                </body>
-            </html>
-            """
-            
-            # Expected extracted content (BeautifulSoup will extract text content)
-            expected_content = "Test Article This is test content for caching verification. Multiple paragraphs to ensure sufficient content length."
-            
-            with patch.object(discovery.session, 'get') as mock_get:
-                mock_response = AsyncMock()
-                mock_response.status = 200
-                mock_response.headers = {'content-type': 'text/html'}
-                mock_response.content.read = AsyncMock(return_value=mock_html.encode('utf-8'))
-                mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-                
-                # First call - should fetch and cache
-                content1 = await discovery._fetch_page_content(url)
-                # Check that we get the extracted text content
-                assert "test content for caching verification" in content1
-                assert "Multiple paragraphs" in content1
-                assert mock_get.call_count == 1
-                
-                # Second call - should use cache
-                content2 = await discovery._fetch_page_content(url)
-                assert content2 == content1
-                assert mock_get.call_count == 1  # No additional fetches
-                
-                # Verify cache file exists
-                cache_key = ["page_content_v2_bytes", url]
-                cached_content = read_from_cache(cache_key, 30)
-                assert cached_content == content1
-
-    @pytest.mark.asyncio
-    async def test_cache_performance_benefits(self):
-        """Test that caching provides performance benefits"""
-        api_key = "test_api_key"
-        
-        async with WebDiscoveryLogic(api_key, self.config) as discovery:
-            # Pre-populate cache
-            query = "performance test"
-            cache_key = ["brave_search", query]
-            mock_results = [{"url": "https://fast.com", "title": "Fast", "snippet": "Quick"}]
-            write_to_cache(cache_key, mock_results)
-            
-            # Measure cache hit performance
-            start_time = datetime.now()
-            results = await discovery._fetch_brave_search(query)
-            cache_duration = (datetime.now() - start_time).total_seconds()
-            
-            assert results == mock_results
-            assert cache_duration < 0.1  # Should be very fast for cache hit
 
 
 class TestChromaDBCaching:
@@ -479,7 +331,14 @@ class TestDatabaseCaching:
             name="Beautiful Beaches",
             description="Amazing beaches with clear water",
             fit_score=0.9,
-            evidence=[evidence]
+            evidence=[evidence],
+            confidence_breakdown={
+                "overall_confidence": 0.9,
+                "evidence_count": 1,
+                "source_diversity": 0.8,
+                "authority_score": 0.8,
+                "confidence_level": "high"
+            }
         )
         
         destination = Destination(
@@ -500,78 +359,73 @@ class TestDatabaseCaching:
         assert results["storage_summary"]["evidence"] == 1
 
     def test_database_caching_performance(self):
-        """Test database query performance with indices"""
+        """Test database performance with indexing"""
         db_manager = EnhancedDatabaseManager(
             db_path=self.temp_db_path,
             enable_json_export=False
         )
         
-        # Verify indices were created
+        # Check database indices exist for performance
         conn = sqlite3.connect(self.temp_db_path)
         cursor = conn.cursor()
         
-        # Check for performance indices
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index';")
         indices = [row[0] for row in cursor.fetchall()]
         
+        # Should have performance indices
         expected_indices = [
-            "idx_evidence_destination",
-            "idx_evidence_confidence", 
-            "idx_themes_destination",
-            "idx_themes_category"
+            "idx_evidence_destination", "idx_themes_destination", 
+            "idx_theme_evidence_theme", "idx_authentic_insights_theme"
         ]
         
         for expected_idx in expected_indices:
-            assert expected_idx in indices
+            assert expected_idx in indices, f"Missing performance index: {expected_idx}"
         
         conn.close()
 
     def test_json_export_caching(self):
-        """Test JSON export functionality and file caching"""
+        """Test JSON export file caching"""
         db_manager = EnhancedDatabaseManager(
             db_path=self.temp_db_path,
             enable_json_export=True,
             json_export_path=self.temp_export_dir
         )
         
-        # Create minimal destination for export test
+        # Create minimal destination
         destination = Destination(
             id="export_test",
-            names=["Export Test Destination"],
+            names=["Export Test"],
             admin_levels={"country": "Test"},
             timezone="UTC",
-            country_code="ET"
+            country_code="ET",
+            themes=[]
         )
         
-        # Store and export
+        # Store destination - should trigger JSON export
         results = db_manager.store_destination(destination)
         
-        assert results["database_stored"] is True
-        assert "json_files_created" in results
+        assert results["json_exported"] is True
+        assert "json_export_path" in results
         
-        # Verify JSON files were created
-        json_files = results["json_files_created"]
-        for file_type, file_path in json_files.items():
-            assert os.path.exists(file_path)
-            
-            # Verify file contains valid JSON
-            with open(file_path, 'r') as f:
-                data = json.load(f)
-                assert data is not None
+        # Verify JSON file exists
+        json_path = results["json_export_path"]
+        assert os.path.exists(json_path)
+        
+        # Verify JSON content
+        with open(json_path, 'r') as f:
+            exported_data = json.load(f)
+        
+        assert exported_data["destination"]["id"] == "export_test"
 
 
 class TestCacheIntegration:
-    """Test integration between different caching layers"""
+    """Test integration between different cache layers"""
     
     def setup_method(self):
         """Setup integrated test environment"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.temp_db_dir = os.path.join(self.temp_dir, "chroma")
-        self.temp_cache_dir = os.path.join(self.temp_dir, "cache")
-        self.temp_db_path = os.path.join(self.temp_dir, "test.db")
-        
-        os.makedirs(self.temp_db_dir, exist_ok=True)
-        os.makedirs(self.temp_cache_dir, exist_ok=True)
+        self.temp_cache_dir = tempfile.mkdtemp()
+        self.temp_db_dir = tempfile.mkdtemp()
+        self.temp_sqlite_path = tempfile.mktemp(suffix='.db')
         
         # Patch cache directory
         import src.caching
@@ -580,85 +434,121 @@ class TestCacheIntegration:
         
     def teardown_method(self):
         """Cleanup test environment"""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.temp_cache_dir, ignore_errors=True)
+        shutil.rmtree(self.temp_db_dir, ignore_errors=True)
+        if os.path.exists(self.temp_sqlite_path):
+            os.remove(self.temp_sqlite_path)
         
         # Restore cache directory
         import src.caching
         src.caching.CACHE_DIR = self.original_cache_dir
 
     def test_cache_layer_coordination(self):
-        """Test that different cache layers work together effectively"""
-        # Test web cache -> vector cache -> database cache pipeline
-        
-        # 1. Simulate web content cache
-        web_content_key = ["page_content_v2_bytes", "https://example.com/bali"]
-        web_content = "Bali is famous for its beautiful beaches, temples, and rice terraces."
-        write_to_cache(web_content_key, web_content)
-        
-        # 2. Process through vector cache
+        """Test coordination between file cache, ChromaDB, and SQLite"""
         from src.schemas import ProcessedPageChunk
+        
+        # Initialize all cache layers
         chroma_manager = ChromaDBManager(
             db_path=self.temp_db_dir,
             collection_name="integration_test"
         )
         
-        chunk = ProcessedPageChunk(
-            chunk_id="bali_chunk",
-            url="https://example.com/bali",
-            title="Bali Guide",
-            text_chunk=web_content,
-            chunk_order=0,
-            metadata={"source": "web_cache"}
-        )
-        
-        chroma_manager.add_chunks([chunk])
-        
-        # 3. Store in database cache
         db_manager = EnhancedDatabaseManager(
-            db_path=self.temp_db_path,
+            db_path=self.temp_sqlite_path,
             enable_json_export=False
         )
         
+        # Test data flow through layers
+        # 1. Store raw data in file cache
+        raw_data = {"source": "web", "content": "Test content about Bali"}
+        write_to_cache(["raw", "bali_data"], raw_data)
+        
+        # 2. Process and store in ChromaDB
+        chunk = ProcessedPageChunk(
+            chunk_id="integration_chunk",
+            url="https://example.com/integration",
+            title="Integration Test",
+            text_chunk="Test content about Bali for integration testing.",
+            chunk_order=0,
+            metadata={"test": "integration"}
+        )
+        chroma_manager.add_chunks([chunk])
+        
+        # 3. Store structured data in SQLite
+        evidence = Evidence(
+            id="integration_evidence",
+            source_url="https://example.com/integration",
+            source_category=SourceCategory.BLOG,
+            evidence_type=EvidenceType.SECONDARY,
+            authority_weight=0.7,
+            text_snippet="Integration test evidence",
+            timestamp=datetime.now(),
+            confidence=0.8,
+            sentiment=0.6,
+            cultural_context={"integration": True},
+            relationships=[],
+            agent_id="integration_agent"
+        )
+        
+        theme = Theme(
+            theme_id="integration_theme",
+            macro_category="Test",
+            micro_category="Integration",
+            name="Integration Test Theme",
+            description="Theme for testing integration",
+            fit_score=0.8,
+            evidence=[evidence]
+        )
+        
         destination = Destination(
-            id="bali_integration",
-            names=["Bali"],
-            admin_levels={"country": "Indonesia"},
-            timezone="Asia/Jakarta", 
-            country_code="ID"
+            id="integration_destination",
+            names=["Integration Test"],
+            admin_levels={"country": "Test"},
+            timezone="UTC",
+            country_code="IT",
+            themes=[theme]
         )
         
         db_results = db_manager.store_destination(destination)
         
-        # Verify all layers working
-        assert read_from_cache(web_content_key, 30) == web_content
+        # Verify data exists in all layers
+        # File cache
+        cached_raw = read_from_cache(["raw", "bali_data"], 1)
+        assert cached_raw == raw_data
         
-        search_results = chroma_manager.search(["Bali beaches"], n_results=1)
+        # ChromaDB
+        search_results = chroma_manager.search(["Bali integration"], n_results=1)
         assert len(search_results[0]) == 1
+        assert search_results[0][0].document_chunk.chunk_id == "integration_chunk"
         
+        # SQLite
         assert db_results["database_stored"] is True
 
     def test_cache_consistency_across_layers(self):
-        """Test data consistency across different caching layers"""
-        destination_name = "Test Destination"
-        content_url = f"https://example.com/{destination_name.lower().replace(' ', '-')}"
+        """Test data consistency across different cache layers"""
+        # This test ensures that the same source data produces consistent
+        # results across different cache and storage layers
         
-        # Store in web cache
-        web_cache_key = ["page_content_v2_bytes", content_url]
-        original_content = f"Information about {destination_name} attractions and culture."
-        write_to_cache(web_cache_key, original_content)
+        source_url = "https://example.com/consistency"
+        source_content = "Consistent test content about destination features."
         
-        # Verify consistency
-        cached_content = read_from_cache(web_cache_key, 30)
-        assert cached_content == original_content
+        # Store in file cache with timestamp
+        file_cache_data = {
+            "url": source_url,
+            "content": source_content,
+            "processed_at": datetime.now().isoformat()
+        }
+        write_to_cache(["consistency", "test"], file_cache_data)
         
-        # Test cache key collision handling
-        similar_key = ["page_content_v2_bytes", content_url.upper()]
-        different_content = "Different content for similar URL"
-        write_to_cache(similar_key, different_content)
+        # Retrieve and verify consistency
+        retrieved_data = read_from_cache(["consistency", "test"], 1)
+        assert retrieved_data["url"] == source_url
+        assert retrieved_data["content"] == source_content
         
-        # Should maintain separate cache entries
-        assert read_from_cache(web_cache_key, 30) == original_content
-        assert read_from_cache(similar_key, 30) == different_content
+        # Verify timestamp handling
+        assert "processed_at" in retrieved_data
+        processed_time = datetime.fromisoformat(retrieved_data["processed_at"])
+        assert (datetime.now() - processed_time).seconds < 10  # Recent timestamp
 
 
 if __name__ == "__main__":

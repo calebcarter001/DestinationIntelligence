@@ -630,8 +630,8 @@ class TestPriorityDataExtractionTool:
         
         for url in community_urls:
             credibility = extractor.calculate_source_credibility(url)
-            # Reverted back to 0.7 as that's the actual implementation value
-            assert credibility == 0.7
+            # Updated to 0.5 to match our implementation fix
+            assert credibility == 0.5
         
         # Test facebook (not in community list, should get default)
         facebook_url = "https://www.facebook.com/travelgroup"

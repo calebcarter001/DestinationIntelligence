@@ -158,41 +158,103 @@ class TestEnhancedThemeAnalysisTool:
         
         for theme in themes:
             # Check that all enhanced fields are present and populated
-            assert "authentic_insights" in theme, f"Theme '{theme.get('name')}' missing authentic_insights"
-            assert "local_authorities" in theme, f"Theme '{theme.get('name')}' missing local_authorities"
-            assert "seasonal_relevance" in theme, f"Theme '{theme.get('name')}' missing seasonal_relevance"
-            assert "cultural_summary" in theme, f"Theme '{theme.get('name')}' missing cultural_summary"
-            assert "sentiment_analysis" in theme, f"Theme '{theme.get('name')}' missing sentiment_analysis"
-            assert "temporal_analysis" in theme, f"Theme '{theme.get('name')}' missing temporal_analysis"
-            assert "factors" in theme, f"Theme '{theme.get('name')}' missing factors"
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'name'):  # Theme object
+                theme_name = theme.name
+                assert hasattr(theme, 'authentic_insights'), f"Theme '{theme_name}' missing authentic_insights"
+                assert hasattr(theme, 'local_authorities'), f"Theme '{theme_name}' missing local_authorities"
+                assert hasattr(theme, 'seasonal_relevance'), f"Theme '{theme_name}' missing seasonal_relevance"
+                assert hasattr(theme, 'cultural_summary'), f"Theme '{theme_name}' missing cultural_summary"
+                assert hasattr(theme, 'sentiment_analysis'), f"Theme '{theme_name}' missing sentiment_analysis"
+                assert hasattr(theme, 'temporal_analysis'), f"Theme '{theme_name}' missing temporal_analysis"
+                assert hasattr(theme, 'factors'), f"Theme '{theme_name}' missing factors"
+                
+                # Access Theme object attributes
+                authentic_insights = theme.authentic_insights
+                seasonal_relevance = theme.seasonal_relevance
+                cultural_summary = theme.cultural_summary
+                sentiment_analysis = theme.sentiment_analysis
+                temporal_analysis = theme.temporal_analysis
+                factors = theme.factors
+            else:  # Dictionary
+                theme_name = theme.get('name', 'Unknown')
+                assert "authentic_insights" in theme, f"Theme '{theme_name}' missing authentic_insights"
+                assert "local_authorities" in theme, f"Theme '{theme_name}' missing local_authorities"
+                assert "seasonal_relevance" in theme, f"Theme '{theme_name}' missing seasonal_relevance"
+                assert "cultural_summary" in theme, f"Theme '{theme_name}' missing cultural_summary"
+                assert "sentiment_analysis" in theme, f"Theme '{theme_name}' missing sentiment_analysis"
+                assert "temporal_analysis" in theme, f"Theme '{theme_name}' missing temporal_analysis"
+                assert "factors" in theme, f"Theme '{theme_name}' missing factors"
+                
+                # Access dictionary values
+                authentic_insights = theme["authentic_insights"]
+                seasonal_relevance = theme["seasonal_relevance"]
+                cultural_summary = theme["cultural_summary"]
+                sentiment_analysis = theme["sentiment_analysis"]
+                temporal_analysis = theme["temporal_analysis"]
+                factors = theme["factors"]
             
             # Validate that enhanced fields are not empty (at least some should have content)
-            theme_name = theme.get('name', 'Unknown')
             
             # authentic_insights should be a list with at least one item for validated themes
-            if theme.get('is_validated', False):
-                assert isinstance(theme["authentic_insights"], list), f"Theme '{theme_name}' authentic_insights should be a list"
-                if len(theme["authentic_insights"]) > 0:
-                    insight = theme["authentic_insights"][0]
-                    assert "insight_type" in insight, f"Theme '{theme_name}' authentic insight missing insight_type"
-                    assert "authenticity_score" in insight, f"Theme '{theme_name}' authentic insight missing authenticity_score"
-                    assert "uniqueness_score" in insight, f"Theme '{theme_name}' authentic insight missing uniqueness_score"
-                    assert "actionability_score" in insight, f"Theme '{theme_name}' authentic insight missing actionability_score"
+            is_validated = getattr(theme, 'is_validated', False) if hasattr(theme, 'name') else theme.get('is_validated', False)
+            if is_validated:
+                assert isinstance(authentic_insights, list), f"Theme '{theme_name}' authentic_insights should be a list"
+                if len(authentic_insights) > 0:
+                    insight = authentic_insights[0]
+                    # Validate insight structure - Handle both objects and dictionaries
+                    if hasattr(insight, 'insight_type'):  # AuthenticInsight object
+                        assert hasattr(insight, 'insight_type')
+                        assert hasattr(insight, 'authenticity_score')
+                        assert hasattr(insight, 'uniqueness_score')
+                        assert hasattr(insight, 'actionability_score')
+                        assert hasattr(insight, 'temporal_relevance')
+                        assert hasattr(insight, 'location_exclusivity')
+                    else:  # Dictionary
+                        assert "insight_type" in insight
+                        assert "authenticity_score" in insight
+                        assert "uniqueness_score" in insight
+                        assert "actionability_score" in insight
+                        assert "temporal_relevance" in insight
+                        assert "location_exclusivity" in insight
+                    
+                    # Validate insight values - Get values regardless of format
+                    if hasattr(insight, 'insight_type'):  # Object
+                        insight_type = insight.insight_type.value if hasattr(insight.insight_type, 'value') else insight.insight_type
+                        authenticity_score = insight.authenticity_score
+                        uniqueness_score = insight.uniqueness_score
+                        actionability_score = insight.actionability_score
+                        temporal_relevance = insight.temporal_relevance
+                        location_exclusivity = insight.location_exclusivity.value if hasattr(insight.location_exclusivity, 'value') else insight.location_exclusivity
+                    else:  # Dictionary
+                        insight_type = insight["insight_type"]
+                        authenticity_score = insight["authenticity_score"]
+                        uniqueness_score = insight["uniqueness_score"]
+                        actionability_score = insight["actionability_score"]
+                        temporal_relevance = insight["temporal_relevance"]
+                        location_exclusivity = insight["location_exclusivity"]
+                    
+                    assert insight_type in ["seasonal", "specialty", "insider", "cultural", "practical"]
+                    assert 0 <= authenticity_score <= 1
+                    assert 0 <= uniqueness_score <= 1
+                    assert 0 <= actionability_score <= 1
+                    assert 0 <= temporal_relevance <= 1
+                    assert location_exclusivity in ["exclusive", "signature", "regional", "common"]
                     
             # seasonal_relevance should be a dict with month data
-            assert isinstance(theme["seasonal_relevance"], dict), f"Theme '{theme_name}' seasonal_relevance should be a dict"
+            assert isinstance(seasonal_relevance, dict), f"Theme '{theme_name}' seasonal_relevance should be a dict"
             
             # cultural_summary should have data
-            assert isinstance(theme["cultural_summary"], dict), f"Theme '{theme_name}' cultural_summary should be a dict"
+            assert isinstance(cultural_summary, dict), f"Theme '{theme_name}' cultural_summary should be a dict"
             
             # sentiment_analysis should have data
-            assert isinstance(theme["sentiment_analysis"], dict), f"Theme '{theme_name}' sentiment_analysis should be a dict"
+            assert isinstance(sentiment_analysis, dict), f"Theme '{theme_name}' sentiment_analysis should be a dict"
             
             # temporal_analysis should have data
-            assert isinstance(theme["temporal_analysis"], dict), f"Theme '{theme_name}' temporal_analysis should be a dict"
+            assert isinstance(temporal_analysis, dict), f"Theme '{theme_name}' temporal_analysis should be a dict"
             
             # factors should have data
-            assert isinstance(theme["factors"], dict), f"Theme '{theme_name}' factors should be a dict"
+            assert isinstance(factors, dict), f"Theme '{theme_name}' factors should be a dict"
 
     @pytest.mark.asyncio
     async def test_analyze_themes_with_missing_description(self, tool, mock_agents):
@@ -267,18 +329,32 @@ class TestEnhancedThemeAnalysisTool:
         # Find the beach activities theme
         beach_theme = None
         for theme in themes:
-            if theme.get("name") == "Beach Activities":
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'name'):  # Theme object
+                theme_name = theme.name
+            else:  # Dictionary
+                theme_name = theme.get("name", "Unknown")
+            
+            if theme_name == "Beach Activities":
                 beach_theme = theme
                 break
         
         assert beach_theme is not None, "Beach Activities theme should be processed"
         
         # Validate enhanced fields are still populated
-        assert "authentic_insights" in beach_theme
-        assert "seasonal_relevance" in beach_theme
-        assert "cultural_summary" in beach_theme
-        assert "sentiment_analysis" in beach_theme
-        assert "temporal_analysis" in beach_theme
+        # Handle both Theme objects and dictionaries
+        if hasattr(beach_theme, 'authentic_insights'):  # Theme object
+            assert hasattr(beach_theme, 'authentic_insights')
+            assert hasattr(beach_theme, 'seasonal_relevance')
+            assert hasattr(beach_theme, 'cultural_summary')
+            assert hasattr(beach_theme, 'sentiment_analysis')
+            assert hasattr(beach_theme, 'temporal_analysis')
+        else:  # Dictionary
+            assert "authentic_insights" in beach_theme
+            assert "seasonal_relevance" in beach_theme
+            assert "cultural_summary" in beach_theme
+            assert "sentiment_analysis" in beach_theme
+            assert "temporal_analysis" in beach_theme
 
     @pytest.mark.asyncio 
     async def test_local_authority_detection(self, tool, mock_agents):
@@ -313,18 +389,39 @@ class TestEnhancedThemeAnalysisTool:
         # Debug: Print the actual result structure
         print(f"\nDEBUG: Total themes found: {len(result['themes'])}")
         for i, theme in enumerate(result["themes"]):
-            print(f"Theme {i}: {theme.get('name', 'Unknown')} - Keys: {list(theme.keys())}")
-            if 'local_authorities' in theme:
-                print(f"  Local authorities: {theme['local_authorities']}")
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'name'):  # Theme object
+                theme_name = theme.name
+                theme_keys = [attr for attr in dir(theme) if not attr.startswith('_')]
+            else:  # Dictionary
+                theme_name = theme.get('name', 'Unknown')
+                theme_keys = list(theme.keys())
+            
+            print(f"Theme {i}: {theme_name} - Keys: {theme_keys}")
+            
+            # Check for local_authorities
+            if hasattr(theme, 'local_authorities'):  # Theme object
+                local_auths = theme.local_authorities
+            else:  # Dictionary
+                local_auths = theme.get('local_authorities', [])
+            
+            if local_auths and len(local_auths) > 0:
+                print(f"  Local authorities: {local_auths}")
             else:
-                print(f"  No local_authorities key found")
+                print(f"  Local authorities list is empty: {local_auths}")
         
         # Check that some themes have local authorities
         found_local_authorities = False
         for theme in result["themes"]:
-            if theme.get("local_authorities") and len(theme["local_authorities"]) > 0:
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'local_authorities'):  # Theme object
+                local_auths = theme.local_authorities
+            else:  # Dictionary
+                local_auths = theme.get("local_authorities", [])
+            
+            if local_auths and len(local_auths) > 0:
                 found_local_authorities = True
-                authority = theme["local_authorities"][0]
+                authority = local_auths[0]
                 
                 # Validate authority structure
                 assert "authority_type" in authority
@@ -332,8 +429,8 @@ class TestEnhancedThemeAnalysisTool:
                 assert "expertise_domain" in authority
                 assert "community_validation" in authority
                 
-                # Validate authority values - Updated to include 'industry_professional'
-                allowed_types = ["producer", "resident", "professional", "cultural", "seasonal_worker", "industry_professional"]
+                # Validate authority values - Match actual AuthorityType enum values
+                allowed_types = ["producer", "long_term_resident", "industry_professional", "cultural_institution", "seasonal_worker"]
                 assert authority["authority_type"] in allowed_types
                 
                 # local_tenure can be None (Optional[int])
@@ -382,7 +479,12 @@ class TestEnhancedThemeAnalysisTool:
         # Check that seasonal relevance is populated
         found_seasonal_data = False
         for theme in result["themes"]:
-            seasonal_relevance = theme.get("seasonal_relevance", {})
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'seasonal_relevance'):  # Theme object
+                seasonal_relevance = theme.seasonal_relevance or {}
+            else:  # Dictionary
+                seasonal_relevance = theme.get("seasonal_relevance", {})
+            
             if seasonal_relevance:
                 found_seasonal_data = True
                 
@@ -442,7 +544,12 @@ class TestEnhancedThemeAnalysisTool:
         # Check sentiment analysis in themes
         found_sentiment_data = False
         for theme in result["themes"]:
-            sentiment_analysis = theme.get("sentiment_analysis", {})
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'sentiment_analysis'):  # Theme object
+                sentiment_analysis = theme.sentiment_analysis or {}
+            else:  # Dictionary
+                sentiment_analysis = theme.get("sentiment_analysis", {})
+            
             if sentiment_analysis:
                 found_sentiment_data = True
                 
@@ -503,7 +610,12 @@ class TestEnhancedThemeAnalysisTool:
         # Check cultural summary in themes
         found_cultural_data = False
         for theme in result["themes"]:
-            cultural_summary = theme.get("cultural_summary", {})
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'cultural_summary'):  # Theme object
+                cultural_summary = theme.cultural_summary or {}
+            else:  # Dictionary
+                cultural_summary = theme.get("cultural_summary", {})
+            
             if cultural_summary:
                 found_cultural_data = True
                 
@@ -650,25 +762,53 @@ class TestEnhancedThemeAnalysisTool:
         # Check that authentic insights are classified correctly
         found_insights = False
         for theme in result["themes"]:
-            authentic_insights = theme.get("authentic_insights", [])
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'authentic_insights'):  # Theme object
+                authentic_insights = theme.authentic_insights or []
+            else:  # Dictionary
+                authentic_insights = theme.get("authentic_insights", [])
+            
             if authentic_insights:
                 found_insights = True
                 for insight in authentic_insights:
-                    # Validate insight structure
-                    assert "insight_type" in insight
-                    assert "authenticity_score" in insight
-                    assert "uniqueness_score" in insight
-                    assert "actionability_score" in insight
-                    assert "temporal_relevance" in insight
-                    assert "location_exclusivity" in insight
+                    # Validate insight structure - Handle both objects and dictionaries
+                    if hasattr(insight, 'insight_type'):  # AuthenticInsight object
+                        assert hasattr(insight, 'insight_type')
+                        assert hasattr(insight, 'authenticity_score')
+                        assert hasattr(insight, 'uniqueness_score')
+                        assert hasattr(insight, 'actionability_score')
+                        assert hasattr(insight, 'temporal_relevance')
+                        assert hasattr(insight, 'location_exclusivity')
+                    else:  # Dictionary
+                        assert "insight_type" in insight
+                        assert "authenticity_score" in insight
+                        assert "uniqueness_score" in insight
+                        assert "actionability_score" in insight
+                        assert "temporal_relevance" in insight
+                        assert "location_exclusivity" in insight
                     
-                    # Validate insight values
-                    assert insight["insight_type"] in ["seasonal", "specialty", "insider", "cultural", "practical"]
-                    assert 0 <= insight["authenticity_score"] <= 1
-                    assert 0 <= insight["uniqueness_score"] <= 1
-                    assert 0 <= insight["actionability_score"] <= 1
-                    assert 0 <= insight["temporal_relevance"] <= 1
-                    assert insight["location_exclusivity"] in ["exclusive", "signature", "regional", "common"]
+                    # Validate insight values - Get values regardless of format
+                    if hasattr(insight, 'insight_type'):  # Object
+                        insight_type = insight.insight_type.value if hasattr(insight.insight_type, 'value') else insight.insight_type
+                        authenticity_score = insight.authenticity_score
+                        uniqueness_score = insight.uniqueness_score
+                        actionability_score = insight.actionability_score
+                        temporal_relevance = insight.temporal_relevance
+                        location_exclusivity = insight.location_exclusivity.value if hasattr(insight.location_exclusivity, 'value') else insight.location_exclusivity
+                    else:  # Dictionary
+                        insight_type = insight["insight_type"]
+                        authenticity_score = insight["authenticity_score"]
+                        uniqueness_score = insight["uniqueness_score"]
+                        actionability_score = insight["actionability_score"]
+                        temporal_relevance = insight["temporal_relevance"]
+                        location_exclusivity = insight["location_exclusivity"]
+                    
+                    assert insight_type in ["seasonal", "specialty", "insider", "cultural", "practical"]
+                    assert 0 <= authenticity_score <= 1
+                    assert 0 <= uniqueness_score <= 1
+                    assert 0 <= actionability_score <= 1
+                    assert 0 <= temporal_relevance <= 1
+                    assert location_exclusivity in ["exclusive", "signature", "regional", "common"]
         
         assert found_insights, "Should generate classified authentic insights"
 

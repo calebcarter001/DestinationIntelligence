@@ -17,6 +17,9 @@ class InsightClassifier:
 
     def classify_insight_type(self, content: str) -> InsightType:
         """Determine if seasonal, specialty, insider, cultural, or practical."""
+        if not content:
+            return InsightType.PRACTICAL
+        
         content_lower = content.lower()
 
         # Seasonal patterns
@@ -52,6 +55,9 @@ class InsightClassifier:
 
     def determine_location_exclusivity(self, content: str) -> LocationExclusivity:
         """Determine how exclusive content is to a location."""
+        if not content:
+            return LocationExclusivity.COMMON
+        
         content_lower = content.lower()
 
         # Exclusive patterns
@@ -87,6 +93,9 @@ class InsightClassifier:
 
     def extract_seasonal_window(self, content: str) -> Optional[SeasonalWindow]:
         """Extract timing information for seasonal insights."""
+        if not content:
+            return None
+        
         content_lower = content.lower()
         
         start_month = None
@@ -154,6 +163,9 @@ class InsightClassifier:
 
     def extract_actionable_details(self, content: str) -> Dict[str, str]:
         """Extract what/when/where/how details from content."""
+        if not content:
+            return {}
+        
         details = {}
         content_lower = content.lower()
 

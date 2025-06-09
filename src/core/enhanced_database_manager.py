@@ -6,13 +6,15 @@ from typing import Optional, List, Dict, Any
 import os
 import uuid
 
-from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority, PointOfInterest
+from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority, PointOfInterest, SpecialEvent
 from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
 from .consolidated_json_export_manager import ConsolidatedJsonExportManager
 from src.schemas import InsightType, LocationExclusivity, AuthorityType
 
+
+
 class EnhancedDatabaseManager:
-    """Enhanced database manager supporting comprehensive destination intelligence"""
+    """A rewritten, robust database manager with explicit connection management."""
     
     def __init__(self, db_path: str = "enhanced_destination_intelligence.db", 
                  enable_json_export: bool = True,
@@ -27,10 +29,10 @@ class EnhancedDatabaseManager:
             json_export_path: Path for JSON exports
             config: Application configuration dictionary for adaptive processing
         """
-        project_root = os.path.join(os.path.dirname(__file__), '..', '..')
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
         self.db_path = os.path.join(project_root, db_path)
-        self.conn = None
         self.logger = logging.getLogger(__name__)
+        self.conn = None
         
         # Store configuration for adaptive processing
         self.config = config or {}
@@ -56,76 +58,136 @@ class EnhancedDatabaseManager:
             # Original log message, now uses effective_export_path for clarity
             self.logger.info(f"Consolidated JSON export enabled with adaptive intelligence. Files will be saved to: {self.json_export_manager.consolidated_path}")
         
+        self.connect()
         self.init_database()
         
-    def init_database(self):
-        """Initialize enhanced database schema"""
+    def connect(self):
+        """Establish database connection"""
+        if not os.path.exists(os.path.dirname(self.db_path)):
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row  # Enable column access by name
+        
+        # Initialize database schema if needed
+        self.init_database()
+    
+    def get_connection(self):
+        """Get the database connection object"""
+        if not self.conn:
+            self.connect()
+        return self.conn
+
+    def close_db(self):
+        """Closes the database connection."""
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            self.logger.info("Database connection closed.")
+
+    def _execute_sql(self, cursor, sql: str, params: tuple = ()):
+        """Executes a SQL command on a given cursor."""
         try:
-            self.conn = sqlite3.connect(self.db_path)
-            cursor = self.conn.cursor()
-            
-            # Destinations table with enhanced fields
+            cursor.execute(sql, params)
+        except sqlite3.Error as e:
+            self.logger.error(f"Failed to execute SQL: {sql} with params {params}. Error: {e}", exc_info=True)
+            raise
+
+    def _add_column_if_not_exists(self, cursor, table_name: str, column_name: str, column_definition: str):
+        """Safely add a column to a table if it doesn't exist."""
+        try:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}")
+            self.logger.info(f"Added column {column_name} to table {table_name}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                self.logger.debug(f"Column {column_name} already exists in table {table_name}")
+            else:
+                self.logger.error(f"Error adding column {column_name} to table {table_name}: {e}")
+                raise
+
+    def init_database(self):
+        """Initializes the complete database schema with all required tables."""
+        if not self.conn: 
+            self.connect()
+        
+        cursor = self.conn.cursor()
+        
+        try:
+            # Create destinations table with all required columns
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS destinations (
                     id TEXT PRIMARY KEY,
-                    names TEXT NOT NULL,  -- JSON array
-                    admin_levels TEXT,    -- JSON object
-                    timezone TEXT,
-                    population INTEGER,
+                    name TEXT NOT NULL,
                     country_code TEXT,
-                    core_geo TEXT,        -- JSON object
-                    lineage TEXT,         -- JSON object
-                    meta TEXT,            -- JSON object
-                    last_updated TIMESTAMP,
-                    destination_revision INTEGER DEFAULT 1
+                    population INTEGER,
+                    area_km2 REAL,
+                    primary_language TEXT,
+                    hdi REAL,
+                    gdp_per_capita_usd REAL,
+                    vibe_descriptors TEXT,
+                    historical_summary TEXT,
+                    unesco_sites TEXT,
+                    annual_tourist_arrivals INTEGER,
+                    popularity_stage TEXT,
+                    visa_info_url TEXT,
+                    last_updated TEXT,
+                    admin_levels TEXT,
+                    core_geo TEXT,
+                    dominant_religions TEXT,
+                    timezone TEXT
                 )
             """)
-            
-            # Evidence table with full tracking
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS evidence (
-                    id TEXT PRIMARY KEY,
-                    destination_id TEXT,
-                    source_url TEXT NOT NULL,
-                    source_category TEXT,
-                    evidence_type TEXT,
-                    authority_weight REAL,
-                    text_snippet TEXT,
-                    timestamp TIMESTAMP,
-                    confidence REAL,
-                    sentiment REAL,
-                    cultural_context TEXT,  -- JSON
-                    relationships TEXT,     -- JSON array
-                    agent_id TEXT,
-                    published_date TIMESTAMP,
-                    factors TEXT,           -- JSON object for additional factors
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id)
-                )
-            """)
-            
-            # Themes table with enhanced metadata
+
+            # Create themes table with all required columns
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS themes (
                     theme_id TEXT PRIMARY KEY,
-                    destination_id TEXT,
-                    macro_category TEXT,
-                    micro_category TEXT,
+                    destination_id TEXT NOT NULL,
                     name TEXT NOT NULL,
                     description TEXT,
-                    fit_score REAL,
-                    tags TEXT,  -- JSON array
-                    sentiment_analysis TEXT,  -- JSON object
-                    temporal_analysis TEXT,   -- JSON object
+                    macro_category TEXT,
+                    micro_category TEXT,
+                    fit_score REAL DEFAULT 0.0,
+                    tags TEXT,
+                    sentiment_analysis TEXT,
+                    temporal_analysis TEXT,
                     confidence_level TEXT,
-                    confidence_breakdown TEXT,  -- JSON object
-                    authentic_insights TEXT,    -- JSON array
-                    local_authorities TEXT,     -- JSON array
-                    source_evidence_ids TEXT,   -- JSON array
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id)
+                    confidence_breakdown TEXT,
+                    authentic_insights TEXT,
+                    local_authorities TEXT,
+                    source_evidence_ids TEXT,
+                    traveler_relevance_factor REAL DEFAULT 0.5,
+                    adjusted_overall_confidence REAL DEFAULT 0.0,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id)
                 )
             """)
-            
-            # Theme-Evidence relationship table
+
+            # Create evidence table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS evidence (
+                    id TEXT PRIMARY KEY,
+                    destination_id TEXT NOT NULL,
+                    content TEXT,
+                    source_url TEXT,
+                    source_type TEXT,
+                    publication_date TEXT,
+                    scrape_timestamp TEXT,
+                    relevance_score REAL DEFAULT 0.0,
+                    confidence REAL DEFAULT 0.0,
+                    author TEXT,
+                    title TEXT,
+                    language TEXT,
+                    word_count INTEGER DEFAULT 0,
+                    sentiment REAL DEFAULT 0.0,
+                    cultural_context TEXT,
+                    relationships TEXT,
+                    agent_id TEXT,
+                    published_date TEXT,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id)
+                )
+            """)
+
+            # Create theme_evidence junction table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS theme_evidence (
                     theme_id TEXT,
@@ -135,187 +197,139 @@ class EnhancedDatabaseManager:
                     FOREIGN KEY (evidence_id) REFERENCES evidence(id)
                 )
             """)
-            
-            # Dimensions table for quantified aspects
+
+            # Create dimensions table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS dimensions (
-                    destination_id TEXT,
-                    dimension_name TEXT,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    destination_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
                     value REAL,
-                    unit TEXT,
-                    sample_period TEXT,
-                    confidence REAL,
-                    source_evidence_ids TEXT,  -- JSON array
-                    last_updated TIMESTAMP,
-                    PRIMARY KEY (destination_id, dimension_name),
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id)
+                    confidence REAL DEFAULT 0.0,
+                    source TEXT,
+                    last_updated TEXT,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id)
                 )
             """)
-            
-            # Temporal slices for time-based insights
+
+            # Create temporal_slices table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS temporal_slices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    destination_id TEXT,
-                    valid_from TIMESTAMP,
-                    valid_to TIMESTAMP,
-                    season TEXT,
-                    seasonal_highlights TEXT,  -- JSON array
-                    special_events TEXT,       -- JSON array
-                    weather_patterns TEXT,     -- JSON object
-                    visitor_patterns TEXT,     -- JSON object
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id)
+                    destination_id TEXT NOT NULL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    slice_type TEXT,
+                    average_price_level REAL,
+                    weather_data TEXT,
+                    crowd_level TEXT,
+                    special_events TEXT,
+                    local_insights TEXT,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id)
                 )
             """)
-            
-            # POIs table for points of interest
+
+            # Create pois table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pois (
                     poi_id TEXT PRIMARY KEY,
-                    destination_id TEXT,
+                    destination_id TEXT NOT NULL,
                     name TEXT NOT NULL,
-                    description TEXT,
-                    location TEXT,  -- JSON object with lat/lng
-                    address TEXT,
                     poi_type TEXT,
-                    theme_tags TEXT,  -- JSON array
-                    ada_accessible BOOLEAN,
-                    ada_features TEXT,  -- JSON array
-                    media_urls TEXT,   -- JSON array
-                    operating_hours TEXT,  -- JSON object
-                    price_range TEXT,
+                    coordinates TEXT,
+                    description TEXT,
                     rating REAL,
-                    review_count INTEGER,
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id)
+                    price_level INTEGER,
+                    operating_hours TEXT,
+                    contact_info TEXT,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id)
                 )
             """)
-            
-            # Authentic insights table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS authentic_insights (
-                    id TEXT PRIMARY KEY,
-                    destination_id TEXT,
-                    insight_type TEXT,
-                    authenticity_score REAL,
-                    uniqueness_score REAL,
-                    actionability_score REAL,
-                    temporal_relevance REAL,
-                    location_exclusivity TEXT,
-                    seasonal_window_id INTEGER,
-                    local_validation_count INTEGER,
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id),
-                    FOREIGN KEY (seasonal_window_id) REFERENCES seasonal_windows(id)
-                )
-            """)
-            
-            # Seasonal windows table
+
+            # Create seasonal_windows table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS seasonal_windows (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     start_month INTEGER,
                     end_month INTEGER,
-                    peak_weeks TEXT,  -- JSON array
+                    peak_weeks TEXT,
                     booking_lead_time INTEGER,
-                    specific_dates TEXT  -- JSON array
+                    specific_dates TEXT
                 )
             """)
-            
-            # Local authorities table
+
+            # Create authentic_insights table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS authentic_insights (
+                    id TEXT PRIMARY KEY,
+                    destination_id TEXT NOT NULL,
+                    insight_type TEXT,
+                    authenticity_score REAL DEFAULT 0.0,
+                    uniqueness_score REAL DEFAULT 0.0,
+                    actionability_score REAL DEFAULT 0.0,
+                    temporal_relevance REAL DEFAULT 0.0,
+                    location_exclusivity TEXT,
+                    seasonal_window_id INTEGER,
+                    local_validation_count INTEGER DEFAULT 0,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id),
+                    FOREIGN KEY(seasonal_window_id) REFERENCES seasonal_windows(id)
+                )
+            """)
+
+            # Create local_authorities table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS local_authorities (
                     id TEXT PRIMARY KEY,
-                    destination_id TEXT,
+                    destination_id TEXT NOT NULL,
                     authority_type TEXT,
-                    local_tenure INTEGER,
+                    local_tenure INTEGER DEFAULT 0,
                     expertise_domain TEXT,
-                    community_validation INTEGER,
-                    FOREIGN KEY (destination_id) REFERENCES destinations(id)
+                    community_validation REAL DEFAULT 0.0,
+                    FOREIGN KEY(destination_id) REFERENCES destinations(id)
                 )
             """)
+
+            # Add missing columns to existing tables if they don't exist
+            self._add_column_if_not_exists(cursor, "destinations", "dominant_religions", "TEXT")
+            self._add_column_if_not_exists(cursor, "destinations", "timezone", "TEXT")
+            self._add_column_if_not_exists(cursor, "themes", "traveler_relevance_factor", "REAL DEFAULT 0.5")
+            self._add_column_if_not_exists(cursor, "themes", "adjusted_overall_confidence", "REAL DEFAULT 0.0")
+            
+            # Add missing columns to evidence table
+            self._add_column_if_not_exists(cursor, "evidence", "sentiment", "REAL DEFAULT 0.0")
+            self._add_column_if_not_exists(cursor, "evidence", "cultural_context", "TEXT")
+            self._add_column_if_not_exists(cursor, "evidence", "relationships", "TEXT")
+            self._add_column_if_not_exists(cursor, "evidence", "agent_id", "TEXT")
+            self._add_column_if_not_exists(cursor, "evidence", "published_date", "TEXT")
+
+            self.conn.commit()
             
             # Create performance indices
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_destination ON evidence(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_confidence ON evidence(confidence)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_source_category ON evidence(source_category)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_timestamp ON evidence(timestamp)")
+            self._create_performance_indices(cursor)
             
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_themes_destination ON themes(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_themes_category ON themes(macro_category)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_themes_confidence ON themes(confidence_level)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_themes_fit_score ON themes(fit_score)")
-            
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_destination ON temporal_slices(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_dates ON temporal_slices(valid_from, valid_to)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_season ON temporal_slices(season)")
-            
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pois_destination ON pois(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pois_type ON pois(poi_type)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pois_rating ON pois(rating)")
-            
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dimensions_destination ON dimensions(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dimensions_name ON dimensions(dimension_name)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dimensions_confidence ON dimensions(confidence)")
-            
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_authentic_destination ON authentic_insights(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_authentic_type ON authentic_insights(insight_type)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_authentic_scores ON authentic_insights(authenticity_score, uniqueness_score)")
-            
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_authorities_destination ON local_authorities(destination_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_authorities_type ON local_authorities(authority_type)")
-            
-            # Additional normalized relationship tables for optimal queries
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS theme_insight_relationships (
-                    theme_id TEXT,
-                    insight_id TEXT,
-                    relationship_strength REAL DEFAULT 1.0,
-                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (theme_id, insight_id),
-                    FOREIGN KEY (theme_id) REFERENCES themes(theme_id),
-                    FOREIGN KEY (insight_id) REFERENCES authentic_insights(id)
-                )
-            """)
-            
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS insight_authority_relationships (
-                    insight_id TEXT,
-                    authority_id TEXT,
-                    validation_strength REAL DEFAULT 1.0,
-                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (insight_id, authority_id),
-                    FOREIGN KEY (insight_id) REFERENCES authentic_insights(id),
-                    FOREIGN KEY (authority_id) REFERENCES local_authorities(id)
-                )
-            """)
-            
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS temporal_theme_relationships (
-                    temporal_slice_id INTEGER,
-                    theme_id TEXT,
-                    relevance_score REAL DEFAULT 1.0,
-                    created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (temporal_slice_id, theme_id),
-                    FOREIGN KEY (temporal_slice_id) REFERENCES temporal_slices(id),
-                    FOREIGN KEY (theme_id) REFERENCES themes(theme_id)
-                )
-            """)
-            
-            # Indices for relationship tables
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_evidence_theme ON theme_evidence(theme_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_evidence_evidence ON theme_evidence(evidence_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_insight_theme ON theme_insight_relationships(theme_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_theme_insight_insight ON theme_insight_relationships(insight_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_insight_authority_insight ON insight_authority_relationships(insight_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_insight_authority_authority ON insight_authority_relationships(authority_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_theme_temporal ON temporal_theme_relationships(temporal_slice_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_temporal_theme_theme ON temporal_theme_relationships(theme_id)")
-            
-            self.conn.commit()
-            self.logger.info("Enhanced database schema initialized with performance indices and normalized relationships")
+            self.logger.info("Complete database schema initialized successfully.")
             
         except sqlite3.Error as e:
-            self.logger.error(f"Failed to initialize database: {e}")
+            self.logger.error(f"Error initializing database schema: {e}", exc_info=True)
             raise
+
+    def _create_performance_indices(self, cursor):
+        """Create performance indices for better query performance"""
+        indices = [
+            "CREATE INDEX IF NOT EXISTS idx_evidence_destination ON evidence(destination_id)",
+            "CREATE INDEX IF NOT EXISTS idx_themes_destination ON themes(destination_id)",
+            "CREATE INDEX IF NOT EXISTS idx_theme_evidence_theme ON theme_evidence(theme_id)",
+            "CREATE INDEX IF NOT EXISTS idx_authentic_insights_theme ON authentic_insights(destination_id)"
+        ]
+        
+        for index_sql in indices:
+            try:
+                cursor.execute(index_sql)
+                self.logger.debug(f"Created index: {index_sql}")
+            except sqlite3.Error as e:
+                self.logger.warning(f"Failed to create index {index_sql}: {e}")
+        
+        self.conn.commit()
 
     def store_destination(self, destination: Destination, 
                          analysis_metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -348,31 +362,30 @@ class EnhancedDatabaseManager:
             self.logger.warning(f"Validation warnings for destination {destination.id}: {validation_errors}")
             
         try:
-            # Begin transaction for atomic operations
+            # Use a single transaction
             cursor = self.conn.cursor()
             cursor.execute("BEGIN TRANSACTION")
             
             # Store main destination with validation
             try:
-                cursor.execute("""
+                self.logger.debug(f"Executing INSERT or REPLACE for destination ID: {destination.id}")
+                dest_sql = """
                     INSERT OR REPLACE INTO destinations 
-                    (id, names, admin_levels, timezone, population, country_code, 
-                     core_geo, lineage, meta, last_updated, destination_revision)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    str(destination.id),
-                    json.dumps(destination.names),
-                    json.dumps(destination.admin_levels),
-                    str(destination.timezone),
-                    destination.population,
-                    str(destination.country_code),
-                    json.dumps(destination.core_geo),
-                    json.dumps(destination.lineage),
-                    json.dumps(destination.meta),
-                    destination.last_updated.isoformat(),
-                    destination.destination_revision
-                ))
-                self.logger.info(f"Stored destination record: {destination.id}")
+                    (id, name, country_code, population, area_km2, primary_language, hdi, gdp_per_capita_usd,
+                     vibe_descriptors, historical_summary, unesco_sites, annual_tourist_arrivals, popularity_stage, visa_info_url,
+                     last_updated, admin_levels, core_geo, dominant_religions, timezone)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """
+                dest_params = (
+                    destination.id, destination.names[0], destination.country_code, destination.population,
+                    destination.area_km2, destination.primary_language, destination.hdi, destination.gdp_per_capita_usd,
+                    json.dumps(destination.vibe_descriptors), destination.historical_summary, json.dumps(destination.unesco_sites),
+                    destination.annual_tourist_arrivals, destination.popularity_stage, destination.visa_info_url,
+                    destination.last_updated.isoformat(), json.dumps(destination.admin_levels), json.dumps(destination.core_geo),
+                    json.dumps(getattr(destination, 'dominant_religions', [])), destination.timezone
+                )
+                self._execute_sql(cursor, dest_sql, dest_params)
+                self.logger.debug(f"Successfully stored core destination data for {destination.id}")
             except sqlite3.Error as e:
                 results["errors"].append(f"Failed to store destination record: {e}")
                 cursor.execute("ROLLBACK")
@@ -384,22 +397,26 @@ class EnhancedDatabaseManager:
             insights_stored = 0
             authorities_stored = 0
             
+            cursor.execute("DELETE FROM themes WHERE destination_id = ?", (destination.id,))
+            
             for theme in destination.themes:
                 try:
                     self._store_theme(cursor, destination.id, theme)
                     themes_stored += 1
                     
                     # Store AuthenticInsights associated with the theme
-                    for insight in theme.authentic_insights:
+                    for insight in getattr(theme, 'authentic_insights', []):
                         try:
-                            seasonal_window_id = self._store_seasonal_window(cursor, insight.seasonal_window)
+                            # Safe access to seasonal_window for both dict and object formats
+                            seasonal_window = getattr(insight, 'seasonal_window', None) if hasattr(insight, 'seasonal_window') else insight.get('seasonal_window', None) if isinstance(insight, dict) else None
+                            seasonal_window_id = self._store_seasonal_window(cursor, seasonal_window)
                             self._store_authentic_insight(cursor, destination.id, insight, seasonal_window_id)
                             insights_stored += 1
                         except sqlite3.Error as e:
                             results["warnings"].append(f"Failed to store insight for theme {theme.theme_id}: {e}")
 
                     # Store LocalAuthorities associated with the theme
-                    for authority in theme.local_authorities:
+                    for authority in getattr(theme, 'local_authorities', []):
                         try:
                             self._store_local_authority(cursor, destination.id, authority)
                             authorities_stored += 1
@@ -411,18 +428,22 @@ class EnhancedDatabaseManager:
                     
                 except sqlite3.Error as e:
                     results["warnings"].append(f"Failed to store theme {theme.theme_id}: {e}")
+                except Exception as e:
+                    results["warnings"].append(f"Unexpected error storing theme {theme.theme_id}: {e}")
                     
             # Store destination-level authentic insights
-            for insight in destination.authentic_insights:
+            for insight in getattr(destination, 'authentic_insights', []):
                 try:
-                    seasonal_window_id = self._store_seasonal_window(cursor, insight.seasonal_window)
+                    # Safe access to seasonal_window for both dict and object formats
+                    seasonal_window = getattr(insight, 'seasonal_window', None) if hasattr(insight, 'seasonal_window') else insight.get('seasonal_window', None) if isinstance(insight, dict) else None
+                    seasonal_window_id = self._store_seasonal_window(cursor, seasonal_window)
                     self._store_authentic_insight(cursor, destination.id, insight, seasonal_window_id)
                     insights_stored += 1
                 except sqlite3.Error as e:
                     results["warnings"].append(f"Failed to store destination-level insight: {e}")
 
             # Store destination-level local authorities
-            for authority in destination.local_authorities:
+            for authority in getattr(destination, 'local_authorities', []):
                 try:
                     self._store_local_authority(cursor, destination.id, authority)
                     authorities_stored += 1
@@ -481,18 +502,21 @@ class EnhancedDatabaseManager:
             if self.enable_json_export and self.json_export_manager:
                 try:
                     # Use consolidated export with evidence registry
-                    evidence_registry = analysis_metadata.get("evidence_registry", {})
+                    evidence_registry = analysis_metadata.get("evidence_registry", {}) if analysis_metadata else {}
                     json_file_path = self.json_export_manager.export_destination_insights(
                         destination, 
-                        analysis_metadata,
+                        analysis_metadata or {},
                         evidence_registry
                     )
                     results["json_files_created"] = {"comprehensive": json_file_path}
+                    results["json_exported"] = True
+                    results["json_export_path"] = json_file_path
                     self.logger.info(f"Exported consolidated JSON file: {os.path.basename(json_file_path)}")
                 except Exception as json_error:
                     error_msg = f"JSON export error: {str(json_error)}"
                     self.logger.error(error_msg)
                     results["errors"].append(error_msg)
+                    results["json_exported"] = False
             
         except sqlite3.Error as e:
             error_msg = f"Database error storing destination {destination.id}: {e}"
@@ -530,21 +554,33 @@ class EnhancedDatabaseManager:
             
         # Validate themes
         for theme in destination.themes:
-            if not theme.theme_id:
-                errors.append(f"Theme missing ID: {theme.name}")
-            if not theme.name:
-                errors.append(f"Theme missing name for ID: {theme.theme_id}")
-            if theme.fit_score < 0 or theme.fit_score > 1:
-                errors.append(f"Theme {theme.name} has invalid fit_score: {theme.fit_score}")
-                
-            # Validate evidence
-            for evidence in theme.evidence:
+            # Handle both Theme objects and dictionaries
+            if hasattr(theme, 'theme_id'):  # Theme object
+                theme_id = theme.theme_id
+                theme_name = theme.name
+                theme_fit_score = theme.fit_score
+                evidence_list = theme.evidence
+            else:  # Dictionary
+                theme_id = theme.get('theme_id', '')
+                theme_name = theme.get('name', '')
+                theme_fit_score = theme.get('fit_score', 0.0)
+                evidence_list = theme.get('evidence', [])
+            
+            if not theme_id:
+                errors.append(f"Theme missing ID: {theme_name}")
+            if not theme_name:
+                errors.append(f"Theme {theme_id} missing name")
+            
+            if theme_fit_score < 0 or theme_fit_score > 1:
+                errors.append(f"Theme {theme_name} has invalid fit_score: {theme_fit_score}")
+            
+            for evidence in evidence_list:
                 if not evidence.id:
-                    errors.append(f"Evidence missing ID in theme {theme.name}")
+                    errors.append(f"Evidence missing ID in theme {theme_name}")
                 if not evidence.source_url:
-                    errors.append(f"Evidence missing source_url in theme {theme.name}")
+                    errors.append(f"Evidence missing source_url in theme {theme_name}")
                 if evidence.confidence < 0 or evidence.confidence > 1:
-                    errors.append(f"Evidence has invalid confidence in theme {theme.name}: {evidence.confidence}")
+                    errors.append(f"Evidence has invalid confidence in theme {theme_name}: {evidence.confidence}")
                     
         # Validate dimensions
         for dim_name, dim_value in destination.dimensions.items():
@@ -556,67 +592,151 @@ class EnhancedDatabaseManager:
     def _store_theme(self, cursor, destination_id: str, theme: Theme):
         """Store or update a theme"""
         
-        level_obj = theme.get_confidence_level()
+        # Handle both Theme objects and dictionaries
+        theme_id = getattr(theme, 'theme_id', None) or theme.get('theme_id', '') if isinstance(theme, dict) else None
+        theme_name = getattr(theme, 'name', None) or theme.get('name', '') if isinstance(theme, dict) else None
+        
+        level_obj = theme.get_confidence_level() if hasattr(theme, 'get_confidence_level') else theme.get('confidence_level', 'unknown')
         confidence_level_value_to_store = None
 
-        if isinstance(level_obj, ConfidenceLevel): # Check against the imported enum
+        if isinstance(level_obj, ConfidenceLevel):
             confidence_level_value_to_store = level_obj.value
         elif isinstance(level_obj, str):
-            self.logger.warning(f"Theme {theme.theme_id if hasattr(theme, 'theme_id') else 'Unknown_ID'}: get_confidence_level() returned a string: '{level_obj}'. Using it directly for DB.")
+            self.logger.warning(f"Theme {theme_id}: get_confidence_level() returned a string: '{level_obj}'. Using it directly for DB.")
             confidence_level_value_to_store = level_obj
         else:
-            self.logger.error(f"Theme {theme.theme_id if hasattr(theme, 'theme_id') else 'Unknown_ID'}: get_confidence_level() returned unexpected type: {type(level_obj)} with value '{level_obj}'. Defaulting confidence to 'unknown'.")
+            self.logger.error(f"Theme {theme_id}: get_confidence_level() returned unexpected type: {type(level_obj)} with value '{level_obj}'. Defaulting confidence to 'unknown'.")
             confidence_level_value_to_store = "unknown"
 
+        # Ensure new fields have default FLOAT values if not present or None on the theme object.
+        raw_relevance_factor = getattr(theme, 'traveler_relevance_factor', None) or theme.get('traveler_relevance_factor', None) if isinstance(theme, dict) else getattr(theme, 'traveler_relevance_factor', None)
+        traveler_relevance_factor = raw_relevance_factor if isinstance(raw_relevance_factor, float) else 0.5 # Default to neutral float
+
+        raw_adjusted_confidence = getattr(theme, 'adjusted_overall_confidence', None) or theme.get('adjusted_overall_confidence', None) if isinstance(theme, dict) else getattr(theme, 'adjusted_overall_confidence', None)
+        adjusted_overall_confidence = raw_adjusted_confidence # Keep it as is, could be None initially
+
+        # If adjusted_overall_confidence was not directly on the theme object OR was None,
+        # try to calculate it now using the (now guaranteed float) traveler_relevance_factor.
+        if adjusted_overall_confidence is None: 
+            confidence_breakdown = getattr(theme, 'confidence_breakdown', None) or theme.get('confidence_breakdown', None) if isinstance(theme, dict) else getattr(theme, 'confidence_breakdown', None)
+            if confidence_breakdown:
+                # Handle both ConfidenceBreakdown objects and dictionaries
+                if hasattr(confidence_breakdown, 'overall_confidence'):
+                    # ConfidenceBreakdown object
+                    original_confidence = confidence_breakdown.overall_confidence
+                elif isinstance(confidence_breakdown, dict) and 'overall_confidence' in confidence_breakdown:
+                    # Dictionary format
+                    original_confidence = confidence_breakdown['overall_confidence']
+                else:
+                    original_confidence = None
+                
+                if original_confidence is not None and isinstance(original_confidence, (int, float)):
+                    adjusted_overall_confidence = float(original_confidence) * traveler_relevance_factor
+                else:
+                    self.logger.warning(f"Theme {theme_id}: original_confidence in breakdown is not a valid number ('{type(original_confidence)}'). Setting adjusted_confidence to 0.")
+                    adjusted_overall_confidence = 0.0
+            else:
+                # No breakdown or no original confidence in breakdown, cannot calculate adjusted from it.
+                # If traveler_relevance_factor itself was also defaulted (e.g. to 0.5), this would be 0.
+                # It implies this theme might be problematic or missing crucial data upstream.
+                self.logger.warning(f"Theme {theme_id}: Missing confidence_breakdown or overall_confidence in it. Setting adjusted_confidence to 0.")
+                adjusted_overall_confidence = 0.0 
+
+        # Final check to ensure adjusted_overall_confidence is a float for DB storage
+        if not isinstance(adjusted_overall_confidence, float):
+            self.logger.error(f"Theme {theme_id}: adjusted_overall_confidence ended up as non-float ('{type(adjusted_overall_confidence)}'). Defaulting to 0.0 for DB.")
+            adjusted_overall_confidence = 0.0
+
+        
+        values = (
+            theme_id,
+            destination_id,
+            getattr(theme, 'name', None) or theme.get('name', '') if isinstance(theme, dict) else theme.name,
+            getattr(theme, 'description', None) or theme.get('description', '') if isinstance(theme, dict) else theme.description,
+            getattr(theme, 'macro_category', None) or theme.get('macro_category', '') if isinstance(theme, dict) else theme.macro_category,
+            getattr(theme, 'micro_category', None) or theme.get('micro_category', '') if isinstance(theme, dict) else theme.micro_category,
+            getattr(theme, 'fit_score', 0.0) or theme.get('fit_score', 0.0) if isinstance(theme, dict) else theme.fit_score,
+            json.dumps(getattr(theme, 'tags', [])),
+            json.dumps(getattr(theme, 'sentiment_analysis', None)) if getattr(theme, 'sentiment_analysis', None) else None,
+            json.dumps(getattr(theme, 'temporal_analysis', None)) if getattr(theme, 'temporal_analysis', None) else None,
+            confidence_level_value_to_store,
+            # Proper type checking for confidence_breakdown
+            json.dumps(
+                confidence_breakdown if isinstance(confidence_breakdown, dict)
+                else confidence_breakdown.to_dict() if hasattr(confidence_breakdown, 'to_dict') and callable(getattr(confidence_breakdown, 'to_dict'))
+                else {"error": "unexpected_confidence_breakdown_type", "type": str(type(confidence_breakdown))}
+            ) if confidence_breakdown else None,
+            # Proper type checking for authentic_insights
+            json.dumps([
+                ai if isinstance(ai, dict)
+                else ai.to_dict() if hasattr(ai, 'to_dict') and callable(getattr(ai, 'to_dict'))
+                else {"error": "unexpected_insight_type", "type": str(type(ai))}
+                for ai in getattr(theme, 'authentic_insights', [])
+            ]),
+            # Proper type checking for local_authorities
+            json.dumps([
+                la if isinstance(la, dict)
+                else la.to_dict() if hasattr(la, 'to_dict') and callable(getattr(la, 'to_dict'))
+                else {"error": "unexpected_authority_type", "type": str(type(la))}
+                for la in getattr(theme, 'local_authorities', [])
+            ]),
+            json.dumps([evidence.id if hasattr(evidence, 'id') else evidence.get('id', '') for evidence in getattr(theme, 'evidence', [])]),
+            traveler_relevance_factor,
+            adjusted_overall_confidence
+        )
+        
+        # DEBUG: Keep value count for debugging
+        if len(values) != 17:
+            print(f"ERROR: Expected 17 values, got {len(values)}: {values}")
+        
         cursor.execute("""
             INSERT OR REPLACE INTO themes 
-            (theme_id, destination_id, macro_category, micro_category, name, description,
+            (theme_id, destination_id, name, description, macro_category, micro_category,
              fit_score, tags, sentiment_analysis, temporal_analysis, confidence_level,
-             confidence_breakdown, authentic_insights, local_authorities, source_evidence_ids)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            theme.theme_id,
-            destination_id,
-            theme.macro_category,
-            theme.micro_category,
-            theme.name,
-            theme.description,
-            theme.fit_score,
-            json.dumps(theme.tags),
-            json.dumps(theme.sentiment_analysis) if theme.sentiment_analysis else None,
-            json.dumps(theme.temporal_analysis) if theme.temporal_analysis else None,
-            confidence_level_value_to_store, # Use the processed value
-            json.dumps(theme.confidence_breakdown.to_dict()) if theme.confidence_breakdown else None,
-            json.dumps([ai.to_dict() for ai in theme.authentic_insights]),
-            json.dumps([la.to_dict() for la in theme.local_authorities]),
-            json.dumps([evidence.id for evidence in theme.evidence])  # Store evidence IDs
-        ))
+             confidence_breakdown, authentic_insights, local_authorities, source_evidence_ids,
+             traveler_relevance_factor, adjusted_overall_confidence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, values)
         
         # Store evidence
-        for evidence in theme.evidence:
-            self._store_evidence(cursor, destination_id, evidence)
-            
-            # Link theme to evidence if table exists
+        evidence_stored_count = 0
+        theme_id = getattr(theme, 'theme_id', None) or theme.get('theme_id', '') if isinstance(theme, dict) else theme.theme_id
+        
+        for evidence in getattr(theme, 'evidence', []):
             try:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO theme_evidence (theme_id, evidence_id)
-                    VALUES (?, ?)
-                """, (theme.theme_id, evidence.id))
-            except sqlite3.OperationalError:
-                # theme_evidence table might not exist, create it
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS theme_evidence (
-                        theme_id TEXT,
-                        evidence_id TEXT,
-                        PRIMARY KEY (theme_id, evidence_id),
-                        FOREIGN KEY (theme_id) REFERENCES themes(theme_id),
-                        FOREIGN KEY (evidence_id) REFERENCES evidence(id)
-                    )
-                """)
-                cursor.execute("""
-                    INSERT OR IGNORE INTO theme_evidence (theme_id, evidence_id)
-                    VALUES (?, ?)
-                """, (theme.theme_id, evidence.id))
+                self._store_evidence(cursor, destination_id, evidence)
+                evidence_stored_count += 1
+                
+                # Get evidence ID - handle both objects and dictionaries
+                evidence_id = getattr(evidence, 'id', None) or evidence.get('id', '') if isinstance(evidence, dict) else evidence.id
+                
+                # Link theme to evidence if table exists
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO theme_evidence (theme_id, evidence_id)
+                        VALUES (?, ?)
+                    """, (theme_id, evidence_id))
+                except sqlite3.OperationalError:
+                    # theme_evidence table might not exist, create it
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS theme_evidence (
+                            theme_id TEXT,
+                            evidence_id TEXT,
+                            PRIMARY KEY (theme_id, evidence_id),
+                            FOREIGN KEY (theme_id) REFERENCES themes(theme_id),
+                            FOREIGN KEY (evidence_id) REFERENCES evidence(id)
+                        )
+                    """)
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO theme_evidence (theme_id, evidence_id)
+                        VALUES (?, ?)
+                    """, (theme_id, evidence_id))
+            except Exception as e:
+                evidence_id_for_log = getattr(evidence, 'id', None) or evidence.get('id', 'unknown') if isinstance(evidence, dict) else 'unknown'
+                self.logger.warning(f"Failed to store evidence {evidence_id_for_log}: {e}")
+        
+        if evidence_stored_count == 0:
+            self.logger.warning(f"No evidence stored for theme {theme_id}")
 
     def _store_authentic_insight(self, cursor, destination_id: str, insight: AuthenticInsight, seasonal_window_id: Optional[int]):
         """Store an authentic insight"""
@@ -629,14 +749,15 @@ class EnhancedDatabaseManager:
         """, (
             str(uuid.uuid4()), # Generate a new UUID for the insight ID
             destination_id,
-            insight.insight_type.value,
-            insight.authenticity_score,
-            insight.uniqueness_score,
-            insight.actionability_score,
-            insight.temporal_relevance,
-            insight.location_exclusivity.value,
+            # Safe attribute access for both dict and object formats
+            getattr(insight, 'insight_type', {}).get('value', getattr(insight, 'insight_type', 'unknown')) if isinstance(insight, dict) else (insight.insight_type.value if hasattr(insight.insight_type, 'value') else str(insight.insight_type)),
+            getattr(insight, 'authenticity_score', 0.0),
+            getattr(insight, 'uniqueness_score', 0.0),
+            getattr(insight, 'actionability_score', 0.0),
+            getattr(insight, 'temporal_relevance', 0.0),
+            getattr(insight, 'location_exclusivity', {}).get('value', getattr(insight, 'location_exclusivity', 'unknown')) if isinstance(insight, dict) else (insight.location_exclusivity.value if hasattr(insight.location_exclusivity, 'value') else str(insight.location_exclusivity)),
             seasonal_window_id,
-            insight.local_validation_count
+            getattr(insight, 'local_validation_count', 0)
         ))
 
     def _store_seasonal_window(self, cursor, seasonal_window: Optional[SeasonalWindow]) -> Optional[int]:
@@ -649,11 +770,11 @@ class EnhancedDatabaseManager:
             (start_month, end_month, peak_weeks, booking_lead_time, specific_dates)
             VALUES (?, ?, ?, ?, ?)
         """, (
-            seasonal_window.start_month,
-            seasonal_window.end_month,
-            json.dumps(seasonal_window.peak_weeks),
-            seasonal_window.booking_lead_time,
-            json.dumps(seasonal_window.specific_dates)
+            getattr(seasonal_window, 'start_month', None),
+            getattr(seasonal_window, 'end_month', None),
+            json.dumps(getattr(seasonal_window, 'peak_weeks', [])),
+            getattr(seasonal_window, 'booking_lead_time', None),
+            json.dumps(getattr(seasonal_window, 'specific_dates', []))
         ))
         return cursor.lastrowid
 
@@ -666,98 +787,102 @@ class EnhancedDatabaseManager:
         """, (
             str(uuid.uuid4()), # Generate a new UUID for the local authority ID
             destination_id,
-            authority.authority_type.value,
-            authority.local_tenure,
-            authority.expertise_domain,
-            authority.community_validation
+            getattr(authority, 'authority_type', {}).get('value', getattr(authority, 'authority_type', 'unknown')) if isinstance(authority, dict) else (authority.authority_type.value if hasattr(authority.authority_type, 'value') else str(authority.authority_type)),
+            getattr(authority, 'local_tenure', None),
+            getattr(authority, 'expertise_domain', ''),
+            getattr(authority, 'community_validation', 0.0)
         ))
 
     def _store_evidence(self, cursor, destination_id: str, evidence: Evidence):
         """Store or update evidence"""
         cursor.execute("""
             INSERT OR REPLACE INTO evidence 
-            (id, destination_id, source_url, source_category, evidence_type,
-             authority_weight, text_snippet, timestamp, confidence, sentiment,
-             cultural_context, relationships, agent_id, published_date, factors)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, destination_id, content, source_url, source_type, publication_date,
+             scrape_timestamp, relevance_score, confidence, author, title, language, word_count,
+             sentiment, cultural_context, relationships, agent_id, published_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             evidence.id,
             destination_id,
+            evidence.text_snippet,  # Map text_snippet to content
             evidence.source_url,
-            evidence.source_category.value,
-            evidence.evidence_type.value,
-            evidence.authority_weight,
-            evidence.text_snippet,
-            evidence.timestamp.isoformat(),
+            getattr(evidence.source_category, 'value', str(evidence.source_category)) if hasattr(evidence, 'source_category') else None,
+            getattr(evidence, 'published_date', None).isoformat() if getattr(evidence, 'published_date', None) else None,  # publication_date
+            evidence.timestamp.isoformat() if evidence.timestamp else None,
+            getattr(evidence, 'relevance_score', 0.0),
             evidence.confidence,
-            evidence.sentiment,
-            json.dumps(evidence.cultural_context) if evidence.cultural_context else None,
-            json.dumps(evidence.relationships),
-            evidence.agent_id,
-            evidence.published_date.isoformat() if evidence.published_date else None,
-            json.dumps(evidence.factors) if evidence.factors else None
+            getattr(evidence, 'author', None),
+            getattr(evidence, 'title', None),
+            getattr(evidence, 'language', 'en'),
+            len(evidence.text_snippet.split()) if evidence.text_snippet else 0,
+            getattr(evidence, 'sentiment', 0.0),
+            json.dumps(getattr(evidence, 'cultural_context', {})) if getattr(evidence, 'cultural_context', None) else None,
+            json.dumps(getattr(evidence, 'relationships', [])) if getattr(evidence, 'relationships', None) else None,
+            getattr(evidence, 'agent_id', None),
+            getattr(evidence, 'published_date', None).isoformat() if getattr(evidence, 'published_date', None) else None  # published_date (duplicate)
         ))
 
     def _store_dimension(self, cursor, destination_id: str, name: str, value: DimensionValue):
         """Store a dimension value"""
         cursor.execute("""
             INSERT OR REPLACE INTO dimensions
-            (destination_id, dimension_name, value, unit, sample_period,
-             confidence, source_evidence_ids, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (destination_id, name, value, confidence, source, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             destination_id,
             name,
             value.value,
-            value.unit,
-            value.sample_period,
             value.confidence,
-            json.dumps(value.source_evidence_ids),
-            value.last_updated.isoformat()
+            getattr(value, 'source', None),
+            value.last_updated.isoformat() if value.last_updated else None
         ))
 
     def _store_temporal_slice(self, cursor, destination_id: str, temporal_slice: TemporalSlice):
-        """Store a temporal slice"""
+        """Store a single temporal slice."""
+        self.logger.debug(f"Storing temporal slice for destination {destination_id}")
         cursor.execute("""
-            INSERT INTO temporal_slices
-            (destination_id, valid_from, valid_to, season, seasonal_highlights,
-             special_events, weather_patterns, visitor_patterns)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO temporal_slices (
+                destination_id, start_date, end_date, slice_type, average_price_level,
+                weather_data, crowd_level, special_events, local_insights
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             destination_id,
-            temporal_slice.valid_from.isoformat(),
-            temporal_slice.valid_to.isoformat() if temporal_slice.valid_to else None,
-            temporal_slice.season,
-            json.dumps(temporal_slice.seasonal_highlights),
-            json.dumps(temporal_slice.special_events),
-            json.dumps(temporal_slice.weather_patterns) if temporal_slice.weather_patterns else None,
-            json.dumps(temporal_slice.visitor_patterns) if temporal_slice.visitor_patterns else None
+            getattr(temporal_slice, 'valid_from', None),
+            getattr(temporal_slice, 'valid_to', None),
+            getattr(temporal_slice, 'season', 'unknown'),
+            temporal_slice.average_price_level,
+            json.dumps(getattr(temporal_slice, 'weather_patterns', {})),
+            getattr(temporal_slice, 'crowd_level', 'unknown'),
+            # Proper type checking for special_events
+            json.dumps([
+                event if isinstance(event, dict)
+                else event.to_dict() if hasattr(event, 'to_dict') and callable(getattr(event, 'to_dict'))
+                else str(event) if event is not None
+                else {"error": "null_event"}
+                for event in temporal_slice.special_events
+            ]),
+            json.dumps(getattr(temporal_slice, 'seasonal_highlights', {}))
         ))
+        self.logger.debug(f"Temporal slice for {destination_id} stored successfully.")
 
     def _store_poi(self, cursor, destination_id: str, poi):
-        """Store a POI"""
+        """Store a single point of interest."""
         cursor.execute("""
             INSERT OR REPLACE INTO pois
-            (poi_id, destination_id, name, description, location, address,
-             poi_type, theme_tags, ada_accessible, ada_features, media_urls,
-             operating_hours, price_range, rating, review_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (poi_id, destination_id, name, poi_type, coordinates, description,
+             rating, price_level, operating_hours, contact_info)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             poi.poi_id,
             destination_id,
             poi.name,
-            poi.description,
-            json.dumps(poi.location),
-            poi.address,
             poi.poi_type,
-            json.dumps(poi.theme_tags),
-            poi.ada_accessible,
-            json.dumps(poi.ada_features),
-            json.dumps(poi.media_urls),
-            json.dumps(poi.operating_hours) if poi.operating_hours else None,
-            poi.price_range,
+            json.dumps(getattr(poi, 'location', {})),
+            poi.description,
             poi.rating,
-            poi.review_count
+            getattr(poi, 'price_range', None),
+            json.dumps(poi.operating_hours) if poi.operating_hours else None,
+            getattr(poi, 'contact_info', None)
         ))
 
     def get_destination_themes(
@@ -856,7 +981,12 @@ class EnhancedDatabaseManager:
             )
             
             if theme_obj.confidence_breakdown and theme_obj.confidence_breakdown.overall_confidence >= min_confidence:
-                themes_data.append(theme_obj.to_dict()) # Assuming to_dict is updated in Theme
+                # Defensive type checking for theme_obj
+                if hasattr(theme_obj, 'to_dict') and callable(getattr(theme_obj, 'to_dict')):
+                    themes_data.append(theme_obj.to_dict())
+                else:
+                    self.logger.warning(f"Theme object {theme_obj.theme_id} missing to_dict method, creating fallback dict")
+                    themes_data.append({"error": "missing_to_dict_method", "theme_id": getattr(theme_obj, 'theme_id', 'unknown')})
 
         return themes_data
 
@@ -950,7 +1080,12 @@ class EnhancedDatabaseManager:
             )
             
             if theme_obj.confidence_breakdown and theme_obj.confidence_breakdown.overall_confidence >= min_confidence:
-                themes_data.append(theme_obj.to_dict())
+                # Defensive type checking for theme_obj
+                if hasattr(theme_obj, 'to_dict') and callable(getattr(theme_obj, 'to_dict')):
+                    themes_data.append(theme_obj.to_dict())
+                else:
+                    self.logger.warning(f"Theme object {theme_obj.theme_id} missing to_dict method, creating fallback dict")
+                    themes_data.append({"error": "missing_to_dict_method", "theme_id": getattr(theme_obj, 'theme_id', 'unknown')})
 
         return themes_data
 
@@ -1045,12 +1180,6 @@ class EnhancedDatabaseManager:
         if self.json_export_manager:
             self.json_export_manager.archive_old_exports(days_to_keep)
             self.logger.info(f"Archived JSON exports older than {days_to_keep} days")
-
-    def close_db(self):
-        """Close database connection"""
-        if self.conn:
-            self.conn.close()
-            self.logger.info("Database connection closed.")
 
     def export_from_normalized_schema(self, destination_id: str) -> Dict[str, Any]:
         """
@@ -1195,3 +1324,67 @@ class EnhancedDatabaseManager:
         except sqlite3.Error as e:
             self.logger.error(f"Error exporting from normalized schema: {e}")
             raise 
+
+    def get_destination_by_name(self, name: str) -> Optional[Destination]:
+        """Retrieves and reconstructs a full Destination object by its primary name."""
+        if not self.conn:
+            self.logger.error("Database connection is not open.")
+            return None
+            
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM destinations WHERE name = ?;", (name,))
+        dest_row = cursor.fetchone()
+        
+        if not dest_row:
+            self.logger.warning(f"No destination found with name: {name}")
+            return None
+
+        # Fetch column names from cursor description
+        columns = [description[0] for description in cursor.description]
+        dest_data = dict(zip(columns, dest_row))
+        
+        # Reconstruct Destination object with correct type handling
+        dest = Destination(
+            id=dest_data.get('id'),
+            names=[dest_data.get('name')],  # Treat 'name' as a plain string
+            country_code=dest_data.get('country_code'),
+            population=dest_data.get('population'),
+            area_km2=dest_data.get('area_km2'),
+            primary_language=dest_data.get('primary_language'),
+            hdi=dest_data.get('hdi'),
+            gdp_per_capita_usd=dest_data.get('gdp_per_capita_usd'),
+            vibe_descriptors=json.loads(dest_data.get('vibe_descriptors') or '[]'),
+            historical_summary=dest_data.get('historical_summary'),
+            unesco_sites=json.loads(dest_data.get('unesco_sites') or '[]'),
+            annual_tourist_arrivals=dest_data.get('annual_tourist_arrivals'),
+            popularity_stage=dest_data.get('popularity_stage'),
+            visa_info_url=dest_data.get('visa_info_url'),
+            last_updated=datetime.fromisoformat(dest_data.get('last_updated')) if dest_data.get('last_updated') else datetime.now(),
+            admin_levels=json.loads(dest_data.get('admin_levels') or '{}'),
+            core_geo=json.loads(dest_data.get('core_geo') or '{}'),
+            timezone=dest_data.get('timezone')
+        )
+        
+        # Add the enrichment fields that might not be in constructor
+        dest.dominant_religions = json.loads(dest_data.get('dominant_religions') or '[]')
+
+        cursor.execute("SELECT * FROM themes WHERE destination_id = ?;", (dest.id,))
+        theme_rows = cursor.fetchall()
+        theme_columns = [desc[0] for desc in cursor.description]
+
+        for row in theme_rows:
+            theme_data = dict(zip(theme_columns, row))
+            dest.themes.append(Theme(
+                theme_id=theme_data.get('theme_id'), 
+                name=theme_data.get('name'), 
+                description=theme_data.get('description'), 
+                macro_category=theme_data.get('macro_category'), 
+                micro_category=theme_data.get('micro_category'), 
+                fit_score=theme_data.get('fit_score', 0.0)
+            ))
+        
+        self.logger.info(f"Successfully loaded destination '{name}' with {len(dest.themes)} themes.")
+        return dest 
+
+    def __del__(self):
+        self.close_db() 
