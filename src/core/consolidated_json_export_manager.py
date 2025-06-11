@@ -117,11 +117,6 @@ class ConsolidatedJsonExportManager:
             
             # Create export based on adaptive mode
             export_mode = adaptive_settings.get("export_mode", "themes_focused")
-
-            # TEMPORARY OVERRIDE FOR CHICAGO COMPREHENSIVE EXPORT (FOR DEBUGGING AUTHORITY WEIGHT)
-            if "chicago" in destination_id_safe:
-                self.logger.warning(f"TEMPORARY OVERRIDE: Forcing 'comprehensive' export mode for {destination_id_safe}")
-                export_mode = "comprehensive"
             
             if export_mode == "comprehensive":
                 export_data = self._create_comprehensive_export(
@@ -210,11 +205,19 @@ class ConsolidatedJsonExportManager:
         for theme in destination.themes:
             # Calculate confidence
             if theme.confidence_breakdown:
-                # Handle both ConfidenceBreakdown objects and dictionaries
+                # Handle ConfidenceBreakdown objects, dictionaries, and JSON strings
                 if hasattr(theme.confidence_breakdown, 'overall_confidence'):
                     theme_confidence = theme.confidence_breakdown.overall_confidence
                 elif isinstance(theme.confidence_breakdown, dict):
                     theme_confidence = theme.confidence_breakdown.get('overall_confidence', 0.5)
+                elif isinstance(theme.confidence_breakdown, str):
+                    # Handle JSON string case
+                    try:
+                        import json
+                        conf_dict = json.loads(theme.confidence_breakdown)
+                        theme_confidence = conf_dict.get('overall_confidence', 0.5)
+                    except (json.JSONDecodeError, AttributeError):
+                        theme_confidence = 0.5
                 else:
                     theme_confidence = 0.5
             else:
@@ -224,18 +227,25 @@ class ConsolidatedJsonExportManager:
                 filtered_themes.append(theme)
         
         # Sort themes by confidence
-        filtered_themes.sort(
-            key=lambda t: (
-                t.confidence_breakdown.overall_confidence 
-                if t.confidence_breakdown and hasattr(t.confidence_breakdown, 'overall_confidence')
-                else (
-                    t.confidence_breakdown.get('overall_confidence', 0) 
-                    if t.confidence_breakdown and isinstance(t.confidence_breakdown, dict)
-                    else 0.5
-                )
-            ),
-            reverse=True
-        )
+        def get_theme_confidence(t):
+            if not t.confidence_breakdown:
+                return 0.5
+            if hasattr(t.confidence_breakdown, 'overall_confidence'):
+                return t.confidence_breakdown.overall_confidence
+            elif isinstance(t.confidence_breakdown, dict):
+                return t.confidence_breakdown.get('overall_confidence', 0.5)
+            elif isinstance(t.confidence_breakdown, str):
+                # Handle JSON string case
+                try:
+                    import json
+                    conf_dict = json.loads(t.confidence_breakdown)
+                    return conf_dict.get('overall_confidence', 0.5)
+                except (json.JSONDecodeError, AttributeError):
+                    return 0.5
+            else:
+                return 0.5
+        
+        filtered_themes.sort(key=get_theme_confidence, reverse=True)
         
         if len(filtered_themes) > max_themes:
             filtered_themes = filtered_themes[:max_themes]
@@ -257,7 +267,7 @@ class ConsolidatedJsonExportManager:
         if "data" in export_data and "themes" in export_data["data"]:
             filtered_themes = {}
             for theme_id, theme_data in export_data["data"]["themes"].items():
-                confidence = theme_data.get("confidence_breakdown", {}).get("overall_confidence", 0)
+                confidence = self._get_theme_confidence_safe(theme_data)
                 if confidence >= confidence_threshold:
                     filtered_themes[theme_id] = theme_data
             export_data["data"]["themes"] = filtered_themes
@@ -476,7 +486,7 @@ class ConsolidatedJsonExportManager:
             "stats": {
                 "total_themes": len(themes_data),
                 "high_confidence_themes": len([t for t in themes_data.values() 
-                                             if t.get("confidence_breakdown", {}).get("overall_confidence", 0) > 0.7])
+                                             if self._get_theme_confidence_safe(t) > 0.7])
             }
         }
     
@@ -598,11 +608,18 @@ class ConsolidatedJsonExportManager:
         # Format confidence breakdown - ensure it's never None
         confidence_breakdown_dict = {}
         if theme.confidence_breakdown:
-            # Proper type checking for confidence_breakdown
+            # Proper type checking for confidence_breakdown including JSON strings
             if isinstance(theme.confidence_breakdown, dict):
                 confidence_breakdown_dict = theme.confidence_breakdown
             elif hasattr(theme.confidence_breakdown, 'to_dict') and callable(getattr(theme.confidence_breakdown, 'to_dict')):
                 confidence_breakdown_dict = theme.confidence_breakdown.to_dict()
+            elif isinstance(theme.confidence_breakdown, str):
+                # Handle JSON string case
+                try:
+                    import json
+                    confidence_breakdown_dict = json.loads(theme.confidence_breakdown)
+                except (json.JSONDecodeError, TypeError):
+                    confidence_breakdown_dict = {"error": "invalid_json_confidence_breakdown", "original": theme.confidence_breakdown}
             else:
                 confidence_breakdown_dict = {"error": "unexpected_confidence_breakdown_type", "type": str(type(theme.confidence_breakdown))}
         else:
@@ -628,11 +645,11 @@ class ConsolidatedJsonExportManager:
             "tags": theme.tags,
             "created": theme.created_date.isoformat(),
             "last_validated": theme.last_validated.isoformat() if theme.last_validated else None,
-            "factors": getattr(theme, 'factors', {}),
-            "cultural_summary": getattr(theme, 'cultural_summary', {}),
-            "sentiment_analysis": getattr(theme, 'sentiment_analysis', {}),
-            "temporal_analysis": getattr(theme, 'temporal_analysis', {}),
-            "seasonal_relevance": getattr(theme, 'seasonal_relevance', {}),
+            "factors": self._safe_get_dict_attribute(theme, 'factors'),
+            "cultural_summary": self._safe_get_dict_attribute(theme, 'cultural_summary'),
+            "sentiment_analysis": self._safe_get_dict_attribute(theme, 'sentiment_analysis'),
+            "temporal_analysis": self._safe_get_dict_attribute(theme, 'temporal_analysis'),
+            "seasonal_relevance": self._safe_get_dict_attribute(theme, 'seasonal_relevance'),
             "regional_uniqueness": getattr(theme, 'regional_uniqueness', 0.0),
             "insider_tips": getattr(theme, 'insider_tips', [])
         }
@@ -811,11 +828,19 @@ class ConsolidatedJsonExportManager:
         confidence_scores = []
         for t in destination.themes:
             if t.confidence_breakdown:
-                # Handle both ConfidenceBreakdown objects and dictionaries
+                # Handle ConfidenceBreakdown objects, dictionaries, and JSON strings
                 if hasattr(t.confidence_breakdown, 'overall_confidence'):
                     confidence_scores.append(t.confidence_breakdown.overall_confidence)
                 elif isinstance(t.confidence_breakdown, dict):
                     confidence_scores.append(t.confidence_breakdown.get('overall_confidence', 0))
+                elif isinstance(t.confidence_breakdown, str):
+                    # Handle JSON string case
+                    try:
+                        import json
+                        conf_dict = json.loads(t.confidence_breakdown)
+                        confidence_scores.append(conf_dict.get('overall_confidence', 0))
+                    except (json.JSONDecodeError, AttributeError):
+                        confidence_scores.append(0)
                 else:
                     confidence_scores.append(0)
         
@@ -877,6 +902,45 @@ class ConsolidatedJsonExportManager:
         
         return sum(scores) / len(scores) if scores else 0.0
     
+    def _get_theme_confidence_safe(self, theme_data: Dict[str, Any]) -> float:
+        """Safely extract confidence from theme data regardless of format"""
+        confidence_breakdown = theme_data.get("confidence_breakdown", {})
+        
+        if not confidence_breakdown:
+            return 0.0
+            
+        if isinstance(confidence_breakdown, dict):
+            return confidence_breakdown.get("overall_confidence", 0.0)
+        elif isinstance(confidence_breakdown, str):
+            # Handle JSON string case
+            try:
+                import json
+                conf_dict = json.loads(confidence_breakdown)
+                return conf_dict.get("overall_confidence", 0.0)
+            except (json.JSONDecodeError, AttributeError):
+                return 0.0
+        else:
+            return 0.0
+    
+    def _safe_get_dict_attribute(self, obj: Any, attr_name: str, default: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Safely get a dictionary attribute that might be stored as a JSON string"""
+        if default is None:
+            default = {}
+            
+        attr_value = getattr(obj, attr_name, default)
+        
+        if isinstance(attr_value, dict):
+            return attr_value
+        elif isinstance(attr_value, str):
+            # Handle JSON string case
+            try:
+                import json
+                return json.loads(attr_value)
+            except (json.JSONDecodeError, TypeError):
+                return default
+        else:
+            return default
+    
     def _save_json(self, data: Dict[str, Any], filepath: Path):
         """Save data to JSON file with configurable formatting"""
         indent = 2 if self.export_config.pretty_print else None
@@ -908,4 +972,11 @@ class ConsolidatedJsonExportManager:
             if filepath.stat().st_mtime < archive_date:
                 archive_file = self.base_path / "archive" / filepath.name
                 filepath.rename(archive_file)
-                self.logger.info(f"Archived old export: {filepath.name}") 
+                self.logger.info(f"Archived old export: {filepath.name}")
+
+    def _safe_get_dict_attribute(self, obj, attr):
+        """Safely get a dictionary attribute from an object"""
+        if hasattr(obj, attr):
+            return getattr(obj, attr)
+        else:
+            return {} 

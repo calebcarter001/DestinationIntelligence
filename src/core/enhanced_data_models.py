@@ -205,6 +205,36 @@ class Theme:
                         return ConfidenceLevel.LOW
                     else:
                         return ConfidenceLevel.INSUFFICIENT
+            elif isinstance(self.confidence_breakdown, str):
+                # Handle JSON string case
+                try:
+                    import json
+                    conf_dict = json.loads(self.confidence_breakdown)
+                    confidence_level_value = conf_dict.get('confidence_level')
+                    if confidence_level_value:
+                        from .confidence_scoring import ConfidenceLevel
+                        if isinstance(confidence_level_value, str):
+                            try:
+                                return ConfidenceLevel(confidence_level_value)
+                            except ValueError:
+                                return ConfidenceLevel.INSUFFICIENT
+                        else:
+                            return confidence_level_value
+                    else:
+                        # Fallback to overall_confidence if available
+                        overall_confidence = conf_dict.get('overall_confidence', 0.0)
+                        from .confidence_scoring import ConfidenceLevel
+                        if overall_confidence >= 0.8:
+                            return ConfidenceLevel.HIGH
+                        elif overall_confidence >= 0.6:
+                            return ConfidenceLevel.MEDIUM
+                        elif overall_confidence >= 0.3:
+                            return ConfidenceLevel.LOW
+                        else:
+                            return ConfidenceLevel.INSUFFICIENT
+                except (json.JSONDecodeError, AttributeError):
+                    from .confidence_scoring import ConfidenceLevel
+                    return ConfidenceLevel.INSUFFICIENT
         
         # No confidence breakdown available
         from .confidence_scoring import ConfidenceLevel

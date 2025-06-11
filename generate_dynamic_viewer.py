@@ -1,22 +1,87 @@
 #!/usr/bin/env python3
 """
-Generate Dynamic Database Viewer HTML
-Creates the dynamic_database_viewer.html file with interactive features
+Generate Dynamic Database Viewer HTML with Cultural Intelligence
+Creates enhanced dynamic viewers with cultural intelligence categorization
 """
 
 import json
 import sqlite3
 from pathlib import Path
 import os
+import argparse
+import yaml
 
-def generate_dynamic_database_viewer():
-    """Generate the dynamic database viewer HTML file"""
+# CULTURAL INTELLIGENCE: Define category processing rules
+CATEGORY_PROCESSING_RULES = {
+    "cultural": {
+        "categories": [
+            "Cultural Identity & Atmosphere", "Authentic Experiences", "Distinctive Features",
+            "Local Character & Vibe", "Artistic & Creative Scene"
+        ],
+        "color": "#9C27B0",  # Purple for cultural
+        "border_color": "#7B1FA2",
+        "icon": "🎭",
+        "description": "Cultural themes focus on authenticity, local character, and distinctive experiences"
+    },
+    "practical": {
+        "categories": [
+            "Safety & Security", "Transportation & Access", "Budget & Costs", 
+            "Health & Medical", "Logistics & Planning", "Visa & Documentation"
+        ],
+        "color": "#2196F3",  # Blue for practical
+        "border_color": "#1976D2",
+        "icon": "📋",
+        "description": "Practical themes provide essential travel information and logistics"
+    },
+    "hybrid": {
+        "categories": [
+            "Food & Dining", "Entertainment & Nightlife", "Nature & Outdoor",
+            "Shopping & Local Craft", "Family & Education", "Health & Wellness"
+        ],
+        "color": "#4CAF50",  # Green for hybrid
+        "border_color": "#388E3C",
+        "icon": "⚖️",
+        "description": "Hybrid themes balance practical information with cultural authenticity"
+    }
+}
+
+def get_processing_type(macro_category):
+    """Determine if theme is cultural, practical, or hybrid"""
+    if not macro_category:
+        return "unknown"
+    
+    for proc_type, rules in CATEGORY_PROCESSING_RULES.items():
+        if macro_category in rules["categories"]:
+            return proc_type
+    return "unknown"
+
+def load_config():
+    """Loads the application configuration from config.yaml."""
+    config_path = "config/config.yaml"
+    if not os.path.exists(config_path):
+        print(f"❌ config.yaml not found!")
+        return None
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def generate_dynamic_database_viewer(destination_name=None, check_exists=False):
+    """Generate the dynamic database viewer HTML file with cultural intelligence features"""
+    
+    output_filename = "dynamic_database_viewer.html"
+    if destination_name:
+        # Create a URL-safe version of the destination name for the filename
+        safe_dest_name = destination_name.replace(', ', '_').replace(',', '_').replace(' ', '_').lower()
+        output_filename = f"dynamic_viewer_{safe_dest_name}.html"
+
+    if check_exists and os.path.exists(output_filename):
+        print(f"✅ Viewer for {destination_name} already exists. Skipping.")
+        return True, None
     
     # Check for database file
     db_path = "enhanced_destination_intelligence.db"
     if not os.path.exists(db_path):
         print(f"❌ Database file {db_path} not found!")
-        return False
+        return False, None
     
     # Connect to database and get all theme data
     try:
@@ -24,14 +89,23 @@ def generate_dynamic_database_viewer():
         cursor = conn.cursor()
         
         # Get all themes with full details
-        cursor.execute("""
+        query = """
             SELECT theme_id, name, macro_category, micro_category, description,
                    fit_score, confidence_level, confidence_breakdown,
                    tags, sentiment_analysis, temporal_analysis,
                    traveler_relevance_factor, adjusted_overall_confidence
             FROM themes 
-            ORDER BY fit_score DESC
-        """)
+        """
+        params = []
+        if destination_name:
+            query += " WHERE destination_id = ?"
+            # The database ID has a specific format we need to match
+            dest_id = f"dest_{destination_name.replace(', ', '_').replace(' ', '_').lower()}"
+            params.append(dest_id)
+
+        query += " ORDER BY fit_score DESC"
+        
+        cursor.execute(query, params)
         themes = cursor.fetchall()
         
         # Get total count
@@ -41,10 +115,12 @@ def generate_dynamic_database_viewer():
         
     except Exception as e:
         print(f"❌ Error reading database: {e}")
-        return False
+        return False, None
     
-    # Build themes data for JavaScript
+    # Build themes data for JavaScript with cultural intelligence
     themes_js_data = []
+    category_stats = {"cultural": 0, "practical": 0, "hybrid": 0, "unknown": 0}
+    
     for i, theme in enumerate(themes, 1):
         theme_id, name, macro_cat, micro_cat, description, fit_score, confidence_level, confidence_breakdown, tags, sentiment_analysis, temporal_analysis, traveler_relevance_factor, adjusted_overall_confidence = theme
         
@@ -66,6 +142,13 @@ def generate_dynamic_database_viewer():
                 overall_confidence = float(overall_confidence)
             except:
                 overall_confidence = 0.0
+        
+        # CULTURAL INTELLIGENCE: Determine processing type and styling
+        proc_type = get_processing_type(macro_cat)
+        category_info = CATEGORY_PROCESSING_RULES.get(proc_type, {
+            "color": "#666666", "border_color": "#444444", "icon": "📌", "description": "Unknown category"
+        })
+        category_stats[proc_type] += 1
                 
         theme_data = {
             "id": theme_id,
@@ -80,6 +163,12 @@ def generate_dynamic_database_viewer():
             "created_date": None,  # Column doesn't exist
             "tags": tags_data,
             "traveler_relevance_factor": traveler_relevance_factor,
+            # CULTURAL INTELLIGENCE: Add processing type and styling
+            "processing_type": proc_type,
+            "category_color": category_info["color"],
+            "category_border_color": category_info["border_color"],
+            "category_icon": category_info["icon"],
+            "category_description": category_info["description"],
             "metadata": {
                 "theme_id": theme_id,
                 "description": description,
@@ -89,13 +178,17 @@ def generate_dynamic_database_viewer():
         }
         themes_js_data.append(theme_data)
     
-    # Create the HTML content
+    # Create the HTML content with cultural intelligence features
+    title = "Cultural Intelligence Theme Report"
+    if destination_name:
+        title = f"Cultural Intelligence Report - {destination_name}"
+
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comprehensive Database Theme Report</title>
+    <title>{title}</title>
     <style>
         * {{
             margin: 0;
@@ -111,7 +204,7 @@ def generate_dynamic_database_viewer():
         }}
         
         .header {{
-            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            background: linear-gradient(135deg, #9C27B0 0%, #2196F3 50%, #4CAF50 100%);
             color: white;
             padding: 2rem;
             text-align: center;
@@ -122,6 +215,42 @@ def generate_dynamic_database_viewer():
             font-size: 2.5rem;
             margin-bottom: 0.5rem;
             font-weight: 600;
+        }}
+        
+        .category-legend {{
+            background: white;
+            margin: 1rem 2rem;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }}
+        
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }}
+        
+        .legend-cultural {{
+            background: rgba(156, 39, 176, 0.1);
+            border-left: 4px solid #9C27B0;
+        }}
+        
+        .legend-practical {{
+            background: rgba(33, 150, 243, 0.1);
+            border-left: 4px solid #2196F3;
+        }}
+        
+        .legend-hybrid {{
+            background: rgba(76, 175, 80, 0.1);
+            border-left: 4px solid #4CAF50;
         }}
         
         .controls {{
@@ -182,7 +311,8 @@ def generate_dynamic_database_viewer():
             padding: 1.5rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             transition: transform 0.2s, box-shadow 0.2s;
-            border-left: 4px solid #4285f4;
+            border-left: 4px solid var(--theme-color);
+            position: relative;
         }}
         
         .theme-card:hover {{
@@ -193,8 +323,23 @@ def generate_dynamic_database_viewer():
         .theme-header {{
             font-size: 1.4rem;
             font-weight: 600;
-            color: #4285f4;
+            color: var(--theme-color);
             margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        
+        .category-badge {{
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            background: var(--theme-color);
         }}
         
         .theme-meta {{
@@ -244,7 +389,7 @@ def generate_dynamic_database_viewer():
             border-radius: 6px;
             cursor: pointer;
             font-weight: 500;
-            color: #4285f4;
+            color: var(--theme-color);
             width: 100%;
             text-align: left;
             display: flex;
@@ -315,13 +460,34 @@ def generate_dynamic_database_viewer():
             .control-group {{
                 justify-content: space-between;
             }}
+            
+            .category-legend {{
+                flex-direction: column;
+                gap: 1rem;
+            }}
         }}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Comprehensive Database Theme Report</h1>
-        <p>Interactive analysis of {theme_count:,} destination intelligence themes</p>
+        <h1>{title}</h1>
+        <p>🎭 Cultural Intelligence analysis of {theme_count:,} destination themes</p>
+        <p>🎯 Cultural: {category_stats['cultural']} | 📋 Practical: {category_stats['practical']} | ⚖️ Hybrid: {category_stats['hybrid']}</p>
+    </div>
+    
+    <div class="category-legend">
+        <div class="legend-item legend-cultural">
+            <span>🎭</span>
+            <span><strong>Cultural:</strong> Authenticity & Local Character</span>
+        </div>
+        <div class="legend-item legend-practical">
+            <span>📋</span>
+            <span><strong>Practical:</strong> Essential Travel Information</span>
+        </div>
+        <div class="legend-item legend-hybrid">
+            <span>⚖️</span>
+            <span><strong>Hybrid:</strong> Balanced Practical & Cultural</span>
+        </div>
     </div>
     
     <div class="controls">
@@ -330,14 +496,24 @@ def generate_dynamic_database_viewer():
             <input type="text" id="filterInput" placeholder="Enter keyword...">
         </div>
         <div class="control-group">
+            <label for="categoryFilter">Category:</label>
+            <select id="categoryFilter">
+                <option value="all">All Categories</option>
+                <option value="cultural">🎭 Cultural</option>
+                <option value="practical">📋 Practical</option>
+                <option value="hybrid">⚖️ Hybrid</option>
+            </select>
+        </div>
+        <div class="control-group">
             <label for="sortSelect">Sort by:</label>
             <select id="sortSelect">
-                <option value="fit_score_desc">Fit Score (High-Low)</option>
-                <option value="fit_score_asc">Fit Score (Low-High)</option>
-                <option value="confidence_desc">Confidence (High-Low)</option>
-                <option value="confidence_asc">Confidence (Low-High)</option>
+                <option value="confidence_desc" selected>Tourist Relevance (High-Low)</option>
+                <option value="fit_score_desc">Evidence Quality (High-Low)</option>
+                <option value="fit_score_asc">Evidence Quality (Low-High)</option>
+                <option value="confidence_asc">Tourist Relevance (Low-High)</option>
                 <option value="name_asc">Name (A-Z)</option>
                 <option value="name_desc">Name (Z-A)</option>
+                <option value="category_asc">Category (Cultural First)</option>
             </select>
         </div>
         <div class="control-group">
@@ -361,7 +537,7 @@ def generate_dynamic_database_viewer():
     </div>
     
     <script>
-        // Theme data from database
+        // Theme data from database with cultural intelligence
         const allThemes = {json.dumps(themes_js_data, indent=2)};
         
         let filteredThemes = [...allThemes];
@@ -409,9 +585,19 @@ def generate_dynamic_database_viewer():
                 const confidenceClass = formatConfidenceLevelCssClass(theme.confidence_level);
                 const relevanceFactor = typeof theme.traveler_relevance_factor === 'number' ? theme.traveler_relevance_factor.toFixed(2) : 'N/A';
                 
+                // CULTURAL INTELLIGENCE: Theme styling based on processing type
+                const themeColor = theme.category_color || '#4285f4';
+                const categoryIcon = theme.category_icon || '📌';
+                const processingType = theme.processing_type || 'unknown';
+                const categoryDescription = theme.category_description || 'Unknown category';
+                
                 html += `
-                <div class="theme-card">
-                    <div class="theme-header">${{globalIndex}}. ${{name}}</div>
+                <div class="theme-card" style="--theme-color: ${{themeColor}}">
+                    <div class="category-badge">${{categoryIcon}} ${{processingType.toUpperCase()}}</div>
+                    <div class="theme-header">
+                        <span>${{categoryIcon}}</span>
+                        <span>${{globalIndex}}. ${{name}}</span>
+                    </div>
                     
                     <div class="theme-meta">
                         <div class="meta-item">
@@ -422,10 +608,19 @@ def generate_dynamic_database_viewer():
                             <span class="meta-label">Overall Confidence:</span>
                             <span class="meta-value ${{confidenceClass}}">${{adjustedConfidence}} (Level: ${{confidenceLevelDisplay}})</span>
                         </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Category:</span>
+                            <span class="meta-value">${{escapeHtml(theme.macro_category)}}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Processing Type:</span>
+                            <span class="meta-value" style="color: ${{themeColor}}">${{processingType.toUpperCase()}}</span>
+                        </div>
                     </div>
                     
                     <div class="description">
                         <strong>Description:</strong> ${{escapeHtml(theme.description || 'No description available')}}
+                        <br><small style="color: #888; margin-top: 0.5rem; display: block;"><em>${{categoryDescription}}</em></small>
                     </div>
                     
                     <div class="expandable">
@@ -445,7 +640,7 @@ def generate_dynamic_database_viewer():
                             <p><strong>Theme ID:</strong> ${{theme.id}}</p>
                             <p><strong>Category:</strong> ${{escapeHtml(theme.macro_category)}}</p>
                             <p><strong>Subcategory:</strong> ${{escapeHtml(theme.micro_category)}}</p>
-                            <p><strong>Created:</strong> Unknown</p>
+                            <p><strong>Processing Type:</strong> <span style="color: ${{themeColor}}">${{processingType.toUpperCase()}}</span></p>
                             <p><strong>Traveler Relevance:</strong> ${{relevanceFactor}}</p>
                             ${{theme.tags && theme.tags.length > 0 ? '<p><strong>Tags:</strong> ' + theme.tags.map(tag => escapeHtml(tag)).join(', ') + '</p>' : ''}}
                         </div>
@@ -511,6 +706,7 @@ def generate_dynamic_database_viewer():
         
         function applyFilters() {{
             const filterText = document.getElementById('filterInput').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
             const sortBy = document.getElementById('sortSelect').value;
             itemsPerPage = parseInt(document.getElementById('itemsPerPage').value);
             
@@ -518,7 +714,12 @@ def generate_dynamic_database_viewer():
             filteredThemes = allThemes.filter(theme => {{
                 const nameMatch = theme.name && theme.name.toLowerCase().includes(filterText);
                 const descMatch = theme.description && theme.description.toLowerCase().includes(filterText);
-                return nameMatch || descMatch;
+                const textMatch = nameMatch || descMatch;
+                
+                // CULTURAL INTELLIGENCE: Category filtering
+                const categoryMatch = categoryFilter === 'all' || theme.processing_type === categoryFilter;
+                
+                return textMatch && categoryMatch;
             }});
             
             // Sort themes
@@ -536,8 +737,13 @@ def generate_dynamic_database_viewer():
                         return (a.name || '').localeCompare(b.name || '');
                     case 'name_desc':
                         return (b.name || '').localeCompare(a.name || '');
+                    case 'category_asc':
+                        // Sort by processing type: cultural, practical, hybrid
+                        const order = {{'cultural': 0, 'practical': 1, 'hybrid': 2, 'unknown': 3}};
+                        return (order[a.processing_type] || 3) - (order[b.processing_type] || 3);
                     default:
-                        return 0;
+                        // DEFAULT: Sort by tourist relevance (overall_confidence which includes traveler_relevance_factor)
+                        return (b.overall_confidence || 0) - (a.overall_confidence || 0);
                 }}
             }});
             
@@ -561,27 +767,235 @@ def generate_dynamic_database_viewer():
 </html>"""
     
     # Write the HTML file
-    with open("dynamic_database_viewer.html", "w", encoding="utf-8") as f:
+    with open(output_filename, "w", encoding="utf-8") as f:
         f.write(html_content)
     
-    print(f"✅ Dynamic database viewer created: dynamic_database_viewer.html")
+    print(f"✅ Cultural Intelligence dynamic viewer created: {output_filename}")
     print(f"📊 Generated with {theme_count:,} themes")
-    print(f"🌐 Open http://localhost:8000/dynamic_database_viewer.html to view")
+    print(f"🎭 Cultural: {category_stats['cultural']} | 📋 Practical: {category_stats['practical']} | ⚖️ Hybrid: {category_stats['hybrid']}")
+    print(f"🌐 Open http://localhost:8000/{output_filename} to view")
     
-    return True
+    return True, output_filename
+
+def load_and_categorize_themes(db_path, destination_name):
+    """Load themes from database and categorize them with cultural intelligence processing"""
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Convert destination name to destination ID format
+        dest_id = f"dest_{destination_name.replace(', ', '_').replace(' ', '_').lower()}"
+        
+        cursor.execute("""
+            SELECT 
+                theme_id, name, macro_category, micro_category, description,
+                fit_score, confidence_level, adjusted_overall_confidence,
+                confidence_breakdown, tags
+            FROM themes
+            WHERE destination_id = ?
+        """, (dest_id,))
+        
+        rows = cursor.fetchall()
+        themes = []
+        
+        for row in rows:
+            theme_id, name, macro_cat, micro_cat, description, fit_score, confidence_level, overall_confidence, confidence_breakdown, tags = row
+            
+            # Determine processing type and get category info
+            proc_type = get_processing_type(macro_cat)
+            category_info = CATEGORY_PROCESSING_RULES.get(proc_type, {
+                "color": "#666666", "border_color": "#444444", "icon": "📌", "description": "Unknown category"
+            })
+            
+            theme_data = {
+                "theme_id": theme_id,
+                "name": name,
+                "macro_category": macro_cat,
+                "micro_category": micro_cat,
+                "description": description,
+                "fit_score": fit_score or 0.0,
+                "confidence_level": confidence_level,
+                "overall_confidence": overall_confidence or 0.0,
+                "confidence_breakdown": confidence_breakdown,
+                "tags": tags,
+                "processing_type": proc_type,
+                "category_color": category_info["color"],
+                "category_border_color": category_info["border_color"],
+                "category_icon": category_info["icon"],
+                "category_description": category_info["description"]
+            }
+            
+            themes.append(theme_data)
+        
+        conn.close()
+        return themes
+        
+    except sqlite3.Error as e:
+        print(f"Database error loading and categorizing themes: {e}")
+        return []
+    except Exception as e:
+        print(f"Error loading and categorizing themes: {e}")
+        return []
+
+def apply_category_styling(theme_data, processing_rules=None):
+    """Apply category-based styling to a single theme or themes data for dynamic viewer generation"""
+    if processing_rules is None:
+        processing_rules = {
+            "cultural": {"color": "#9C27B0", "icon": "🎭"},
+            "practical": {"color": "#2196F3", "icon": "🛠️"},
+            "hybrid": {"color": "#FF9800", "icon": "🌟"},
+            "unknown": {"color": "#757575", "icon": "❓"}
+        }
+    
+    # Handle single theme vs dictionary of themes
+    if isinstance(theme_data, dict) and ("name" in theme_data or "processing_type" in theme_data):
+        # Single theme object
+        processing_type = theme_data.get("processing_type") or get_theme_processing_type(theme_data.get("macro_category", ""))
+        styling = processing_rules.get(processing_type, processing_rules["unknown"])
+        
+        styled_theme = {
+            **theme_data,
+            "processing_type": processing_type,
+            "category_color": styling["color"],
+            "category_icon": styling["icon"],
+            "category_class": f"theme-{processing_type}"
+        }
+        
+        return styled_theme
+    else:
+        # Dictionary of themes (original behavior)
+        styled_themes = []
+        
+        for theme_id, theme_data in theme_data.items():
+            # Determine processing type for the theme
+            processing_type = get_theme_processing_type(theme_data.get("macro_category", ""))
+            
+            # Apply styling based on processing type
+            styling = processing_rules.get(processing_type, processing_rules["unknown"])
+            
+            styled_theme = {
+                **theme_data,
+                "processing_type": processing_type,
+                "style": {
+                    "color": styling["color"],
+                    "icon": styling["icon"],
+                    "category_class": f"theme-{processing_type}"
+                }
+            }
+            
+            styled_themes.append((theme_id, styled_theme))
+        
+        return styled_themes
+
+def get_theme_processing_type(macro_category):
+    """Determine processing type for a theme category"""
+    if not macro_category:
+        return "unknown"
+        
+    cultural_categories = [
+        "Cultural Identity & Atmosphere", "Authentic Experiences", "Distinctive Features",
+        "Local Character & Vibe", "Artistic & Creative Scene", "Cultural & Arts", "Heritage & History"
+    ]
+    
+    practical_categories = [
+        "Safety & Security", "Transportation & Access", "Health & Medical", "Budget & Costs",
+        "Logistics & Planning", "Communication & Language", "Legal & Documentation"
+    ]
+    
+    hybrid_categories = [
+        "Food & Dining", "Entertainment & Nightlife", "Nature & Outdoor", "Shopping & Commerce",
+        "Accommodations", "Climate & Weather", "Adventure & Sports"
+    ]
+    
+    if macro_category in cultural_categories:
+        return "cultural"
+    elif macro_category in practical_categories:
+        return "practical"
+    elif macro_category in hybrid_categories:
+        return "hybrid"
+    else:
+        return "unknown"
+
+def generate_theme_cards_html(themes_data):
+    """Generate HTML cards for themes with cultural intelligence styling"""
+    if not themes_data:
+        return "<p>No themes available for display.</p>"
+    
+    html_parts = []
+    html_parts.append('<div class="themes-container">')
+    
+    for theme in themes_data:
+        # Get theme data
+        name = theme.get("name", "Unknown Theme")
+        description = theme.get("description", "No description available")
+        confidence = theme.get("confidence", 0.0)
+        processing_type = theme.get("processing_type", "unknown")
+        category_color = theme.get("category_color", "#757575")
+        category_icon = theme.get("category_icon", "❓")
+        
+        # Generate theme card HTML
+        html_parts.append(f'''
+        <div class="theme-card {processing_type}-theme" style="border-left: 4px solid {category_color};">
+            <div class="theme-header">
+                <span class="category-badge" style="background-color: {category_color};">
+                    {category_icon} {processing_type.title()}
+                </span>
+                <span class="processing-type">{processing_type}</span>
+            </div>
+            <h3 class="theme-title">{name}</h3>
+            <p class="theme-description">{description}</p>
+            <div class="theme-metrics">
+                <span class="confidence">Confidence: {confidence:.2f}</span>
+            </div>
+        </div>
+        ''')
+    
+    html_parts.append('</div>')
+    
+    return '\n'.join(html_parts)
 
 if __name__ == "__main__":
-    print("🔧 Generating dynamic database viewer...")
-    success = generate_dynamic_database_viewer()
+    parser = argparse.ArgumentParser(description="Generate a dynamic HTML viewer for destination themes.")
+    parser.add_argument("-d", "--destination", type=str, help="The name of the destination to generate the viewer for (e.g., 'Chicago, United States').")
+    parser.add_argument("--all", action="store_true", help="Generate viewers for all destinations in config.yaml.")
+    args = parser.parse_args()
+
+    config = load_config()
+    if not config:
+        exit()
+
+    destinations_to_process = []
+    if args.destination:
+        destinations_to_process.append(args.destination)
+    elif args.all:
+        destinations_to_process = config.get("destinations", [])
+    else:
+        # Default to the first destination in the config
+        first_dest = config.get("destinations", [None])[0]
+        if first_dest:
+            destinations_to_process.append(first_dest)
+
+    if not destinations_to_process:
+        print("❌ No destinations specified or found in config.yaml.")
+        exit()
+
+    print(f"🔧 Generating dynamic database viewer(s) for: {', '.join(destinations_to_process)}")
     
-    if success:
-        print("\n🎉 Success! Dynamic viewer recreated with full functionality!")
+    generated_files = []
+    for dest in destinations_to_process:
+        success, filename = generate_dynamic_database_viewer(dest, check_exists=True)
+        if success and filename:
+            generated_files.append(filename)
+
+    if generated_files:
+        print("\n🎉 Success! Dynamic viewer(s) created with full functionality!")
         print("   - Interactive filtering and sorting")
         print("   - Card-based layout matching your original")
         print("   - Expandable confidence breakdowns")
         print("   - Responsive design")
         print("\n📝 To view:")
         print("   1. python -m http.server 8000")
-        print("   2. Open: http://localhost:8000/dynamic_database_viewer.html")
+        for i, f in enumerate(generated_files):
+            print(f"   {i+2}. Open: http://localhost:8000/{f}")
     else:
-        print("\n❌ Could not generate viewer. Check that the database exists and contains data.") 
+        print("\n🤷 No new viewers were generated. They may already exist or there was an error.") 

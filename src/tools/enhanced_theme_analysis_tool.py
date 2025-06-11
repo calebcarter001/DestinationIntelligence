@@ -80,12 +80,21 @@ class EvidenceRegistry:
         # Create new evidence entry
         evidence_id = f"ev_{len(self.evidence_by_id)}"
         
+        # Handle source_category and evidence_type which might be strings or enums
+        source_category_value = evidence.source_category
+        if hasattr(source_category_value, 'value'):
+            source_category_value = source_category_value.value
+        
+        evidence_type_value = getattr(evidence, 'evidence_type', 'analysis')
+        if hasattr(evidence_type_value, 'value'):
+            evidence_type_value = evidence_type_value.value
+        
         evidence_data = {
             "id": evidence_id,
             "content_hash": content_hash,
             "source_url": evidence.source_url,
-            "source_category": evidence.source_category.value,
-            "evidence_type": evidence.evidence_type.value,
+            "source_category": source_category_value,
+            "evidence_type": evidence_type_value,
             "authority_weight": evidence.authority_weight,
             "text_snippet": evidence.text_snippet,
             "cultural_context": evidence.cultural_context,
@@ -94,7 +103,7 @@ class EvidenceRegistry:
             "agent_id": evidence.agent_id,
             "published_date": evidence.published_date.isoformat() if evidence.published_date else None,
             "confidence": evidence.confidence,
-            "timestamp": evidence.timestamp.isoformat(),
+            "timestamp": evidence.timestamp if isinstance(evidence.timestamp, str) else evidence.timestamp.isoformat(),
             "factors": getattr(evidence, 'factors', {})
         }
         
@@ -185,31 +194,73 @@ class EnhancedThemeAnalysisTool:
         self.theme_taxonomy = self.config.get(
             "theme_taxonomy", 
             {
-                "Nature & Outdoor": [
-                    "Hiking & Trails", "Mountains & Peaks", "Parks & Recreation", "Nature Viewing",
-                    "Outdoor Adventures", "Rivers & Lakes", "Scenic Views", "Wildlife",
-                    "Camping & RV", "Rock Climbing", "Kayaking & Rafting", "Fishing",
-                    "Biking & Cycling", "Cross-Country Skiing", "Snowshoeing"
+                # CULTURAL CATEGORIES (Authenticity-focused heuristics)
+                "Cultural Identity & Atmosphere": [
+                    "Local Character", "City Vibe", "Cultural Heritage", "Historical Identity",
+                    "Artistic Scene", "Music Heritage", "Literary Connection", "Creative Community",
+                    "Cultural Movements", "Local Legends", "Community Spirit", "Urban Character"
                 ],
-                "Cultural & Arts": [
-                    "Museums & Galleries", "Architecture", "Historic Sites", "Local Arts",
-                    "Cultural Heritage", "Music & Performances", "Festivals & Events",
-                    "Art Studios", "Public Art", "Cultural Centers"
+                "Authentic Experiences": [
+                    "Local Secrets", "Hidden Gems", "Insider Knowledge", "Off-the-Beaten-Path",
+                    "Neighborhood Culture", "Community Life", "Local Customs", "Traditional Practices",
+                    "Authentic Activities", "Local Hangouts", "Resident Favorites", "Undiscovered Spots"
                 ],
+                "Distinctive Features": [
+                    "Unique Attractions", "Signature Experiences", "What Makes It Special",
+                    "Competitive Advantages", "Cultural Uniqueness", "Distinctive Architecture",
+                    "Iconic Landmarks", "Signature Events", "Regional Specialties", "Local Innovations"
+                ],
+                "Local Character & Vibe": [
+                    "Neighborhood Personalities", "Street Culture", "Social Atmosphere", "Community Energy",
+                    "Local Lifestyle", "Daily Rhythms", "Social Dynamics", "Cultural Personality"
+                ],
+                "Artistic & Creative Scene": [
+                    "Local Artists", "Creative Districts", "Art Movements", "Cultural Innovation",
+                    "Music Scene", "Performance Culture", "Creative Spaces", "Artistic Heritage"
+                ],
+                
+                # PRACTICAL CATEGORIES (Authority-focused heuristics)
+                "Safety & Security": [
+                    "Crime Statistics", "Tourist Safety", "Emergency Services", "Safe Areas",
+                    "Security Measures", "Police Presence", "Tourist Police", "Safety Tips"
+                ],
+                "Transportation & Access": [
+                    "Transportation", "Accessibility", "Getting Around", "Parking",
+                    "Public Transit", "Walkability", "Bike-Friendly", "Airport Access"
+                ],
+                "Budget & Costs": [
+                    "Cost of Living", "Budget Travel", "Price Ranges", "Money Saving",
+                    "Currency Exchange", "Tipping Culture", "Cost Comparisons", "Budget Tips"
+                ],
+                "Health & Medical": [
+                    "Healthcare Quality", "Medical Facilities", "Health Risks", "Vaccinations",
+                    "Pharmacies", "Health Insurance", "Medical Tourism", "Emergency Medical"
+                ],
+                "Logistics & Planning": [
+                    "Trip Planning", "Booking Information", "Travel Documentation", "Reservations",
+                    "Seasonal Planning", "Weather Considerations", "Best Times to Visit"
+                ],
+                "Visa & Documentation": [
+                    "Visa Requirements", "Entry Documentation", "Customs Information", "Travel Documents",
+                    "Border Procedures", "Immigration", "Passport Requirements"
+                ],
+                
+                # HYBRID CATEGORIES (Balanced approach)
                 "Food & Dining": [
                     "Restaurants", "Local Cuisine", "Breweries & Distilleries", "Cafes & Coffee",
                     "Food Markets", "Farm-to-Table", "Fine Dining", "Food Festivals",
-                    "Local Specialties", "Wine Tasting", "Food Tours"
+                    "Local Specialties", "Wine Tasting", "Food Tours", "Street Food"
                 ],
                 "Entertainment & Nightlife": [
                     "Nightlife", "Bars & Pubs", "Live Music Venues", "Dance Clubs",
                     "Comedy Shows", "Theater & Performances", "Casinos", "Rooftop Bars",
                     "Entertainment Districts", "Social Venues"
                 ],
-                "Adventure & Sports": [
-                    "Adventure Sports", "Water Sports", "Winter Sports", "Extreme Sports",
-                    "Golf", "Tennis", "Fitness & Wellness", "Sports Events",
-                    "Adventure Tours", "Outdoor Recreation", "Skiing & Snowboarding"
+                "Nature & Outdoor": [
+                    "Hiking & Trails", "Mountains & Peaks", "Parks & Recreation", "Nature Viewing",
+                    "Outdoor Adventures", "Rivers & Lakes", "Scenic Views", "Wildlife",
+                    "Camping & RV", "Rock Climbing", "Kayaking & Rafting", "Fishing",
+                    "Biking & Cycling", "Cross-Country Skiing", "Snowshoeing"
                 ],
                 "Shopping & Local Craft": [
                     "Shopping", "Local Markets", "Boutiques", "Craft Shops", "Artisan Goods",
@@ -224,13 +275,53 @@ class EnhancedThemeAnalysisTool:
                 "Health & Wellness": [
                     "Spas & Wellness", "Hot Springs", "Yoga & Meditation", "Fitness",
                     "Health Retreats", "Therapeutic", "Natural Healing", "Relaxation"
-                ],
-                "Transportation & Access": [
-                    "Transportation", "Accessibility", "Getting Around", "Parking",
-                    "Public Transit", "Walkability", "Bike-Friendly"
                 ]
             }
         )
+        
+        # CULTURAL INTELLIGENCE: Category-specific processing rules
+        self.category_processing_rules = {
+            "cultural": {
+                "categories": [
+                    "Cultural Identity & Atmosphere", "Authentic Experiences", "Distinctive Features",
+                    "Local Character & Vibe", "Artistic & Creative Scene", "Cultural & Arts", "Heritage & History"
+                ],
+                "min_authority_weight": 0.3,
+                "confidence_threshold": 0.45,
+                "preferred_sources": ["reddit", "local_blogs", "community_forums", "personal_experiences"],
+                "evidence_limit": 8,
+                "authenticity_boost": 0.3,
+                "distinctiveness_weight": 0.4
+            },
+            "practical": {
+                "categories": [
+                    "Safety & Security", "Transportation & Access", "Budget & Costs", 
+                    "Health & Medical", "Logistics & Planning", "Visa & Documentation"
+                ],
+                "min_authority_weight": 0.7,
+                "confidence_threshold": 0.75,
+                "preferred_sources": ["gov", "edu", "official_tourism", "major_travel_sites"],
+                "evidence_limit": 4,
+                "authority_boost": 0.2,
+                "recency_weight": 0.4
+            },
+            "hybrid": {
+                "categories": [
+                    "Food & Dining", "Entertainment & Nightlife", "Nature & Outdoor",
+                    "Shopping & Local Craft", "Family & Education", "Health & Wellness"
+                ],
+                "min_authority_weight": 0.5,
+                "confidence_threshold": 0.6,
+                "evidence_limit": 6,
+                "balance_weight": 0.3
+            }
+        }
+        
+        # Load cultural intelligence settings from config
+        self.cultural_config = self.config.get("cultural_intelligence", {})
+        self.enable_dual_track = self.cultural_config.get("enable_dual_track_processing", True)
+        self.enable_authenticity_scoring = self.cultural_config.get("enable_cultural_authenticity_scoring", True)
+        self.enable_distinctiveness = self.cultural_config.get("enable_distinctiveness_filtering", True)
         
     async def analyze_themes(self, input_data: EnhancedThemeAnalysisInput) -> Dict[str, Any]:
         """
@@ -512,6 +603,18 @@ class EnhancedThemeAnalysisTool:
             )
             theme_objects.append(theme_obj)
 
+        # CULTURAL INTELLIGENCE: Apply dual-track filtering before final output
+        if self.enable_dual_track:
+            # Determine data quality for adaptive filtering (simplified heuristic)
+            data_quality = "rich_data" if len(all_evidence) > 75 else "poor_data" if len(all_evidence) < 30 else "medium_data"
+            
+            pre_filter_count = len(theme_objects)
+            theme_objects = self.filter_themes_by_cultural_intelligence(theme_objects, data_quality)
+            post_filter_count = len(theme_objects)
+            
+            self.logger.info(f"Cultural intelligence filtering: {pre_filter_count} -> {post_filter_count} themes (data quality: {data_quality})")
+            print(f"DEBUG_ETA: CULTURAL FILTERING APPLIED. {pre_filter_count} -> {post_filter_count} themes", file=sys.stderr)
+        
         # Update the return result to include authentic insights
         return {
             "destination_name": input_data.destination_name,
@@ -1072,10 +1175,13 @@ class EnhancedThemeAnalysisTool:
                     sanitized_entity = entity.replace("|", " ")
                     local_theme_candidates.add(sanitized_entity)
         
-        self.logger.info(f"Identified {len(local_theme_candidates)} potential local themes")
+        self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Identified {len(local_theme_candidates)} potential local themes: {list(local_theme_candidates)[:5]}")
         
         # Second pass: map evidence to themes
+        evidence_processed = 0
+        theme_matches_found = 0
         for evidence in evidence_list:
+            evidence_processed += 1
             text_lower = evidence.text_snippet.lower()
             content_type = evidence.cultural_context.get("content_type", "general")
             semantic_topics = evidence.cultural_context.get("semantic_topics", [])
@@ -1084,6 +1190,7 @@ class EnhancedThemeAnalysisTool:
             for macro_category, micro_categories in self.theme_taxonomy.items():
                 for micro_category in micro_categories:
                     if self._check_theme_match(micro_category, text_lower):
+                        theme_matches_found += 1
                         theme_key = f"{macro_category}|{micro_category}"
                         if theme_key not in theme_evidence_map:
                             theme_evidence_map[theme_key] = {
@@ -1093,6 +1200,7 @@ class EnhancedThemeAnalysisTool:
                                 "related_themes": set(),
                                 "temporal_aspects": set()
                             }
+                            self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: New theme created: {theme_key}")
                         theme_map = theme_evidence_map[theme_key]
                         theme_map["evidence"].append(evidence)
                         theme_map["content_types"].add(content_type)
@@ -1130,21 +1238,38 @@ class EnhancedThemeAnalysisTool:
                         evidence.cultural_context.get("temporal_indicators", [])
                     )
         
+        self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Processed {evidence_processed} evidence pieces, found {theme_matches_found} theme matches")
+        self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Created {len(theme_evidence_map)} unique themes in evidence map")
+        
         # Create enhanced themes with rich context
+        themes_created = 0
+        themes_filtered_out = 0
         for theme_key, theme_data in theme_evidence_map.items():
             evidence_list = theme_data["evidence"]
             evidence_count = len(evidence_list)
             
             if evidence_count < 1:
+                themes_filtered_out += 1
+                self.logger.warning(f"🔍 DEBUG_THEME_DISCOVERY: Theme {theme_key} filtered out - no evidence (count: {evidence_count})")
                 continue
             
-            # Enhanced confidence scoring
-            confidence_components = self._calculate_enhanced_confidence(
-                evidence_list,
-                theme_data["content_types"],
-                theme_data["local_context"],
-                theme_data["temporal_aspects"]
-            )
+            # CULTURAL INTELLIGENCE: Enhanced confidence scoring with dual-track processing
+            if self.enable_dual_track:
+                confidence_components = self._calculate_cultural_enhanced_confidence(
+                    evidence_list,
+                    theme_data["content_types"],
+                    theme_data["local_context"],
+                    theme_data["temporal_aspects"],
+                    theme_key.split("|")[0]  # Pass the macro category for processing type determination
+                )
+            else:
+                # Fallback to original confidence calculation
+                confidence_components = self._calculate_enhanced_confidence(
+                    evidence_list,
+                    theme_data["content_types"],
+                    theme_data["local_context"],
+                    theme_data["temporal_aspects"]
+                )
             
             macro, micro = theme_key.split("|")
             
@@ -1204,6 +1329,10 @@ class EnhancedThemeAnalysisTool:
             theme.confidence_breakdown = confidence_scorer.calculate_confidence(evidence_list)
             
             discovered_themes.append(theme)
+            themes_created += 1
+            self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Created theme #{themes_created}: {theme.name} (confidence: {theme.confidence_breakdown.overall_confidence if hasattr(theme.confidence_breakdown, 'overall_confidence') else 'N/A'})")
+        
+        self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: FINAL RESULTS - Created: {themes_created}, Filtered: {themes_filtered_out}, Total discovered: {len(discovered_themes)}")
         
         # Post-process themes to identify relationships
         self._enhance_theme_relationships(discovered_themes)
@@ -2423,6 +2552,14 @@ class EnhancedThemeAnalysisTool:
                     total_confidence += theme.confidence_breakdown.overall_confidence
                 elif theme.confidence_breakdown and isinstance(theme.confidence_breakdown, dict):
                     total_confidence += theme.confidence_breakdown.get('overall_confidence', 0.0)
+                elif theme.confidence_breakdown and isinstance(theme.confidence_breakdown, str):
+                    # Handle JSON string case
+                    try:
+                        import json
+                        conf_dict = json.loads(theme.confidence_breakdown)
+                        total_confidence += conf_dict.get('overall_confidence', 0.0)
+                    except (json.JSONDecodeError, AttributeError):
+                        total_confidence += theme.fit_score  # Fallback to fit_score
                 else:
                     total_confidence += theme.fit_score  # Fallback to fit_score
             else:  # Dictionary
@@ -2897,6 +3034,361 @@ class EnhancedThemeAnalysisTool:
         else:
             # Unknown sources get the URL weight
             return url_weight
+
+    # =============================================================================
+    # CULTURAL INTELLIGENCE: DUAL-TRACK PROCESSING METHODS
+    # =============================================================================
+    
+    def _get_processing_type(self, macro_category: str) -> str:
+        """Determine if theme should use cultural, practical, or hybrid processing"""
+        if not macro_category:
+            return "hybrid"
+            
+        # Check which processing category this theme belongs to
+        for proc_type, rules in self.category_processing_rules.items():
+            if macro_category in rules["categories"]:
+                return proc_type
+                
+        return "hybrid"  # Default fallback
+    
+    def _calculate_cultural_enhanced_confidence(
+        self,
+        evidence_list: List[Evidence],
+        content_types: Set[str],
+        local_context: Set[str],
+        temporal_aspects: Set[str],
+        theme_category: str = None
+    ) -> Dict[str, float]:
+        """Calculate confidence with cultural intelligence and category-specific rules"""
+        
+        processing_type = self._get_processing_type(theme_category)
+        rules = self.category_processing_rules.get(processing_type, self.category_processing_rules["hybrid"])
+        
+        if processing_type == "cultural":
+            # Cultural themes: Emphasize authenticity over authority
+            components = {
+                "authenticity_score": self._calculate_authenticity_score(evidence_list),
+                "local_relevance": self._calculate_local_relevance(evidence_list, local_context),
+                "distinctiveness": self._calculate_distinctiveness_score(evidence_list),
+                "authority_score": self._calculate_authority_score(evidence_list),
+                "processing_type": processing_type
+            }
+            
+            # Cultural weighting
+            confidence_score = (
+                components["authenticity_score"] * 0.4 +      # High weight on authenticity
+                components["local_relevance"] * 0.3 +         # High weight on local relevance
+                components["distinctiveness"] * 0.2 +         # Distinctiveness matters
+                components["authority_score"] * 0.1           # Authority less important
+            )
+            
+            # Apply authenticity boost
+            if self._has_authentic_indicators(evidence_list):
+                confidence_score += rules.get("authenticity_boost", 0)
+                
+        elif processing_type == "practical":
+            # Practical themes: Emphasize authority and reliability
+            components = {
+                "authority_score": self._calculate_authority_score(evidence_list),
+                "recency_score": self._calculate_recency_score(evidence_list),
+                "consistency_score": self._calculate_consistency_score(evidence_list),
+                "completeness_score": self._calculate_completeness_score(evidence_list, content_types),
+                "local_relevance": self._calculate_local_relevance(evidence_list, local_context),  # Add missing key
+                "processing_type": processing_type
+            }
+            
+            # Practical weighting
+            confidence_score = (
+                components["authority_score"] * 0.5 +         # High weight on authority
+                components["recency_score"] * 0.3 +           # Recency important for practical info
+                components["consistency_score"] * 0.2         # Consistency critical
+            )
+            
+            # Apply authority boost
+            if self._has_authoritative_sources(evidence_list):
+                confidence_score += rules.get("authority_boost", 0)
+                
+        else:  # hybrid
+            # Balanced approach for food, entertainment, etc.
+            components = {
+                "authority_score": self._calculate_authority_score(evidence_list),
+                "authenticity_score": self._calculate_authenticity_score(evidence_list),
+                "local_relevance": self._calculate_local_relevance(evidence_list, local_context),
+                "recency_score": self._calculate_recency_score(evidence_list),
+                "processing_type": processing_type
+            }
+            
+            # Hybrid weighting
+            confidence_score = (
+                components["authority_score"] * 0.3 +
+                components["authenticity_score"] * 0.3 +
+                components["local_relevance"] * 0.2 +
+                components["recency_score"] * 0.2
+            )
+        
+        components["overall_confidence"] = min(max(confidence_score, 0.0), 1.0)
+        components["category_rules_applied"] = rules
+        
+        # CULTURAL INTELLIGENCE: Add compatibility keys for existing confidence calculation
+        # Map new cultural intelligence metrics to expected keys
+        components["evidence_quality"] = components.get("authority_score", 0.0)
+        components["source_diversity"] = min(len(evidence_list) / 3.0, 1.0)  # Simple diversity measure
+        components["temporal_coverage"] = 0.5  # Default temporal coverage
+        components["content_completeness"] = components.get("completeness_score", 0.5)
+        components["total_score"] = components["overall_confidence"]
+        
+        return components
+    
+    def _calculate_authenticity_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate authenticity score based on source characteristics and content indicators"""
+        if not evidence_list:
+            return 0.0
+            
+        authentic_indicators = self.cultural_config.get("authentic_source_indicators", {})
+        high_auth_sources = authentic_indicators.get("high_authenticity", [])
+        auth_phrases = authentic_indicators.get("authenticity_phrases", [])
+        
+        authentic_score = 0.0
+        total_weight = 0.0
+        
+        for evidence in evidence_list:
+            weight = 1.0
+            url = evidence.source_url.lower()
+            text = evidence.text_snippet.lower()
+            
+            # Reddit communities get high authenticity score
+            if any(indicator in url for indicator in high_auth_sources):
+                authentic_score += 0.8 * weight
+                
+            # Personal experience phrases
+            elif any(phrase in text for phrase in auth_phrases):
+                authentic_score += 0.9 * weight
+                
+            # Local authority indicators in content
+            elif any(indicator in text for indicator in ["local tip", "insider secret", "authentic", "genuine"]):
+                authentic_score += 0.7 * weight
+                
+            # Government/official sources get lower authenticity for cultural themes
+            elif any(domain in url for domain in [".gov", ".edu", "tripadvisor", "booking"]):
+                authentic_score += 0.3 * weight
+            else:
+                authentic_score += 0.5 * weight  # Neutral score
+                
+            total_weight += weight
+        
+        return authentic_score / total_weight if total_weight > 0 else 0.0
+    
+    def _calculate_distinctiveness_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate how distinctive/unique this theme is vs generic"""
+        if not evidence_list:
+            return 0.0
+            
+        distinct_indicators = self.cultural_config.get("distinctiveness_indicators", {})
+        unique_keywords = distinct_indicators.get("unique_keywords", [])
+        generic_keywords = distinct_indicators.get("generic_keywords", [])
+        
+        distinctive_count = 0
+        generic_count = 0
+        
+        for evidence in evidence_list:
+            text = evidence.text_snippet.lower()
+            distinctive_count += sum(1 for keyword in unique_keywords if keyword in text)
+            generic_count += sum(1 for keyword in generic_keywords if keyword in text)
+        
+        if distinctive_count + generic_count == 0:
+            return 0.5  # Neutral if no indicators
+        
+        return distinctive_count / (distinctive_count + generic_count)
+    
+    def _calculate_authority_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate authority score based on source credibility"""
+        if not evidence_list:
+            return 0.0
+            
+        authority_scores = [ev.authority_weight for ev in evidence_list]
+        
+        # Use max and average authority for balanced score
+        max_authority = max(authority_scores)
+        avg_authority = sum(authority_scores) / len(authority_scores)
+        
+        return (max_authority * 0.7 + avg_authority * 0.3)
+    
+    def _calculate_local_relevance(self, evidence_list: List[Evidence], local_context: Set[str]) -> float:
+        """Calculate local relevance score"""
+        if not evidence_list:
+            return 0.0
+            
+        local_score = 0.0
+        
+        # Score based on local context mentions
+        if local_context:
+            local_score += min(len(local_context) * 0.25, 1.0)
+            
+        # Score based on local indicators in evidence
+        local_indicators = ["local", "neighborhood", "community", "resident", "native"]
+        for evidence in evidence_list:
+            text = evidence.text_snippet.lower()
+            local_mentions = sum(1 for indicator in local_indicators if indicator in text)
+            local_score += min(local_mentions * 0.1, 0.3)
+            
+        return min(local_score, 1.0)
+    
+    def _calculate_recency_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate recency score for practical information"""
+        if not evidence_list:
+            return 0.0
+            
+        now = datetime.now()
+        recency_scores = []
+        
+        for evidence in evidence_list:
+            if evidence.published_date:
+                days_old = (now - evidence.published_date).days
+                # More recent is better, decay over time
+                if days_old <= 30:
+                    recency_scores.append(1.0)
+                elif days_old <= 90:
+                    recency_scores.append(0.8)
+                elif days_old <= 365:
+                    recency_scores.append(0.6)
+                elif days_old <= 730:
+                    recency_scores.append(0.4)
+                else:
+                    recency_scores.append(0.2)
+            else:
+                recency_scores.append(0.5)  # Unknown date
+                
+        return sum(recency_scores) / len(recency_scores) if recency_scores else 0.5
+    
+    def _calculate_consistency_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate consistency score across evidence"""
+        if len(evidence_list) < 2:
+            return 1.0  # Single piece of evidence is consistent with itself
+            
+        # Simple consistency based on sentiment alignment
+        sentiments = [ev.sentiment for ev in evidence_list if ev.sentiment is not None]
+        
+        if not sentiments:
+            return 0.5
+            
+        # Check if sentiments are generally aligned
+        positive_count = sum(1 for s in sentiments if s > 0.1)
+        negative_count = sum(1 for s in sentiments if s < -0.1)
+        neutral_count = len(sentiments) - positive_count - negative_count
+        
+        # High consistency if most evidence has similar sentiment
+        max_sentiment_type = max(positive_count, negative_count, neutral_count)
+        consistency = max_sentiment_type / len(sentiments)
+        
+        return consistency
+    
+    def _calculate_completeness_score(self, evidence_list: List[Evidence], content_types: Set[str]) -> float:
+        """Calculate completeness score based on content variety"""
+        if not evidence_list:
+            return 0.0
+            
+        # Score based on content type diversity
+        content_type_bonus = min(len(content_types) * 0.2, 1.0)
+        
+        # Score based on evidence count
+        evidence_count_bonus = min(len(evidence_list) * 0.1, 0.5)
+        
+        return min(content_type_bonus + evidence_count_bonus, 1.0)
+    
+    def _has_authentic_indicators(self, evidence_list: List[Evidence]) -> bool:
+        """Check if evidence has authentic local indicators"""
+        authentic_phrases = ["as a local", "i live here", "local tip", "insider secret", "hidden gem"]
+        
+        for evidence in evidence_list:
+            text = evidence.text_snippet.lower()
+            if any(phrase in text for phrase in authentic_phrases):
+                return True
+                
+        return False
+    
+    def _has_authoritative_sources(self, evidence_list: List[Evidence]) -> bool:
+        """Check if evidence has authoritative sources"""
+        auth_indicators = self.cultural_config.get("authoritative_source_indicators", {})
+        high_auth = auth_indicators.get("high_authority", [])
+        
+        for evidence in evidence_list:
+            url = evidence.source_url.lower()
+            if any(indicator in url for indicator in high_auth):
+                return True
+                
+        return False
+    
+    def filter_themes_by_cultural_intelligence(
+        self, 
+        themes: List[Theme], 
+        destination_data_quality: str = "medium_data"
+    ) -> List[Theme]:
+        """Apply cultural intelligence filtering with category-specific rules"""
+        
+        if not self.enable_dual_track:
+            return themes  # Fall back to original filtering
+            
+        filtered_themes = []
+        
+        for theme in themes:
+            processing_type = self._get_processing_type(theme.macro_category)
+            rules = self.category_processing_rules[processing_type]
+            
+            # Get category-specific confidence threshold
+            base_threshold = rules["confidence_threshold"]
+            
+            # Adjust for data quality (existing adaptive logic integration)
+            if destination_data_quality == "poor_data":
+                confidence_threshold = base_threshold * 0.7  # Lower bar for sparse data
+            elif destination_data_quality == "rich_data":
+                if processing_type == "practical":
+                    confidence_threshold = base_threshold * 1.1  # Raise bar for practical info
+                elif processing_type == "cultural":
+                    confidence_threshold = base_threshold * 0.9  # Slightly lower for cultural
+                else:
+                    confidence_threshold = base_threshold
+            else:
+                confidence_threshold = base_threshold
+                
+            # Get theme confidence
+            theme_confidence = 0.0
+            if theme.confidence_breakdown:
+                if hasattr(theme.confidence_breakdown, 'overall_confidence'):
+                    theme_confidence = theme.confidence_breakdown.overall_confidence
+                elif isinstance(theme.confidence_breakdown, dict):
+                    theme_confidence = theme.confidence_breakdown.get('overall_confidence', 0.0)
+                elif isinstance(theme.confidence_breakdown, str):
+                    # Handle JSON string case
+                    try:
+                        import json
+                        conf_dict = json.loads(theme.confidence_breakdown)
+                        theme_confidence = conf_dict.get('overall_confidence', 0.0)
+                    except (json.JSONDecodeError, AttributeError):
+                        theme_confidence = 0.0
+            
+            # Apply distinctiveness filtering for cultural themes
+            if processing_type == "cultural" and self.enable_distinctiveness:
+                distinctiveness = self._calculate_distinctiveness_score(theme.evidence)
+                if distinctiveness < 0.3:  # Filter out generic cultural themes
+                    self.logger.info(f"Filtered cultural theme '{theme.name}' for low distinctiveness: {distinctiveness:.2f}")
+                    continue
+                    
+            # Apply the confidence threshold
+            if theme_confidence >= confidence_threshold:
+                # Apply evidence limits
+                max_evidence = rules.get("evidence_limit", 6)
+                if len(theme.evidence) > max_evidence:
+                    # Keep the highest authority evidence
+                    sorted_evidence = sorted(theme.evidence, key=lambda e: e.authority_weight, reverse=True)
+                    theme.evidence = sorted_evidence[:max_evidence]
+                    
+                filtered_themes.append(theme)
+                self.logger.debug(f"Theme '{theme.name}' ({processing_type}) passed filtering: {theme_confidence:.2f} >= {confidence_threshold:.2f}")
+            else:
+                self.logger.info(f"Filtered theme '{theme.name}' ({processing_type}): {theme_confidence:.2f} < {confidence_threshold:.2f}")
+                
+        self.logger.info(f"Cultural intelligence filtering: {len(themes)} -> {len(filtered_themes)} themes")
+        return filtered_themes
 
 def create_enhanced_theme_analysis_tool() -> Tool:
     """Factory function to create the tool for LangChain"""

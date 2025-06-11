@@ -125,13 +125,32 @@ class SmartViewGenerator:
                     confidence = confidence_breakdown.overall_confidence
                 elif confidence_breakdown and isinstance(confidence_breakdown, dict):
                     confidence = confidence_breakdown.get('overall_confidence', 0)
+                elif confidence_breakdown and isinstance(confidence_breakdown, str):
+                    # Handle JSON string case
+                    try:
+                        import json
+                        conf_dict = json.loads(confidence_breakdown)
+                        confidence = conf_dict.get('overall_confidence', 0)
+                    except (json.JSONDecodeError, AttributeError):
+                        confidence = 0
                 else:
                     confidence = 0
             else:  # Dictionary
                 confidence_breakdown = theme.get("confidence_breakdown", {})
                 # Handle None confidence_breakdown
                 if confidence_breakdown:
-                    confidence = confidence_breakdown.get('overall_confidence', 0)
+                    if isinstance(confidence_breakdown, dict):
+                        confidence = confidence_breakdown.get('overall_confidence', 0)
+                    elif isinstance(confidence_breakdown, str):
+                        # Handle JSON string case
+                        try:
+                            import json
+                            conf_dict = json.loads(confidence_breakdown)
+                            confidence = conf_dict.get('overall_confidence', 0)
+                        except (json.JSONDecodeError, AttributeError):
+                            confidence = 0
+                    else:
+                        confidence = 0
                 else:
                     confidence = 0
             
@@ -233,19 +252,29 @@ class SmartViewGenerator:
                 seasonal_relevance = theme.get("seasonal_relevance", {})
                 theme_name = theme.get("name", "Unknown")
             
+            # Handle seasonal_relevance as dict or JSON string
             if seasonal_relevance:
-                for season, relevance in seasonal_relevance.items():
-                    if relevance > 0.5:  # Significant seasonal relevance
-                        if season not in seasonal_themes:
-                            seasonal_themes[season] = []
-                        seasonal_themes[season].append({
-                            "theme_id": theme_id,
-                            "name": theme_name,
-                            "relevance": relevance
-                        })
-                        
-                # Check for current season relevance (simplified)
-                current_relevance = seasonal_relevance.get("current", 0)
+                # If it's a JSON string, parse it
+                if isinstance(seasonal_relevance, str):
+                    try:
+                        import json
+                        seasonal_relevance = json.loads(seasonal_relevance)
+                    except (json.JSONDecodeError, TypeError):
+                        seasonal_relevance = {}
+                
+                if isinstance(seasonal_relevance, dict):
+                    for season, relevance in seasonal_relevance.items():
+                        if relevance > 0.5:  # Significant seasonal relevance
+                            if season not in seasonal_themes:
+                                seasonal_themes[season] = []
+                            seasonal_themes[season].append({
+                                "theme_id": theme_id,
+                                "name": theme_name,
+                                "relevance": relevance
+                            })
+                            
+                    # Check for current season relevance (simplified)
+                    current_relevance = seasonal_relevance.get("current", 0)
                 if current_relevance > 0.7:
                     current_season_themes.append({
                         "theme_id": theme_id,
@@ -284,13 +313,32 @@ class SmartViewGenerator:
                     theme_confidences.append(confidence_breakdown.overall_confidence)
                 elif confidence_breakdown and isinstance(confidence_breakdown, dict):
                     theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                elif confidence_breakdown and isinstance(confidence_breakdown, str):
+                    # Handle JSON string case
+                    try:
+                        import json
+                        conf_dict = json.loads(confidence_breakdown)
+                        theme_confidences.append(conf_dict.get('overall_confidence', 0))
+                    except (json.JSONDecodeError, AttributeError):
+                        theme_confidences.append(0)
                 else:
                     theme_confidences.append(0)
             else:  # Dictionary
                 confidence_breakdown = theme.get("confidence_breakdown", {})
                 # Handle None confidence_breakdown
                 if confidence_breakdown:
-                    theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                    if isinstance(confidence_breakdown, dict):
+                        theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                    elif isinstance(confidence_breakdown, str):
+                        # Handle JSON string case
+                        try:
+                            import json
+                            conf_dict = json.loads(confidence_breakdown)
+                            theme_confidences.append(conf_dict.get('overall_confidence', 0))
+                        except (json.JSONDecodeError, AttributeError):
+                            theme_confidences.append(0)
+                    else:
+                        theme_confidences.append(0)
                 else:
                     theme_confidences.append(0)  # Default confidence if breakdown is None
             
@@ -514,14 +562,23 @@ class SmartViewGenerator:
                 seasonal_relevance = theme.get("seasonal_relevance", {})
                 theme_name = theme.get("name", "Unknown")
             
-            for season, relevance in seasonal_relevance.items():
-                if relevance > 0.5:  # Significant seasonal relevance
-                    if season not in seasonal_themes:
-                        seasonal_themes[season] = []
-                    seasonal_themes[season].append({
-                        "name": theme_name,
-                        "relevance": relevance
-                    })
+            # Handle seasonal_relevance as dict or JSON string
+            if isinstance(seasonal_relevance, str):
+                try:
+                    import json
+                    seasonal_relevance = json.loads(seasonal_relevance)
+                except (json.JSONDecodeError, TypeError):
+                    seasonal_relevance = {}
+            
+            if isinstance(seasonal_relevance, dict):
+                for season, relevance in seasonal_relevance.items():
+                    if relevance > 0.5:  # Significant seasonal relevance
+                        if season not in seasonal_themes:
+                            seasonal_themes[season] = []
+                        seasonal_themes[season].append({
+                            "name": theme_name,
+                            "relevance": relevance
+                        })
         
         return seasonal_themes
 

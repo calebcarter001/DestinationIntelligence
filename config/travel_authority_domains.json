@@ -1,0 +1,352 @@
+[
+    {
+      "id": 1,
+      "name": "Booking.com",
+      "url": "https://www.booking.com",
+      "category": "Global OTA",
+      "description": "One of the world's largest OTAs for accommodations, flights, car rentals, and attractions. Part of Booking Holdings."
+    },
+    {
+      "id": 2,
+      "name": "Expedia.com",
+      "url": "https://www.expedia.com",
+      "category": "Global OTA",
+      "description": "Major global OTA offering flights, hotels, car rentals, cruises, and vacation packages. Parent of many other travel brands."
+    },
+    {
+      "id": 3,
+      "name": "TripAdvisor.com",
+      "url": "https://www.tripadvisor.com",
+      "category": "Reviews & Community",
+      "description": "Largest travel review and community site, with booking capabilities for hotels, flights, and attractions."
+    },
+    {
+      "id": 4,
+      "name": "Google Flights",
+      "url": "https://www.google.com/flights",
+      "category": "Meta-Search",
+      "description": "Powerful flight comparison tool integrated into Google Search, pulling data from airlines and OTAs."
+    },
+    {
+      "id": 5,
+      "name": "Google Hotels",
+      "url": "https://www.google.com/hotels",
+      "category": "Meta-Search",
+      "description": "Hotel search and booking platform integrated into Google Search, comparing prices from various sources."
+    },
+    {
+      "id": 6,
+      "name": "Airbnb.com",
+      "url": "https://www.airbnb.com",
+      "category": "Alternative Accommodations",
+      "description": "Leading platform for short-term home and apartment rentals, and experiences."
+    },
+    {
+      "id": 7,
+      "name": "Kayak.com",
+      "url": "https://www.kayak.com",
+      "category": "Meta-Search",
+      "description": "Popular meta-search engine for flights, hotels, and car rentals. Owned by Booking Holdings."
+    },
+    {
+      "id": 8,
+      "name": "Skyscanner.net",
+      "url": "https://www.skyscanner.net",
+      "category": "Meta-Search",
+      "description": "Global travel meta-search engine, strong for flexible date searches. Owned by Trip.com Group."
+    },
+    {
+      "id": 9,
+      "name": "Agoda.com",
+      "url": "https://www.agoda.com",
+      "category": "Global OTA",
+      "description": "OTA with a strong presence in Asia, offering hotels, flights, and airport transfers. Part of Booking Holdings."
+    },
+    {
+      "id": 10,
+      "name": "Hotels.com",
+      "url": "https://www.hotels.com",
+      "category": "Global OTA",
+      "description": "OTA focused on hotel bookings, known for its loyalty program. Part of Expedia Group."
+    },
+    {
+      "id": 11,
+      "name": "Vrbo.com",
+      "url": "https://www.vrbo.com",
+      "category": "Alternative Accommodations",
+      "description": "Platform for vacation home rentals, primarily targeting families and groups. Part of Expedia Group."
+    },
+    {
+      "id": 12,
+      "name": "Trip.com",
+      "url": "https://www.trip.com",
+      "category": "Global OTA",
+      "description": "Leading OTA in China (as Ctrip) with expanding global presence, offering flights, hotels, trains, and tours."
+    },
+    {
+      "id": 13,
+      "name": "Momondo.com",
+      "url": "https://www.momondo.com",
+      "category": "Meta-Search",
+      "description": "Travel meta-search engine known for its broad search and colorful interface. Owned by Booking Holdings."
+    },
+    {
+      "id": 14,
+      "name": "LonelyPlanet.com",
+      "url": "https://www.lonelyplanet.com",
+      "category": "Content & Inspiration",
+      "description": "Iconic travel guide publisher offering destination information, travel tips, and inspiration."
+    },
+    {
+      "id": 15,
+      "name": "Conde Nast Traveler",
+      "url": "https://www.cntraveler.com",
+      "category": "Content & Inspiration",
+      "description": "Luxury travel magazine and website offering aspirational content, reviews, and destination guides."
+    },
+    {
+      "id": 16,
+      "name": "Travel + Leisure",
+      "url": "https://www.travelandleisure.com",
+      "category": "Content & Inspiration",
+      "description": "Influential travel magazine and website focusing on destinations, hotels, food, and lifestyle."
+    },
+    {
+      "id": 17,
+      "name": "ThePointsGuy.com",
+      "url": "https://www.thepointsguy.com",
+      "category": "Travel Hacking & Loyalty",
+      "description": "Authoritative source for travel rewards, loyalty programs, credit cards, and maximizing points/miles."
+    },
+    {
+      "id": 18,
+      "name": "National Geographic Travel",
+      "url": "https://www.nationalgeographic.com/travel",
+      "category": "Content & Inspiration",
+      "description": "Focuses on photography, cultural insights, adventure, and sustainable travel."
+    },
+    {
+      "id": 19,
+      "name": "Viator.com",
+      "url": "https://www.viator.com",
+      "category": "Tours & Activities",
+      "description": "Leading platform for booking tours, activities, and attractions worldwide. Owned by TripAdvisor."
+    },
+    {
+      "id": 20,
+      "name": "GetYourGuide.com",
+      "url": "https://www.getyourguide.com",
+      "category": "Tours & Activities",
+      "description": "Platform for discovering and booking tours, activities, and attractions."
+    },
+    {
+      "id": 21,
+      "name": "Priceline.com",
+      "url": "https://www.priceline.com",
+      "category": "Global OTA",
+      "description": "OTA known for its 'Name Your Own Price' model and discount travel deals. Part of Booking Holdings."
+    },
+    {
+      "id": 22,
+      "name": "Hostelworld.com",
+      "url": "https://www.hostelworld.com",
+      "category": "Specialized OTA (Hostels)",
+      "description": "Leading online booking platform for hostels worldwide."
+    },
+    {
+      "id": 23,
+      "name": "CruiseCritic.com",
+      "url": "https://www.cruisecritic.com",
+      "category": "Reviews & Community (Cruises)",
+      "description": "Comprehensive cruise review site with community forums and booking information."
+    },
+    {
+      "id": 24,
+      "name": "Skift.com",
+      "url": "https://www.skift.com",
+      "category": "Industry News & Analysis",
+      "description": "Leading source for travel industry news, research, and intelligence."
+    },
+    {
+      "id": 25,
+      "name": "Phocuswire.com",
+      "url": "https://www.phocuswire.com",
+      "category": "Industry News & Analysis",
+      "description": "Focuses on travel technology, distribution, and digital trends in the travel industry."
+    },
+    {
+      "id": 26,
+      "name": "Fodors.com",
+      "url": "https://www.fodors.com",
+      "category": "Content & Inspiration",
+      "description": "Long-standing travel guide publisher offering destination advice and travel tips."
+    },
+    {
+      "id": 27,
+      "name": "Orbitz.com",
+      "url": "https://www.orbitz.com",
+      "category": "Global OTA",
+      "description": "OTA offering flights, hotels, cars, and packages, known for its rewards program. Part of Expedia Group."
+    },
+    {
+      "id": 28,
+      "name": "Travelocity.com",
+      "url": "https://www.travelocity.com",
+      "category": "Global OTA",
+      "description": "Well-known OTA for booking flights, hotels, cars, and vacation packages. Part of Expedia Group."
+    },
+    {
+      "id": 29,
+      "name": "Hotwire.com",
+      "url": "https://www.hotwire.com",
+      "category": "Global OTA (Discount)",
+      "description": "Discount travel site offering opaque deals on hotels, flights, and cars. Part of Expedia Group."
+    },
+    {
+      "id": 30,
+      "name": "Rentalcars.com",
+      "url": "https://www.rentalcars.com",
+      "category": "Specialized OTA (Car Rental)",
+      "description": "Major online car rental booking service. Part of Booking Holdings."
+    },
+    {
+      "id": 31,
+      "name": "US Department of State - Travel",
+      "url": "https://travel.state.gov",
+      "category": "Government & Official Info",
+      "description": "Official source for US travel advisories, passport, and visa information."
+    },
+    {
+      "id": 32,
+      "name": "GOV.UK - Foreign travel advice",
+      "url": "https://www.gov.uk/foreign-travel-advice",
+      "category": "Government & Official Info",
+      "description": "Official source for UK government travel advisories and safety information."
+    },
+    {
+      "id": 33,
+      "name": "Rome2Rio.com",
+      "url": "https://www.rome2rio.com",
+      "category": "Multi-Modal Journey Planner",
+      "description": "Helps discover how to get anywhere by plane, train, bus, ferry, and car."
+    },
+    {
+      "id": 34,
+      "name": "Klook.com",
+      "url": "https://www.klook.com",
+      "category": "Tours & Activities",
+      "description": "Platform for booking travel activities, attractions, and local experiences, strong in Asia."
+    },
+    {
+      "id": 35,
+      "name": "NomadicMatt.com",
+      "url": "https://www.nomadicmatt.com",
+      "category": "Content & Inspiration (Budget Travel)",
+      "description": "Popular budget travel blog with tips, advice, and destination guides."
+    },
+    {
+      "id": 36,
+      "name": "Scott's Cheap Flights (Going.com)",
+      "url": "https://www.going.com",
+      "category": "Deal Finding Service",
+      "description": "Subscription service and website that finds and alerts members to cheap flight deals."
+    },
+    {
+      "id": 37,
+      "name": "Marriott.com",
+      "url": "https://www.marriott.com",
+      "category": "Direct Hotel Chain",
+      "description": "Official site for Marriott Bonvoy hotels, for booking and loyalty program management."
+    },
+    {
+      "id": 38,
+      "name": "Hilton.com",
+      "url": "https://www.hilton.com",
+      "category": "Direct Hotel Chain",
+      "description": "Official site for Hilton Worldwide hotels, for booking and Hilton Honors program."
+    },
+    {
+      "id": 39,
+      "name": "IHG.com",
+      "url": "https://www.ihg.com",
+      "category": "Direct Hotel Chain",
+      "description": "Official site for InterContinental Hotels Group, for booking and IHG Rewards."
+    },
+    {
+      "id": 40,
+      "name": "AmericanAirlines.com (aa.com)",
+      "url": "https://www.aa.com",
+      "category": "Direct Airline",
+      "description": "Official website for American Airlines, for bookings and AAdvantage loyalty program."
+    },
+    {
+      "id": 41,
+      "name": "Delta.com",
+      "url": "https://www.delta.com",
+      "category": "Direct Airline",
+      "description": "Official website for Delta Air Lines, for bookings and SkyMiles loyalty program."
+    },
+    {
+      "id": 42,
+      "name": "United.com",
+      "url": "https://www.united.com",
+      "category": "Direct Airline",
+      "description": "Official website for United Airlines, for bookings and MileagePlus loyalty program."
+    },
+    {
+      "id": 43,
+      "name": "AtlasObscura.com",
+      "url": "https://www.atlasobscura.com",
+      "category": "Content & Inspiration (Unique Places)",
+      "description": "Guide to the world's wondrous and curious places, offering unique travel inspiration and trips."
+    },
+    {
+      "id": 44,
+      "name": "RickSteves.com",
+      "url": "https://www.ricksteves.com",
+      "category": "Content & Inspiration (Europe)",
+      "description": "Authoritative resource for European travel, with guidebooks, tours, TV shows, and travel tips."
+    },
+    {
+      "id": 45,
+      "name": "MakeMyTrip.com",
+      "url": "https://www.makemytrip.com",
+      "category": "Regional OTA (India)",
+      "description": "Leading online travel company in India, offering flights, hotels, holiday packages, and more."
+    },
+    {
+      "id": 46,
+      "name": "Despegar.com / Decolar.com",
+      "url": "https://www.despegar.com",
+      "category": "Regional OTA (Latin America)",
+      "description": "Leading online travel company in Latin America (Despegar in Spanish-speaking countries, Decolar in Brazil)."
+    },
+    {
+      "id": 47,
+      "name": "SecretFlying.com",
+      "url": "https://www.secretflying.com",
+      "category": "Deal Finding Service",
+      "description": "Finds and shares exceptionally cheap flight deals and error fares from around the world."
+    },
+    {
+      "id": 48,
+      "name": "Trainline.com",
+      "url": "https://www.thetrainline.com",
+      "category": "Specialized OTA (Rail)",
+      "description": "Leading independent retailer of train and coach tickets, strong in Europe."
+    },
+    {
+      "id": 49,
+      "name": "InsureMyTrip.com",
+      "url": "https://www.insuremytrip.com",
+      "category": "Travel Insurance Comparison",
+      "description": "Comparison site for travel insurance plans from various providers."
+    },
+    {
+      "id": 50,
+      "name": "SleepingInAirports.net",
+      "url": "https://www.sleepinginairports.net",
+      "category": "Airport Information & Guides",
+      "description": "Provides airport reviews, guides on sleeping in airports, airport lounges, and general airport information."
+    }
+  ]

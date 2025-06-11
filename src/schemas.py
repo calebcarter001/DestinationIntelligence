@@ -28,6 +28,7 @@ class PageContent(BaseModel):
 
 class EnhancedEvidence(BaseModel):
     """Enhanced evidence object with all analytical fields"""
+    id: str = Field(description="Unique identifier for the evidence")
     source_url: str = Field(description="Source URL of the evidence")
     source_category: str = Field(description="Category of the source")
     authority_weight: float = Field(description="Authority weight of the source")
@@ -152,6 +153,8 @@ class AuthorityType(Enum):
     PROFESSIONAL = "industry_professional"
     CULTURAL = "cultural_institution"
     SEASONAL_WORKER = "seasonal_worker"
+    OFFICIAL = "official"  # government, tourism boards
+    COMMUNITY = "community"  # local community groups
 
 class LocationExclusivity(Enum):
     EXCLUSIVE = "exclusive"  # only here

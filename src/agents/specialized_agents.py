@@ -10,7 +10,15 @@ import json
 import sys
 import numpy as np # For dot product and norm, if calculating cosine similarity manually
 from sklearn.metrics.pairwise import cosine_similarity # Ensure cosine_similarity is imported
-from sentence_transformers import SentenceTransformer # Ensure SentenceTransformer is imported
+
+# Try to import sentence transformers, fall back gracefully if not available
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+    SentenceTransformer = None
+
 from collections import Counter # ADDED Counter import
 
 from .base_agent import BaseAgent, MessageBroker, AgentMessage, MessageType
@@ -45,14 +53,15 @@ class ValidationAgent(BaseAgent):
         self.register_handler(MessageType.VALIDATION_REQUEST, self._handle_validation_request)
         
         # Initialize Sentence Model
-        try:
-            self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2') 
-            self.logger.info("SentenceTransformer model 'all-MiniLM-L6-v2' loaded for ValidationAgent.")
-        except ImportError:
-            self.logger.error("SentenceTransformer library not found. Please install it: pip install sentence-transformers")
-            self.sentence_model = None
-        except Exception as e:
-            self.logger.error(f"Error loading SentenceTransformer model: {e}. Semantic relevance will be impaired.")
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                self.sentence_model = SentenceTransformer('all-MiniLM-L6-v2') 
+                self.logger.info("SentenceTransformer model 'all-MiniLM-L6-v2' loaded for ValidationAgent.")
+            except Exception as e:
+                self.logger.error(f"Error loading SentenceTransformer model: {e}. Semantic relevance will be impaired.")
+                self.sentence_model = None
+        else:
+            self.logger.warning("SentenceTransformer library not available. Install with: pip install sentence-transformers")
             self.sentence_model = None
 
         # Theme Category Archetypes (destination-agnostic, but with a tourist lens)
@@ -180,7 +189,7 @@ class ValidationAgent(BaseAgent):
             "general", "information", "overview", "details", "introduction",
             "history", "culture", "people", "population", "geography",
             "climate", "weather", "economy", "politics", "government",
-            "city", "town", "area", "region", "country", "nation", "world",
+            "city", "town", "area", "region", "country", "nation",
             "facts", "data", "statistics", "demographics",
             "united states", "america", "usa", "u.s.a.", "u.s.",  # Added explicit country variations
             "state", "states", "province", "provinces", "territory",  # Added administrative divisions
@@ -283,13 +292,27 @@ class ValidationAgent(BaseAgent):
                                       destination_name: str, 
                                       destination_country_code: str,
                                       semantic_score: float) -> float:
-        """Calculate how relevant a theme is for travelers."""
-        theme_name = theme_data.get("name", "").lower()
-        theme_description = theme_data.get("description", "").lower()
+        """Calculate how relevant a theme is for travelers using emotional appeal and experience classification."""
+        # Handle None values gracefully
+        if not isinstance(theme_data, dict):
+            return 0.5
+            
+        theme_name = theme_data.get("name", "") or ""
+        theme_description = theme_data.get("description", "") or ""
+        theme_category = theme_data.get("macro_category", "") or ""
+        
+        # Convert to lowercase safely
+        theme_name = str(theme_name).lower()
+        theme_description = str(theme_description).lower()
+        theme_category = str(theme_category).lower()
+        combined_text = f"{theme_name} {theme_description}"
         
         # Penalize themes that are just geographic names or too general
-        if any(term in theme_name for term in self.generic_theme_stop_list):
-            return 0.1  # Severely penalize generic geographic themes
+        # Use word boundaries to avoid catching compound words like "world-class"
+        for term in self.generic_theme_stop_list:
+            # Use word boundaries to match whole words only
+            if re.search(r'\b' + re.escape(term) + r'\b', theme_name):
+                return 0.1  # Severely penalize generic geographic themes
         
         # Check if theme matches country name variations
         country_variations = self.country_name_map.get(destination_country_code, [])
@@ -299,26 +322,130 @@ class ValidationAgent(BaseAgent):
         # Penalize state/region level themes
         if destination_country_code == "US":
             for state, cities in self.us_states.items():
-                if state.lower() in theme_name and destination_name.lower() not in cities:
+                if state.lower() in theme_name and str(destination_name).lower() not in cities:
                     return 0.2  # Penalize state-level themes
         
-        # Calculate base relevance from semantic score
-        base_relevance = semantic_score
+        # ENHANCED: Start with category-based base scoring
+        base_relevance = 0.5  # Default neutral
         
-        # Boost for specific tourist indicators in theme name or description
-        tourist_indicators = [
-            "attraction", "tour", "visit", "experience", "activity",
-            "sightseeing", "guide", "tourist", "traveler", "destination"
+        # High tourist relevance categories (experiential)
+        high_tourist_categories = [
+            "entertainment & nightlife", "cultural identity & atmosphere", "nature & outdoor",
+            "authentic experiences", "distinctive features", "artistic & creative scene"
         ]
         
-        indicator_boost = sum(0.1 for indicator in tourist_indicators 
-                            if indicator in theme_name or indicator in theme_description)
+        # Medium tourist relevance categories  
+        medium_tourist_categories = [
+            "food & dining", "shopping & local craft", "family & education"
+        ]
         
-        # Cap the total boost
-        total_boost = min(indicator_boost, 0.3)
+        # Low tourist relevance categories (more for locals)
+        low_tourist_categories = [
+            "health & medical", "transportation & access", "budget & costs",
+            "visa & documentation", "logistics & planning", "safety & security"
+        ]
         
-        # Combine base relevance with tourist-specific boosts
-        final_relevance = min(base_relevance + total_boost, 1.0)
+        if theme_category in high_tourist_categories:
+            base_relevance = 0.8
+        elif theme_category in medium_tourist_categories:
+            base_relevance = 0.6
+        elif theme_category in low_tourist_categories:
+            base_relevance = 0.3
+        
+        # NEW: Emotional Language Detection - creates excitement and inspiration
+        emotional_keywords = [
+            "breathtaking", "stunning", "spectacular", "vibrant", "thrilling", 
+            "intimate", "tranquil", "lively", "genuine", "authentic", "picturesque",
+            "serene", "bustling", "hidden", "secret", "romantic", "magical",
+            "enchanting", "captivating", "mesmerizing", "awe-inspiring", "charming"
+        ]
+        
+        emotional_count = sum(1 for keyword in emotional_keywords if keyword in combined_text)
+        emotional_boost = min(emotional_count * 0.2, 0.6)  # Up to 0.6 boost for multiple emotional words
+        
+        # NEW: Experience vs Service Classification
+        experiential_keywords = [
+            "adventures", "exploration", "discovery", "journey", "escape", "retreat",
+            "immersion", "celebration", "entertainment", "tours", "experiences",
+            "excursions", "activities", "attractions", "sightseeing"
+        ]
+        
+        service_keywords = [
+            "fitness", "medical", "hospital", "clinic", "grocery", "utilities",
+            "administrative", "residential", "office", "government", "banking",
+            "insurance", "legal services", "repairs", "maintenance"
+        ]
+        
+        experience_count = sum(1 for keyword in experiential_keywords if keyword in combined_text)
+        experience_boost = min(experience_count * 0.15, 0.45)  # Up to 0.45 boost
+        
+        service_count = sum(1 for keyword in service_keywords if keyword in combined_text)
+        service_penalty = min(service_count * 0.25, 0.5)  # Up to 0.5 penalty
+        
+        # NEW: Visual/Sensory Appeal Detection
+        visual_appeal_keywords = [
+            "scenic", "views", "landscapes", "sunset", "sunrise", "photography",
+            "architecture", "art", "colorful", "beautiful", "panoramic", "vista",
+            "overlook", "gardens", "monuments", "galleries", "museums", "theaters"
+        ]
+        
+        visual_count = sum(1 for keyword in visual_appeal_keywords if keyword in combined_text)
+        visual_boost = min(visual_count * 0.12, 0.36)  # Up to 0.36 boost
+        
+        # NEW: Traveler Persona Targeting
+        persona_boosts = 0.0
+        
+        # Couples/Romance
+        romantic_keywords = ["romantic", "intimate", "couples", "sunset", "wine", "spa", "cozy"]
+        if any(keyword in combined_text for keyword in romantic_keywords):
+            persona_boosts += 0.15
+        
+        # Families
+        family_keywords = ["family", "kids", "children", "educational", "safe", "all-ages"]
+        if any(keyword in combined_text for keyword in family_keywords):
+            persona_boosts += 0.12
+        
+        # Adventure Seekers
+        adventure_keywords = ["adventure", "hiking", "climbing", "extreme", "adrenaline", "outdoor"]
+        if any(keyword in combined_text for keyword in adventure_keywords):
+            persona_boosts += 0.18
+        
+        # Culture Enthusiasts
+        culture_keywords = ["cultural", "traditional", "historical", "heritage", "local", "authentic"]
+        if any(keyword in combined_text for keyword in culture_keywords):
+            persona_boosts += 0.15
+        
+        # ENHANCED: Stronger penalties for mundane local utilities
+        mundane_penalties = [
+            "fitness center", "gym", "hospital", "clinic", "medical center",
+            "grocery store", "supermarket", "post office", "bank", "atm",
+            "gas station", "parking", "laundromat", "pharmacy", "dentist"
+        ]
+        
+        mundane_count = sum(1 for mundane in mundane_penalties if mundane in combined_text)
+        mundane_penalty = min(mundane_count * 0.3, 0.6)  # Up to 0.6 penalty
+        
+        # NEW: Boost for highly-rated/recommended experiences
+        quality_indicators = [
+            "top-rated", "highly recommended", "must-see", "world-class", "award-winning",
+            "famous", "renowned", "iconic", "legendary", "exceptional", "outstanding"
+        ]
+        
+        quality_count = sum(1 for indicator in quality_indicators if indicator in combined_text)
+        quality_boost = min(quality_count * 0.1, 0.3)  # Up to 0.3 boost
+        
+        # Calculate final relevance with all factors
+        final_relevance = (base_relevance + 
+                          emotional_boost + 
+                          experience_boost + 
+                          visual_boost + 
+                          persona_boosts + 
+                          quality_boost - 
+                          service_penalty - 
+                          mundane_penalty)
+        
+        # Apply bounds with higher upper limit for exceptional tourist themes
+        final_relevance = max(0.05, min(final_relevance, 2.0))  # Allow up to 2.0 for exceptional themes
         
         return final_relevance
 

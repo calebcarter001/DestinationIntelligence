@@ -1,10 +1,10 @@
 import unittest
 from datetime import datetime, date
 from src.core.enhanced_data_models import (
-    AuthenticInsight, SeasonalWindow, LocalAuthority, Theme, Evidence, 
+    AuthenticInsight, SeasonalWindow, LocalAuthority, Theme,
     TemporalSlice, DimensionValue, Destination, PointOfInterest
 )
-from src.schemas import InsightType, AuthorityType, LocationExclusivity
+from src.schemas import InsightType, AuthorityType, LocationExclusivity, EnhancedEvidence
 from src.core.evidence_hierarchy import SourceCategory, EvidenceType
 
 
@@ -115,15 +115,19 @@ class TestLocalAuthority(unittest.TestCase):
 class TestEnhancedTheme(unittest.TestCase):
     
     def setUp(self):
-        self.evidence = Evidence(
+        self.evidence = EnhancedEvidence(
             id="test_evidence_1",
             source_url="https://example.com",
             source_category=SourceCategory.BLOG,
             evidence_type=EvidenceType.TERTIARY,
             authority_weight=0.5,
             text_snippet="Test evidence snippet",
-            timestamp=datetime.now(),
-            confidence=0.7
+            timestamp=datetime.now().isoformat(),
+            confidence=0.7,
+            sentiment=0.6,
+            cultural_context={"is_local": True},
+            relationships=[],
+            agent_id="test_agent"
         )
         
         self.authentic_insight = AuthenticInsight(

@@ -795,6 +795,17 @@ class EnhancedDatabaseManager:
 
     def _store_evidence(self, cursor, destination_id: str, evidence: Evidence):
         """Store or update evidence"""
+        # Helper function to handle timestamp formatting
+        def format_timestamp(timestamp):
+            if timestamp is None:
+                return None
+            elif isinstance(timestamp, str):
+                return timestamp  # Already formatted
+            elif hasattr(timestamp, 'isoformat'):
+                return timestamp.isoformat()  # datetime object
+            else:
+                return str(timestamp)  # fallback to string
+        
         cursor.execute("""
             INSERT OR REPLACE INTO evidence 
             (id, destination_id, content, source_url, source_type, publication_date,
@@ -807,8 +818,8 @@ class EnhancedDatabaseManager:
             evidence.text_snippet,  # Map text_snippet to content
             evidence.source_url,
             getattr(evidence.source_category, 'value', str(evidence.source_category)) if hasattr(evidence, 'source_category') else None,
-            getattr(evidence, 'published_date', None).isoformat() if getattr(evidence, 'published_date', None) else None,  # publication_date
-            evidence.timestamp.isoformat() if evidence.timestamp else None,
+            format_timestamp(getattr(evidence, 'published_date', None)),  # publication_date
+            format_timestamp(evidence.timestamp),
             getattr(evidence, 'relevance_score', 0.0),
             evidence.confidence,
             getattr(evidence, 'author', None),
@@ -819,7 +830,7 @@ class EnhancedDatabaseManager:
             json.dumps(getattr(evidence, 'cultural_context', {})) if getattr(evidence, 'cultural_context', None) else None,
             json.dumps(getattr(evidence, 'relationships', [])) if getattr(evidence, 'relationships', None) else None,
             getattr(evidence, 'agent_id', None),
-            getattr(evidence, 'published_date', None).isoformat() if getattr(evidence, 'published_date', None) else None  # published_date (duplicate)
+            format_timestamp(getattr(evidence, 'published_date', None))  # published_date (duplicate)
         ))
 
     def _store_dimension(self, cursor, destination_id: str, name: str, value: DimensionValue):

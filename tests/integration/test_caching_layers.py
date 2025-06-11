@@ -22,8 +22,9 @@ if PROJECT_ROOT not in sys.path:
 from src.caching import read_from_cache, write_to_cache, get_cache_path, CACHE_EXPIRY_DAYS
 from src.tools.chroma_interaction_tools import ChromaDBManager
 from src.core.enhanced_database_manager import EnhancedDatabaseManager
-from src.core.enhanced_data_models import Destination, Theme, Evidence
+from src.core.enhanced_data_models import Destination, Theme
 from src.core.evidence_hierarchy import SourceCategory, EvidenceType
+from src.schemas import EnhancedEvidence
 
 class TestFileCaching:
     """Test the basic file-based caching system"""
@@ -307,16 +308,13 @@ class TestDatabaseCaching:
         )
         
         # Create test destination with themes and evidence
-        from datetime import datetime
-        
-        evidence = Evidence(
+        evidence = EnhancedEvidence(
             id="test_evidence",
             source_url="https://example.com/test",
             source_category=SourceCategory.GUIDEBOOK,
-            evidence_type=EvidenceType.PRIMARY,
             authority_weight=0.8,
             text_snippet="Test evidence about destination attractions.",
-            timestamp=datetime.now(),
+            timestamp=datetime.now().isoformat(),
             confidence=0.9,
             sentiment=0.7,
             cultural_context={"is_local_source": True},
@@ -475,14 +473,13 @@ class TestCacheIntegration:
         chroma_manager.add_chunks([chunk])
         
         # 3. Store structured data in SQLite
-        evidence = Evidence(
+        evidence = EnhancedEvidence(
             id="integration_evidence",
             source_url="https://example.com/integration",
             source_category=SourceCategory.BLOG,
-            evidence_type=EvidenceType.SECONDARY,
             authority_weight=0.7,
             text_snippet="Integration test evidence",
-            timestamp=datetime.now(),
+            timestamp=datetime.now().isoformat(),
             confidence=0.8,
             sentiment=0.6,
             cultural_context={"integration": True},

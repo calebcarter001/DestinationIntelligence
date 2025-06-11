@@ -2,7 +2,7 @@
 .env
 
 # Ignore configuration files with sensitive information
-config.yaml
+config/config.yaml
 
 # Python virtual environment
 demo_env/

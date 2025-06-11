@@ -8,9 +8,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.core.enhanced_database_manager import EnhancedDatabaseManager
-from src.core.enhanced_data_models import Destination, Theme, Evidence
+from src.core.enhanced_data_models import Destination, Theme
 from src.core.evidence_hierarchy import SourceCategory, EvidenceType
 from src.core.confidence_scoring import ConfidenceScorer, ConfidenceLevel
+from src.schemas import AuthorityType, EnhancedEvidence
 
 class TestDatabaseManager(unittest.TestCase):
 
@@ -20,15 +21,19 @@ class TestDatabaseManager(unittest.TestCase):
         self.db_manager = EnhancedDatabaseManager(db_path=self.db_path, enable_json_export=False)
         
         # Create a sample evidence piece
-        self.sample_evidence = Evidence(
+        self.sample_evidence = EnhancedEvidence(
             id="test_evidence_1",
             source_url="https://test.gov/source",
             source_category=SourceCategory.GOVERNMENT,
             evidence_type=EvidenceType.PRIMARY,
             authority_weight=0.9,
             text_snippet="Test evidence snippet for theme analysis",
-            timestamp=datetime.now(),
-            confidence=0.85
+            timestamp=datetime.now().isoformat(),
+            confidence=0.85,
+            sentiment=0.7,
+            cultural_context={"is_official": True},
+            relationships=[],
+            agent_id="test_agent"
         )
         
         # Create a confidence scorer and calculate confidence

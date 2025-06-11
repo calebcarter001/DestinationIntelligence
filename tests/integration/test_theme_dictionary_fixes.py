@@ -17,6 +17,8 @@ class TestThemeDictionaryFixes(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment"""
+        from src.schemas import AuthorityType
+        from datetime import datetime
         # Use in-memory database for testing
         self.db_manager = EnhancedDatabaseManager(db_path=":memory:", enable_json_export=False)
         self.tool = EnhancedThemeAnalysisTool()
@@ -55,9 +57,8 @@ class TestThemeDictionaryFixes(unittest.TestCase):
 
         # Run the analysis - this should not raise any object/dictionary errors
         try:
-            # Use asyncio to run the async method
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(self.tool.analyze_themes(input_data))
+            # Use asyncio.run to properly handle the async method
+            result = asyncio.run(self.tool.analyze_themes(input_data))
         except Exception as e:
             self.fail(f"Theme analysis failed with error: {e}")
 

@@ -1,13 +1,22 @@
 import logging
 import re
 from typing import Dict, List, Optional, Any, Tuple
-from transformers import pipeline
+from datetime import datetime
+import asyncio
 import os
 from tqdm import tqdm # For sync iteration
 
 # Adjusted import path for data_models
 from ..data_models import DestinationInsight
 from ..schemas import PageContent, ThemeInsightOutput, ChromaSearchResult, DestinationInsight as PydanticDestinationInsight # Added ChromaSearchResult and PydanticDestinationInsight
+
+# Try to import transformers, fall back gracefully if not available
+try:
+    from transformers import pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    pipeline = None
 
 class ContentIntelligenceLogic:
     """Core logic for content analysis using DistilBERT."""
@@ -53,6 +62,11 @@ class ContentIntelligenceLogic:
         self.max_discovered_themes_per_destination = self.config.get("max_discovered_themes_per_destination", 5)
 
     def _load_sentiment_model(self):
+        if not TRANSFORMERS_AVAILABLE:
+            self.logger.warning("Transformers library not available. Sentiment analysis disabled.")
+            self.sentiment_analyzer = None
+            return
+            
         self.logger.info("🤖 Loading DistilBERT model (sentiment)...")
         try:
             device_to_use = 'mps' if os.name == 'darwin' else -1

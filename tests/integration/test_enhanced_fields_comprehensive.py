@@ -20,7 +20,8 @@ if PROJECT_ROOT not in sys.path:
 from src.tools.enhanced_theme_analysis_tool import EnhancedThemeAnalysisTool, EnhancedThemeAnalysisInput
 from src.core.enhanced_database_manager import EnhancedDatabaseManager
 from src.core.consolidated_json_export_manager import ConsolidatedJsonExportManager
-from src.core.enhanced_data_models import Destination, Theme, Evidence, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority, PointOfInterest, InsightType, LocationExclusivity, AuthorityType
+from src.core.enhanced_data_models import Destination, Theme, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority, PointOfInterest, InsightType, LocationExclusivity, AuthorityType
+from src.schemas import EnhancedEvidence
 from src.core.evidence_hierarchy import SourceCategory, EvidenceType
 
 logging.basicConfig(level=logging.INFO)
@@ -360,14 +361,14 @@ def setup_test_environment():
 def create_test_data():
     """Create test destination with themes and evidence"""
     # Create test evidence
-    evidence1 = Evidence(
+    evidence1 = EnhancedEvidence(
         id="test-evidence-1",
         source_url="https://example.com/test1",
         source_category=SourceCategory.BLOG,
         evidence_type=EvidenceType.TERTIARY,
         authority_weight=0.8,
         text_snippet="Beautiful beaches and vibrant culture",
-        timestamp=datetime.now(),
+        timestamp=datetime.now().isoformat(),
         confidence=0.9,
         sentiment=0.8,
         cultural_context={
@@ -381,17 +382,17 @@ def create_test_data():
             "strength": "high"
         }],
         agent_id="test_agent_123",
-        published_date=datetime.now()
+        published_date=datetime.now().isoformat()
     )
     
-    evidence2 = Evidence(
+    evidence2 = EnhancedEvidence(
         id="test-evidence-2",
         source_url="https://example.com/test2",
         source_category=SourceCategory.GUIDEBOOK,
         evidence_type=EvidenceType.SECONDARY,
         authority_weight=0.9,
         text_snippet="Rich cultural heritage and traditional ceremonies",
-        timestamp=datetime.now(),
+        timestamp=datetime.now().isoformat(),
         confidence=0.85,
         sentiment=0.7,
         cultural_context={
@@ -405,7 +406,7 @@ def create_test_data():
             "strength": "high"
         }],
         agent_id="test_agent_123",
-        published_date=datetime.now()
+        published_date=datetime.now().isoformat()
     )
     
     # Create test theme
@@ -835,14 +836,14 @@ async def test_comprehensive_enhanced_fields():
     
     try:
         # Create test evidence with enhanced fields first
-        test_evidence = Evidence(
+        test_evidence = EnhancedEvidence(
             id="test-evidence-1",
             source_url="https://example.com/test",
             source_category=SourceCategory.BLOG,
             evidence_type=EvidenceType.TERTIARY,
             authority_weight=0.8,
             text_snippet="Test evidence content with enhanced fields",
-            timestamp=datetime.now(),
+            timestamp=datetime.now().isoformat(),
             confidence=0.8,
             sentiment=0.6,  # Populated sentiment
             cultural_context={  # Populated cultural context
@@ -856,7 +857,7 @@ async def test_comprehensive_enhanced_fields():
                 "strength": "medium"
             }],
             agent_id="test_agent_123",  # Populated agent ID
-            published_date=datetime.now()  # Populated published date
+            published_date=datetime.now().isoformat()  # Populated published date
         )
         
         # Create test theme with enhanced fields

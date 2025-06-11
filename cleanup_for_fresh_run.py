@@ -67,9 +67,17 @@ def main():
         "run_enhanced_agent_app.py.lprof",  # Profiling output
     ]
     
+    # IDE and editor artifacts (optional cleanup)
+    ide_dirs = ['.vscode', '.idea', '.sublime-project', '.sublime-workspace']
+    
     # Clean directories
     for dir_path, description in cleanup_targets:
         clean_directory(dir_path, description)
+    
+    # Clean IDE directories (if they exist)
+    for ide_dir in ide_dirs:
+        if os.path.exists(ide_dir):
+            clean_directory(ide_dir, f"IDE artifacts ({ide_dir})")
     
     # Clean database files and large data files
     for db_file in db_files:
@@ -94,6 +102,23 @@ def main():
                 print(f"✅ Removed generated file: {gen_file}")
             except Exception as e:
                 print(f"⚠️  Error removing {gen_file}: {e}")
+    
+    # NEW: Clean dynamic viewer HTML files (pattern-based cleanup)
+    print("🧹 Cleaning dynamic viewer HTML files...")
+    dynamic_viewer_files = glob.glob("dynamic_viewer_*.html")
+    if dynamic_viewer_files:
+        for dv_file in dynamic_viewer_files:
+            try:
+                file_size = os.path.getsize(dv_file) / (1024*1024)  # Size in MB
+                os.remove(dv_file)
+                if file_size > 0.1:  # Show size for files > 100KB
+                    print(f"✅ Removed dynamic viewer: {dv_file} ({file_size:.1f}MB)")
+                else:
+                    print(f"✅ Removed dynamic viewer: {dv_file}")
+            except Exception as e:
+                print(f"⚠️  Error removing {dv_file}: {e}")
+    else:
+        print("✅ No dynamic viewer HTML files found")
     
     # Clean Python cache files recursively
     print("🧹 Cleaning Python cache files...")
@@ -123,18 +148,31 @@ def main():
     else:
         print("✅ Python cache: already clean")
     
-    # Clean system files
+    # Clean system files and development artifacts
     system_files = glob.glob('.DS_Store') + glob.glob('**/.DS_Store', recursive=True)
     system_files += glob.glob('.coverage') + glob.glob('**/*.db-journal', recursive=True)
     system_files += glob.glob('**/*.sqlite', recursive=True) + glob.glob('**/*.sqlite3', recursive=True)
     
+    # NEW: Additional development artifacts
+    system_files += glob.glob('.env.local') + glob.glob('.env.*.local')  # Local env files
+    system_files += glob.glob('**/*.prof', recursive=True)  # Profiling files
+    system_files += glob.glob('**/*.pstats', recursive=True)  # Performance stats
+    system_files += glob.glob('.coverage.*')  # Coverage data files
+    
     if system_files:
         for sys_file in system_files:
             try:
+                # Skip files in venv directory
+                if 'venv/' in sys_file or sys_file.startswith('venv/'):
+                    continue
                 os.remove(sys_file)
                 print(f"✅ Removed system file: {sys_file}")
             except Exception as e:
                 print(f"⚠️  Error removing {sys_file}: {e}")
+    
+    # Clean coverage HTML reports
+    if os.path.exists('htmlcov'):
+        clean_directory('htmlcov', "Coverage HTML reports")
     
     # Clean any stray log files in root
     log_files = glob.glob("*.log")
@@ -165,7 +203,7 @@ def main():
     print("\n📊 Post-cleanup status:")
     
     # Verify cleanup of directories
-    verification_dirs = ["logs", "cache", "chroma_db", "outputs", "destination_insights", ".pytest_cache"]
+    verification_dirs = ["logs", "cache", "chroma_db", "outputs", "destination_insights", ".pytest_cache", "htmlcov"]
     for dir_name in verification_dirs:
         if os.path.exists(dir_name):
             item_count = len(os.listdir(dir_name))
@@ -184,6 +222,17 @@ def main():
         status = "✅ Removed" if not os.path.exists(gen_file) else "⚠️  Still exists"
         print(f"   {gen_file}: {status}")
     
+    # NEW: Check dynamic viewer files
+    remaining_dynamic_viewers = glob.glob("dynamic_viewer_*.html")
+    if remaining_dynamic_viewers:
+        print(f"   Dynamic viewer HTMLs: ⚠️  {len(remaining_dynamic_viewers)} remaining")
+        for dv_file in remaining_dynamic_viewers[:3]:  # Show first 3
+            print(f"      - {dv_file}")
+        if len(remaining_dynamic_viewers) > 3:
+            print(f"      - ... and {len(remaining_dynamic_viewers) - 3} more")
+    else:
+        print("   Dynamic viewer HTMLs: ✅ All removed")
+    
     # Check for remaining cache files
     remaining_pycache = len(glob.glob('**/__pycache__', recursive=True))
     remaining_pyc = len(glob.glob('**/*.pyc', recursive=True))
@@ -194,6 +243,14 @@ def main():
     
     if remaining_ds_store > 0:
         print(f"   .DS_Store files: ⚠️  {remaining_ds_store} remaining")
+    
+    # NEW: Check for development artifacts
+    remaining_prof = len(glob.glob('**/*.prof', recursive=True))
+    remaining_coverage = len(glob.glob('.coverage*'))
+    if remaining_prof > 0 or remaining_coverage > 0:
+        print(f"   Development artifacts: ⚠️  {remaining_prof + remaining_coverage} files remaining")
+    else:
+        print("   Development artifacts: ✅ Clean")
     
     print("\n🚀 Ready for fresh run with: python run_enhanced_agent_app.py")
 

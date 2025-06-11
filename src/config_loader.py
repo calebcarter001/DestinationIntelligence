@@ -19,8 +19,8 @@ def load_app_config() -> Dict[str, Any]:
     else:
         logger.warning(f"No .env file found at {env_path}")
 
-    # Load config.yaml 
-    config_path = Path(__file__).parent.parent / "config.yaml"
+    # Load config.yaml from config directory
+    config_path = Path(__file__).parent.parent / "config" / "config.yaml"
     app_config = {}
     
     if config_path.exists():

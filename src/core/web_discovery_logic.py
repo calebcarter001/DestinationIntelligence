@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import re
 import hashlib
 from nltk import sent_tokenize
+import os
 
 # Adjusted import path for caching module
 from ..caching import read_from_cache, write_to_cache, CACHE_EXPIRY_DAYS, PAGE_CONTENT_CACHE_EXPIRY_DAYS
@@ -32,16 +33,38 @@ class WebDiscoveryLogic:
         wd_config = self.config.get("web_discovery", {})
         self.cache_settings = self.config.get("caching", {})
         
+        # Load external configuration files
+        self._load_external_configs()
+        
         self.query_templates = [
-            # Core destination categories - ENHANCED for local customs
-            "{destination} local customs traditions etiquette culture",
-            "{destination} neighborhood culture local life experiences",
-            "{destination} community activities local events festivals",
-            "{destination} local expressions slang social norms",
-            "{destination} indigenous culture aboriginal traditions",
-            "{destination} multicultural communities ethnic neighborhoods",
-            "{destination} local habits lifestyle daily routines",
-            "{destination} street culture urban life social scenes",
+            # ENHANCED: Emotional & Visual Appeal Queries 
+            "{destination} breathtaking scenic views stunning landscapes photography",
+            "{destination} spectacular attractions world-class must-see iconic landmarks",
+            "{destination} thrilling adventures outdoor experiences scenic tours",
+            "{destination} authentic cultural experiences traditional heritage sites",
+            "{destination} romantic intimate spots couples sunset dining",
+            
+            # ENHANCED: Experience-Focused Queries
+            "{destination} adventure tours hiking excursions outdoor activities",
+            "{destination} scenic drives panoramic viewpoints photography spots",
+            "{destination} cultural immersion authentic local experiences",
+            "{destination} culinary tours gourmet dining food experiences",
+            "{destination} family adventures kid-friendly attractions activities",
+            
+            # Core destination categories - ENHANCED for tourist appeal
+            "{destination} top-rated restaurants award-winning dining experiences",
+            "{destination} world-class attractions iconic must-visit landmarks", 
+            "{destination} vibrant nightlife entertainment live music venues",
+            "{destination} stunning museums galleries artistic cultural sites",
+            "{destination} unique shopping artisan markets local crafts",
+            "{destination} spectacular nature parks outdoor adventures",
+            
+            # Enhanced local discovery queries 
+            "{destination} hidden gems secret spots insider recommendations",
+            "{destination} picturesque neighborhoods charming districts explore",
+            "{destination} scenic day trips nearby stunning attractions",
+            "{destination} authentic local customs traditions cultural etiquette",
+            "{destination} local festivals celebrations cultural events",
             
             # Traditional discovery queries (restored as requested)
             "{destination} best restaurants food scene dining guide",
@@ -62,6 +85,60 @@ class WebDiscoveryLogic:
             "what makes {destination} special unique attractions",
             "hidden gems {destination} local recommendations", 
             "{destination} culture traditions authentic experiences",
+        ]
+        
+        # NEW: POI and Landmark Discovery Queries
+        self.poi_query_templates = [
+            # Major landmarks and iconic attractions
+            "{destination} famous landmarks iconic attractions must-visit",
+            "{destination} national parks state parks nature preserves nearby",
+            "{destination} UNESCO world heritage sites historical landmarks",
+            "{destination} mountains peaks viewpoints scenic overlooks within driving distance",
+            "{destination} lakes rivers waterfalls natural attractions nearby",
+            "{destination} monuments memorials historic sites iconic",
+            "{destination} observation decks towers scenic viewpoints photography",
+            "{destination} beaches coastline waterfront natural attractions",
+            "{destination} canyons caves geological formations natural wonders",
+            "{destination} botanical gardens zoos aquariums family attractions",
+            
+            # Nearby attractions and day trips (critical for places like Flagstaff)
+            "{destination} day trip destinations within 2 hours driving",
+            "{destination} nearby attractions regional landmarks accessible",
+            "{destination} surrounding area natural wonders national parks",
+            "{destination} weekend getaway destinations from {destination}",
+            
+            # Activity-specific POI queries
+            "{destination} hiking trails trailheads scenic routes best",
+            "{destination} photography spots Instagram worthy locations iconic",
+            "{destination} sunrise sunset viewpoints panoramic views best",
+            "{destination} camping sites recreational areas outdoor access",
+            "{destination} visitor centers information points park entrances",
+        ]
+        
+        # NEW: Priority POI Discovery Queries (selective, high-value only)
+        # Only 5 queries instead of 20+ for cost efficiency
+        self.priority_poi_query_templates = [
+            # Top 5 highest-value POI queries for tourist gateways
+            "{destination} famous landmarks iconic attractions must-visit",
+            "{destination} national parks nearby attractions within driving distance", 
+            "{destination} day trip destinations scenic drives major attractions",
+            "{destination} UNESCO world heritage sites historical landmarks nearby",
+            "{destination} mountains peaks viewpoints scenic overlooks regional"
+        ]
+        
+        # POI Discovery Configuration
+        poi_config = wd_config.get("poi_discovery", {})
+        self.enable_poi_discovery = poi_config.get("enable_poi_discovery", True)
+        self.max_poi_queries = poi_config.get("max_poi_queries", 5)  # Limit POI queries for cost control
+        self.max_poi_results_per_query = poi_config.get("max_poi_results_per_query", 3)  # Cost control per query
+        
+        # Load tourist gateway keywords from external config or use defaults
+        self.tourist_gateway_keywords = poi_config.get("tourist_gateway_keywords", self._get_default_tourist_gateway_keywords())
+        
+        # Built-in tourist gateway patterns (always checked regardless of config)
+        self.tourist_gateway_patterns = [
+            "national park", "state park", "canyon", "mountain", "lake", "falls",
+            "glacier", "monument", "preserve", "wilderness", "scenic", "resort"
         ]
         
         # Thematic query templates for focused content discovery - ENHANCED LOCAL FOCUS
@@ -301,6 +378,58 @@ class WebDiscoveryLogic:
             "accessibility": 1.1,
             "weather": 1.0
         })
+        
+        # CULTURAL INTELLIGENCE: Enhanced query templates for reputation and distinctiveness discovery
+        self.cultural_config = config.get("cultural_intelligence", {})
+        self.enable_cultural_intelligence = self.cultural_config.get("enable_dual_track_processing", False)
+        
+        # NEW: Cultural reputation discovery queries (high priority when cultural intelligence enabled)
+        self.cultural_reputation_queries = {
+            "cultural_identity": [
+                "what is {destination} famous for worldwide reputation known for",
+                "when people think {destination} what comes to mind culturally",
+                "how is {destination} different from other major cities unique",
+                "{destination} cultural identity what makes it special distinctive",
+                "why is {destination} special unique characteristics culture",
+                "what makes {destination} distinctive from similar places"
+            ],
+            "emotional_association": [
+                "what does {destination} feel like atmosphere vibe character",
+                "emotions associated with {destination} mood personality",
+                "{destination} romantic mysterious energetic peaceful vibes",
+                "personality of {destination} city character feel",
+                "what energy does {destination} have urban vibe culture"
+            ],
+            "comparative_positioning": [
+                "how {destination} different from Paris London New York",
+                "what {destination} does better than anywhere else unique",
+                "{destination} versus other major cities what makes it special",
+                "where {destination} ranks globally for culture music food",
+                "{destination} compared to similar cities what stands out"
+            ],
+            "authentic_local_perspective": [
+                "reddit r/{destination} what locals say about their city",
+                "local perspective {destination} residents honest opinion authentic",
+                "what would surprise visitors about {destination} unexpected",
+                "insider secrets {destination} only locals know authentic",
+                "authentic {destination} experience locals recommendations real"
+            ],
+            "distinctive_experiences": [
+                "{destination} signature experiences nowhere else unique only",
+                "things you can only do in {destination} exclusive experiences",
+                "{destination} unique attractions not found elsewhere distinctive",
+                "what experience defines {destination} culturally signature",
+                "{destination} bucket list unique must-do experiences special"
+            ]
+        }
+        
+        # Enhanced weights for cultural intelligence queries when enabled
+        if self.enable_cultural_intelligence:
+            self.cultural_query_weight = 2.0  # Higher priority for cultural queries
+            self.authenticity_source_boost = 1.5  # Boost for authentic sources like Reddit
+        else:
+            self.cultural_query_weight = 1.0
+            self.authenticity_source_boost = 1.0
         
         # Enhanced settings
         self.timeout_seconds = wd_config.get('timeout_seconds', 30)
@@ -957,6 +1086,113 @@ class WebDiscoveryLogic:
         
         await asyncio.sleep(5.0) # Pause after thematic content
         
+        # CULTURAL INTELLIGENCE: Get cultural reputation content (HIGH PRIORITY)
+        cultural_sources_candidates = []
+        cultural_reputation_slots = int(total_slots * 0.15) if self.enable_cultural_intelligence else 0
+        if self.enable_cultural_intelligence and cultural_reputation_slots > 0:
+            self.logger.info(f"🎭 CULTURAL INTELLIGENCE: Discovering cultural reputation content for: {destination}")
+            cultural_search_results_to_fetch = []
+            
+            for category, templates in self.cultural_reputation_queries.items():
+                for template in templates[:2]:  # Limit queries per category
+                    query = template.format(destination=destination)
+                    search_results = await self._fetch_brave_search(query, destination_country_code=extracted_destination_country_code)
+                    for result in search_results[:3]:  # Limit results per query
+                        if result["url"] not in processed_urls:
+                            result['content_type'] = 'cultural'
+                            result['cultural_category'] = category
+                            result['priority_weight'] = self.cultural_query_weight  # 2.0 when enabled
+                            
+                            # Apply authenticity boost for Reddit and community sources
+                            if 'reddit.com' in result["url"] or 'forum' in result["url"] or 'community' in result["url"]:
+                                result['priority_weight'] *= self.authenticity_source_boost
+                            
+                            cultural_search_results_to_fetch.append(result)
+                            processed_urls.add(result["url"])
+            
+            content_fetch_tasks_cultural = []
+            metadata_for_cultural_content = []
+            for source_meta in cultural_search_results_to_fetch:
+                content_fetch_tasks_cultural.append(self._fetch_page_content(source_meta["url"], destination))
+                metadata_for_cultural_content.append(source_meta)
+
+            self.logger.info(f"📄 Fetching content for {len(content_fetch_tasks_cultural)} cultural reputation URLs...")
+            if content_fetch_tasks_cultural:
+                fetched_cultural_contents = await asyncio_tqdm.gather(
+                    *content_fetch_tasks_cultural,
+                    desc=f"Fetching Cultural Content for {destination}",
+                    unit="url"
+                )
+                for i, content in enumerate(fetched_cultural_contents):
+                    source_metadata = metadata_for_cultural_content[i]
+                    if content and len(content) >= self.min_content_length:
+                        source_metadata["content"] = content
+                        source_metadata["content_length"] = len(content)
+                        cultural_sources_candidates.append(source_metadata)
+            
+            self.logger.info(f"✅ Cultural intelligence step: Gathered {len(cultural_sources_candidates)} cultural reputation source candidates")
+            
+            await asyncio.sleep(5.0) # Pause after cultural content
+            
+            # Adjust other slot allocations to make room for cultural content
+            if is_specific_destination_query:
+                thematic_slots = int(total_slots * 0.25)  # Reduced from 0.30
+                general_slots = total_slots - thematic_slots - priority_slots - tourist_specific_slots - cultural_reputation_slots
+            else:
+                thematic_slots = int(total_slots * 0.50)  # Reduced from 0.65
+                general_slots = total_slots - thematic_slots - priority_slots - cultural_reputation_slots
+        
+        # NEW: STEP 2.5: Selective POI Discovery (for tourist gateway destinations only)
+        poi_sources_candidates = []
+        if self.enable_poi_discovery and self._is_tourist_gateway_destination(destination):
+            self.logger.info(f"🏔️ Step 2.5: Selective POI Discovery for tourist gateway: {destination}")
+            
+            poi_search_results_to_fetch = []
+            
+            # Use only the priority POI queries (5 instead of 20+)
+            for template in self.priority_poi_query_templates[:self.max_poi_queries]:
+                query = template.format(destination=destination)
+                
+                # Use local search to find POI location IDs
+                local_search_results = await self._fetch_brave_local_search(query, extracted_destination_country_code)
+                
+                for result in local_search_results[:3]:  # Limit to 3 results per query for cost control
+                    location_id = result.get('id')
+                    if location_id and result["url"] not in processed_urls:
+                        result['content_type'] = 'poi'
+                        result['priority_weight'] = 1.8  # High priority for POI content
+                        poi_search_results_to_fetch.append(result)
+                        processed_urls.add(result["url"])
+            
+            # Fetch content for POI sources
+            if poi_search_results_to_fetch:
+                content_fetch_tasks_poi = []
+                metadata_for_poi_content = []
+                for source_meta in poi_search_results_to_fetch:
+                    content_fetch_tasks_poi.append(self._fetch_page_content(source_meta["url"], destination))
+                    metadata_for_poi_content.append(source_meta)
+
+                self.logger.info(f"📄 Fetching content for {len(content_fetch_tasks_poi)} POI URLs...")
+                fetched_poi_contents = await asyncio_tqdm.gather(
+                    *content_fetch_tasks_poi,
+                    desc=f"Fetching POI Content for {destination}",
+                    unit="url"
+                )
+                for i, content in enumerate(fetched_poi_contents):
+                    source_metadata = metadata_for_poi_content[i]
+                    if content and len(content) >= self.min_content_length:
+                        source_metadata["content"] = content
+                        source_metadata["content_length"] = len(content)
+                        poi_sources_candidates.append(source_metadata)
+                        
+            self.logger.info(f"✅ POI discovery step: Gathered {len(poi_sources_candidates)} POI source candidates")
+            await asyncio.sleep(3.0) # Short pause after POI content
+        else:
+            if not self.enable_poi_discovery:
+                self.logger.info("🏔️ POI discovery disabled in configuration")
+            else:
+                self.logger.info(f"🏔️ Destination '{destination}' classified as non-gateway, skipping POI discovery")
+        
         # STEP 2: Get general content (MEDIUM PRIORITY)
         general_search_results_to_fetch = [] 
         if general_slots > 0: # Check against allocated slots
@@ -1026,13 +1262,64 @@ class WebDiscoveryLogic:
             
             self.logger.info(f"✅ Priority step: Gathered {len(priority_sources_candidates)} priority source candidates with content")
         
+        # NEW: Selective POI Discovery (for tourist gateway destinations only)
+        poi_sources_candidates = []
+        if self.enable_poi_discovery and self._is_tourist_gateway_destination(destination):
+            self.logger.info(f"🏔️ Selective POI Discovery for tourist gateway: {destination}")
+            
+            poi_search_results_to_fetch = []
+            
+            # Use only the priority POI queries (5 instead of 20+)
+            for template in self.priority_poi_query_templates[:self.max_poi_queries]:
+                query = template.format(destination=destination)
+                
+                # Use local search to find POI location IDs
+                local_search_results = await self._fetch_brave_local_search(query, extracted_destination_country_code)
+                
+                for result in local_search_results[:3]:  # Limit to 3 results per query for cost control
+                    if result.get("url") and result["url"] not in processed_urls:
+                        result['content_type'] = 'poi'
+                        result['priority_weight'] = 1.8  # High priority for POI content
+                        poi_search_results_to_fetch.append(result)
+                        processed_urls.add(result["url"])
+            
+            # Fetch content for POI sources if any found
+            if poi_search_results_to_fetch:
+                content_fetch_tasks_poi = []
+                metadata_for_poi_content = []
+                for source_meta in poi_search_results_to_fetch:
+                    content_fetch_tasks_poi.append(self._fetch_page_content(source_meta["url"], destination))
+                    metadata_for_poi_content.append(source_meta)
+
+                self.logger.info(f"📄 Fetching content for {len(content_fetch_tasks_poi)} POI URLs...")
+                try:
+                    fetched_poi_contents = await asyncio.gather(*content_fetch_tasks_poi)
+                    for i, content in enumerate(fetched_poi_contents):
+                        source_metadata = metadata_for_poi_content[i]
+                        if content and len(content) >= self.min_content_length:
+                            source_metadata["content"] = content
+                            source_metadata["content_length"] = len(content)
+                            poi_sources_candidates.append(source_metadata)
+                except Exception as e:
+                    self.logger.error(f"Error fetching POI content: {e}")
+                        
+            self.logger.info(f"✅ POI discovery: Gathered {len(poi_sources_candidates)} POI source candidates")
+        else:
+            if not self.enable_poi_discovery:
+                self.logger.info("🏔️ POI discovery disabled in configuration")
+            else:
+                self.logger.info(f"🏔️ Destination '{destination}' classified as non-gateway, skipping POI discovery")
+        
         # STEP 4: Combine, Score, and Select Final Sources
-        all_candidate_sources = tourist_sources_candidates + thematic_sources_candidates + general_sources_candidates + priority_sources_candidates
+        all_candidate_sources = (tourist_sources_candidates + thematic_sources_candidates + 
+                                 cultural_sources_candidates + general_sources_candidates + 
+                                 priority_sources_candidates + poi_sources_candidates)
         
         self.logger.info(
             f"Combining candidates: {len(tourist_sources_candidates)} tourist, "
-            f"{len(thematic_sources_candidates)} thematic, {len(general_sources_candidates)} general, "
-            f"{len(priority_sources_candidates)} priority = {len(all_candidate_sources)} total candidates with content."
+            f"{len(thematic_sources_candidates)} thematic, {len(cultural_sources_candidates)} cultural, "
+            f"{len(general_sources_candidates)} general, {len(priority_sources_candidates)} priority = "
+            f"{len(all_candidate_sources)} total candidates with content."
         )
 
         if not all_candidate_sources:
@@ -1055,6 +1342,7 @@ class WebDiscoveryLogic:
 
         # Log the final distribution and metrics for the selected sources
         thematic_final_count = len([s for s in final_selected_sources if s.get("content_type") == "thematic"])
+        cultural_final_count = len([s for s in final_selected_sources if s.get("content_type") == "cultural"])
         general_final_count = len([s for s in final_selected_sources if s.get("content_type") == "general"])
         priority_final_count = len([s for s in final_selected_sources if s.get("content_type") == "priority"])
         tourist_final_count = len([s for s in final_selected_sources if s.get("content_type") == "tourist"])
@@ -1064,7 +1352,8 @@ class WebDiscoveryLogic:
         self.logger.info(f"✅ Final selection for {destination} ({self.max_sources_for_agent} limit applied):")
         self.logger.info(
             f"   📊 Distribution: {tourist_final_count} tourist, {thematic_final_count} thematic, "
-            f"{general_final_count} general, {priority_final_count} priority = {len(final_selected_sources)} total sources."
+            f"{cultural_final_count} cultural, {general_final_count} general, {priority_final_count} priority = "
+            f"{len(final_selected_sources)} total sources."
         )
         self.logger.info(f"   🏆 Average quality score of selected: {avg_quality_final:.2f}")
         
@@ -1419,3 +1708,199 @@ class WebDiscoveryLogic:
             return destination.split(',')[0].strip() 
         # If no comma, assume the whole string is the primary destination name (e.g., "Tuscany", "Yellowstone National Park")
         return destination.strip()
+
+    @retry(tries=3, delay=2, backoff=2, jitter=(1,3))
+    async def _fetch_brave_local_search(self, query: str, destination_country_code: Optional[str] = "US") -> List[Dict]:
+        """
+        Fetches local search results using Brave Local Search API to find location IDs.
+        This is the first step to discover POIs - we search for places and get their IDs,
+        then use those IDs with the POI endpoint to get detailed information.
+        """
+        wd_config = self.config.get("web_discovery", {})
+        
+        headers = {"Accept": "application/json", "X-Subscription-Token": self.api_key}
+        params = {
+            "q": query,
+            "country": destination_country_code or "US",
+            "search_lang": wd_config.get("brave_local_search_lang", "en"),
+            "ui_lang": wd_config.get("brave_local_ui_lang", "en-US"),
+            "count": wd_config.get("brave_local_search_count", 20),  # Add this config option
+            "offset": wd_config.get("brave_local_search_offset", 0)  # Add this config option
+        }
+        
+        # Add optional units parameter
+        units = wd_config.get("brave_local_units")
+        if units:
+            params["units"] = units
+
+        self.logger.info(f"Fetching Brave Local Search for query: '{query}' in country: {destination_country_code}")
+        try:
+            async with self.session.get("https://api.search.brave.com/res/v1/local/search", headers=headers,
+                                        params=params) as response:
+                response.raise_for_status()
+                data = await response.json()
+                local_results = data.get("results", [])
+                if not local_results:
+                    self.logger.warning(f"Brave Local Search for '{query}' returned no results.")
+                    return []
+                self.logger.info(f"Brave Local Search successful for '{query}': found {len(local_results)} locations.")
+                return local_results
+        except aiohttp.ClientResponseError as e:
+            self.logger.error(f"Brave Local Search API request failed for query '{query}': {e.status} {e.message}")
+            return []
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred during Brave Local Search for query '{query}': {e}",
+                             exc_info=True)
+            return []
+
+    async def discover_poi_content(self, destination: str, destination_country_code: Optional[str] = "US") -> List[Dict]:
+        """
+        Discover Points of Interest using our POI query templates and Brave Local Search.
+        This method bridges the gap between our POI queries and the POI endpoint.
+        """
+        self.logger.info(f"🏔️ Starting POI discovery for: {destination} (Country: {destination_country_code})")
+        
+        all_pois = []
+        location_ids_discovered = []
+        
+        # Use our POI query templates to search for local places
+        for template in self.poi_query_templates:
+            query = template.format(destination=destination)
+            self.logger.debug(f"POI Local Search query: '{query}'")
+            
+            # Step 1: Use Local Search to find location IDs
+            local_search_results = await self._fetch_brave_local_search(query, destination_country_code)
+            
+            # Step 2: Extract location IDs from the results
+            for result in local_search_results:
+                location_id = result.get('id')
+                if location_id and location_id not in location_ids_discovered:
+                    location_ids_discovered.append(location_id)
+        
+        if not location_ids_discovered:
+            self.logger.warning(f"No location IDs found for POI discovery in {destination}")
+            return []
+        
+        self.logger.info(f"Found {len(location_ids_discovered)} unique location IDs for POI details")
+        
+        # Step 3: Get detailed POI information using the location IDs
+        poi_details = await self._fetch_brave_local_search_by_ids(location_ids_discovered)
+        
+        if poi_details:
+            self.logger.info(f"✅ POI discovery successful: {len(poi_details)} POIs found for {destination}")
+            all_pois.extend(poi_details)
+        
+        return all_pois
+
+    def _is_tourist_gateway_destination(self, destination: str) -> bool:
+        """
+        Determine if a destination should get POI discovery based on tourist gateway classification.
+        Tourist gateways are destinations that serve as entry points to major tourist attractions.
+        """
+        if not destination:
+            return False
+            
+        destination_lower = str(destination).lower()
+        
+        # Check configured tourist gateway keywords
+        for keyword in self.tourist_gateway_keywords:
+            if keyword.lower() in destination_lower:
+                self.logger.debug(f"Tourist gateway match: '{keyword}' found in '{destination}'")
+                return True
+        
+        # Check built-in tourist gateway patterns
+        for pattern in self.tourist_gateway_patterns:
+            if pattern.lower() in destination_lower:
+                self.logger.debug(f"Tourist gateway pattern match: '{pattern}' found in '{destination}'")
+                return True
+        
+        # Check for specific business/administrative city exclusions
+        business_exclusions = [
+            "new york", "chicago", "san francisco", "washington dc", "washington, dc",
+            "los angeles", "boston", "philadelphia", "atlanta", "detroit", "dallas",
+            "houston", "phoenix", "denver", "seattle", "miami", "las vegas"
+        ]
+        
+        for exclusion in business_exclusions:
+            if exclusion in destination_lower:
+                self.logger.debug(f"Business city exclusion: '{exclusion}' found in '{destination}'")
+                return False
+        
+        # Default to False for unmatched destinations
+        self.logger.debug(f"Destination '{destination}' not classified as tourist gateway")
+        return False
+
+    def _load_external_configs(self):
+        """Load configuration from external JSON files."""
+        try:
+            # Load tourist gateway keywords
+            config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config")
+            tourist_keywords_path = os.path.join(config_dir, "default_tourist_gateway_keywords.json")
+            authority_domains_path = os.path.join(config_dir, "travel_authority_domains.json")
+            
+            # Load tourist gateway keywords
+            if os.path.exists(tourist_keywords_path):
+                with open(tourist_keywords_path, 'r') as f:
+                    self._external_tourist_keywords = json.load(f)
+                    self.logger.info(f"✅ Loaded tourist gateway keywords from {tourist_keywords_path}")
+            else:
+                self._external_tourist_keywords = None
+                self.logger.warning(f"Tourist gateway keywords file not found: {tourist_keywords_path}")
+            
+            # Load travel authority domains
+            if os.path.exists(authority_domains_path):
+                with open(authority_domains_path, 'r') as f:
+                    authority_data = json.load(f)
+                    # Extract just the domain names from the URL field
+                    self._external_authority_domains = []
+                    for item in authority_data:
+                        if 'url' in item:
+                            # Extract domain from URL
+                            domain = item['url'].replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+                            self._external_authority_domains.append(domain)
+                    self.logger.info(f"✅ Loaded {len(self._external_authority_domains)} authority domains from {authority_domains_path}")
+            else:
+                self._external_authority_domains = None
+                self.logger.warning(f"Authority domains file not found: {authority_domains_path}")
+                
+        except Exception as e:
+            self.logger.error(f"Error loading external config files: {e}")
+            self._external_tourist_keywords = None
+            self._external_authority_domains = None
+
+    def _get_default_tourist_gateway_keywords(self):
+        """Get tourist gateway keywords from external config or return defaults."""
+        if self._external_tourist_keywords:
+            # Combine all categories from the external config
+            all_keywords = []
+            for category_keywords in self._external_tourist_keywords.values():
+                all_keywords.extend(category_keywords)
+            return all_keywords
+        else:
+            # Fallback to hardcoded defaults if external config not available
+            return [
+                # National Park Gateway Cities
+                "flagstaff", "sedona", "moab", "aspen", "jackson", "estes park", "mammoth lakes",
+                "springdale", "gatlinburg", "bar harbor", "yosemite village", "glacier village",
+                
+                # Tourist Destination Cities
+                "napa", "carmel", "sausalito", "mendocino", "capitola", "pacific grove",
+                "big sur", "half moon bay", "sonoma", "healdsburg", "calistoga",
+                
+                # Adventure Tourism Centers
+                "whistler", "banff", "jasper", "lake tahoe", "steamboat springs", "vail",
+                "breckenridge", "park city", "sun valley", "taos", "santa fe"
+            ]
+
+    def _get_authority_domains(self):
+        """Get authority domains from external config or return defaults."""
+        if self._external_authority_domains:
+            return self._external_authority_domains
+        else:
+            # Fallback to hardcoded defaults if external config not available
+            return [
+                "wikipedia.org", "tripadvisor.com", "lonelyplanet.com",
+                "timeout.com", "fodors.com", "frommers.com", 
+                "visitnsw.com", "sydney.com", "australia.com",
+                "gov.au", "museum", "official"
+            ]

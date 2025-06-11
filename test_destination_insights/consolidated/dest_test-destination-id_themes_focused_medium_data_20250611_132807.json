@@ -1,0 +1,137 @@
+{
+  "export_metadata": {
+    "version": "3.1",
+    "export_timestamp": "2025-06-11T13:28:07.424543",
+    "destination_id": "test-destination-id",
+    "export_type": "themes_focused",
+    "export_mode": "themes_focused"
+  },
+  "destination": {
+    "id": "test-destination-id",
+    "names": [
+      "Test City"
+    ],
+    "admin_levels": {
+      "country": "Test Country",
+      "state": "Test State"
+    },
+    "timezone": "UTC",
+    "population": null,
+    "country_code": "TC",
+    "core_geo": {},
+    "vibe_descriptors": [],
+    "area_km2": null,
+    "primary_language": null,
+    "dominant_religions": [],
+    "unesco_sites": [],
+    "historical_summary": null,
+    "annual_tourist_arrivals": null,
+    "popularity_stage": null,
+    "visa_info_url": null,
+    "gdp_per_capita_usd": null,
+    "hdi": null,
+    "last_updated": "2025-06-11T13:28:07.424129",
+    "destination_revision": 1,
+    "lineage": {},
+    "meta": {}
+  },
+  "data": {
+    "themes": {
+      "test-theme-1": {
+        "theme_id": "test-theme-1",
+        "name": "Test Theme",
+        "macro_category": "Test Category",
+        "micro_category": "Test Subcategory",
+        "description": "Test theme with enhanced fields",
+        "fit_score": 0.8,
+        "confidence_level": "insufficient",
+        "confidence_breakdown": {
+          "overall_confidence": 0.8,
+          "evidence_count": 1,
+          "source_diversity": 0.7,
+          "authority_score": 0.8,
+          "confidence_level": "HIGH"
+        },
+        "evidence_references": [
+          {
+            "evidence_id": "ev_0",
+            "relevance_score": 1.0
+          }
+        ],
+        "tags": [
+          "test",
+          "enhanced"
+        ],
+        "created": "2025-06-11T13:28:07.424112",
+        "last_validated": null,
+        "factors": {
+          "source_diversity": 3,
+          "authority_distribution": {
+            "high_authority_ratio": 0.8
+          }
+        },
+        "cultural_summary": {
+          "total_sources": 1,
+          "local_sources": 1,
+          "cultural_balance": "local-heavy"
+        },
+        "sentiment_analysis": {
+          "overall": "positive",
+          "average_score": 0.6,
+          "confidence": 0.8
+        },
+        "temporal_analysis": {
+          "evidence_span_days": 30,
+          "seasonal_indicators": [
+            "summer"
+          ]
+        },
+        "seasonal_relevance": {},
+        "regional_uniqueness": 0.0,
+        "insider_tips": []
+      }
+    },
+    "insights": {}
+  },
+  "relationships": {
+    "theme_insights": {},
+    "insight_themes": {}
+  },
+  "views": {
+    "themes_by_category": {
+      "Test Category": [
+        "test-theme-1"
+      ]
+    },
+    "seasonal_overview": {
+      "seasonal_themes": {},
+      "current_season_highlights": [],
+      "seasons_covered": []
+    }
+  },
+  "metadata": {
+    "data_quality_analysis": {
+      "classification": "medium_data",
+      "confidence": 0.32666666666666666,
+      "metrics": {
+        "evidence_count": 1,
+        "source_diversity": 0,
+        "unique_sources": 0,
+        "high_authority_ratio": 0.0,
+        "content_volume": 0,
+        "theme_discovery_rate": 1,
+        "classification_confidence": 0.32666666666666666
+      },
+      "reasoning": "Medium data classification: • Metrics fall between rich and poor thresholds • Evidence: 1, Sources: 0",
+      "adaptive_settings": {
+        "export_mode": "themes_focused",
+        "confidence_threshold": 0.55,
+        "max_evidence_per_theme": 5,
+        "max_themes": 35,
+        "min_authority": 0.5,
+        "semantic_intensive": true,
+        "output_priority": false
+      }
+    }
+  }
+}

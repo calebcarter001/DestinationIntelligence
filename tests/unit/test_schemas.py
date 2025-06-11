@@ -32,6 +32,8 @@ class TestAuthorityType(unittest.TestCase):
         self.assertEqual(AuthorityType.PROFESSIONAL.value, "industry_professional")
         self.assertEqual(AuthorityType.CULTURAL.value, "cultural_institution")
         self.assertEqual(AuthorityType.SEASONAL_WORKER.value, "seasonal_worker")
+        self.assertEqual(AuthorityType.OFFICIAL.value, "official")
+        self.assertEqual(AuthorityType.COMMUNITY.value, "community")
     
     def test_authority_type_from_value(self):
         self.assertEqual(AuthorityType("producer"), AuthorityType.PRODUCER)
@@ -39,11 +41,13 @@ class TestAuthorityType(unittest.TestCase):
         self.assertEqual(AuthorityType("industry_professional"), AuthorityType.PROFESSIONAL)
         self.assertEqual(AuthorityType("cultural_institution"), AuthorityType.CULTURAL)
         self.assertEqual(AuthorityType("seasonal_worker"), AuthorityType.SEASONAL_WORKER)
+        self.assertEqual(AuthorityType("official"), AuthorityType.OFFICIAL)
+        self.assertEqual(AuthorityType("community"), AuthorityType.COMMUNITY)
     
     def test_authority_type_count(self):
-        # Ensure we have exactly 5 authority types
+        # Ensure we have exactly 7 authority types (added OFFICIAL and COMMUNITY)
         authority_types = list(AuthorityType)
-        self.assertEqual(len(authority_types), 5)
+        self.assertEqual(len(authority_types), 7)
 
 
 class TestLocationExclusivity(unittest.TestCase):

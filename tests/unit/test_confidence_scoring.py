@@ -4,9 +4,9 @@ from src.core.confidence_scoring import (
     ConfidenceScorer, AuthenticityScorer, UniquenessScorer, 
     ActionabilityScorer, MultiDimensionalScore, ConfidenceBreakdown, ConfidenceLevel
 )
-from src.core.enhanced_data_models import Evidence, LocalAuthority, AuthenticInsight
+from src.core.enhanced_data_models import LocalAuthority, AuthenticInsight
 from src.core.evidence_hierarchy import SourceCategory, EvidenceType
-from src.schemas import AuthorityType, InsightType, LocationExclusivity
+from src.schemas import AuthorityType, InsightType, LocationExclusivity, EnhancedEvidence
 
 
 class TestMultiDimensionalScore(unittest.TestCase):
@@ -56,15 +56,19 @@ class TestAuthenticityScorer(unittest.TestCase):
             community_validation=0.9
         )
         
-        self.evidence = Evidence(
+        self.evidence = EnhancedEvidence(
             id="test_evidence",
             source_url="https://localbrewery.com",
             source_category=SourceCategory.BLOG,
             evidence_type=EvidenceType.PRIMARY,
             authority_weight=0.8,
             text_snippet="Authentic local brewery content",
-            timestamp=datetime.now(),
-            confidence=0.7
+            timestamp=datetime.now().isoformat(),
+            confidence=0.7,
+            sentiment=0.8,
+            cultural_context={"is_local": True},
+            relationships=[],
+            agent_id="test_agent"
         )
     
     def test_calculate_local_authority_score(self):
@@ -187,15 +191,19 @@ class TestConfidenceScorer(unittest.TestCase):
     
     def test_calculate_confidence_with_evidence(self):
         evidence_list = [
-            Evidence(
+            EnhancedEvidence(
                 id="evidence1",
                 source_url="https://government.org",
                 source_category=SourceCategory.GOVERNMENT,
                 evidence_type=EvidenceType.PRIMARY,
                 authority_weight=0.9,
                 text_snippet="Official tourism information",
-                timestamp=datetime.now(),
-                confidence=0.8
+                timestamp=datetime.now().isoformat(),
+                confidence=0.8,
+                sentiment=0.7,
+                cultural_context={"is_official": True},
+                relationships=[],
+                agent_id="test_agent"
             )
         ]
         
@@ -213,26 +221,34 @@ class TestConfidenceScorer(unittest.TestCase):
         self.assertEqual(breakdown.confidence_level, ConfidenceLevel.INSUFFICIENT)
     
     def test_evidence_quality_score(self):
-        high_quality = Evidence(
+        high_quality = EnhancedEvidence(
             id="hq_evidence",
             source_url="https://academic.edu",
             source_category=SourceCategory.ACADEMIC,
             evidence_type=EvidenceType.PRIMARY,
             authority_weight=0.95,
             text_snippet="Peer-reviewed research",
-            timestamp=datetime.now(),
-            confidence=0.9
+            timestamp=datetime.now().isoformat(),
+            confidence=0.9,
+            sentiment=0.8,
+            cultural_context={"is_peer_reviewed": True},
+            relationships=[],
+            agent_id="test_agent"
         )
         
-        low_quality = Evidence(
+        low_quality = EnhancedEvidence(
             id="lq_evidence",
             source_url="https://unknown-blog.com",
-            source_category=SourceCategory.UNKNOWN,
+            source_category=SourceCategory.BLOG,
             evidence_type=EvidenceType.TERTIARY,
-            authority_weight=0.2,
+            authority_weight=0.3,
             text_snippet="Unverified information",
-            timestamp=datetime(2020, 1, 1),
-            confidence=0.3
+            timestamp="2020-01-01T00:00:00",
+            confidence=0.3,
+            sentiment=0.2,
+            cultural_context={"is_unverified": True},
+            relationships=[],
+            agent_id="test_agent"
         )
         
         hq_score = self.scorer._evidence_quality_score(high_quality)

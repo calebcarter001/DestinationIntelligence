@@ -5,24 +5,50 @@ import sys
 
 DB_NAME = "enhanced_destination_intelligence.db"
 DB_PATH = os.path.join(os.getcwd(), DB_NAME)
-DESTINATION_ID = "dest_chicago,_united_states"
 
-def investigate_theme(theme_name):
+def get_available_destinations():
+    """Get list of available destinations from database"""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT destination_id FROM themes")
+        destinations = [row[0] for row in cursor.fetchall()]
+        return destinations
+    except sqlite3.Error:
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def investigate_theme(theme_name, destination_id=None):
     """Fetches and displays the evidence for a specific theme."""
+    
+    # If no destination provided, try to get first available destination
+    if not destination_id:
+        available_destinations = get_available_destinations()
+        if not available_destinations:
+            print("ERROR: No destinations found in database.")
+            return
+        destination_id = available_destinations[0]
+        print(f"INFO: No destination specified, using: {destination_id}")
+    
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        print(f"--- Investigating Theme: '{theme_name}' for {DESTINATION_ID.replace('dest_', '').replace(',_united_states', '').replace('_', ' ').title()} ---")
+        # Clean destination name for display
+        display_name = destination_id.replace('dest_', '').replace(',_', ', ').replace('_', ' ').title()
+        print(f"--- Investigating Theme: '{theme_name}' for {display_name} ---")
 
         # First, get the theme's source_evidence_ids
         cursor.execute("""
             SELECT source_evidence_ids
             FROM themes
             WHERE name = ? AND destination_id = ?
-        """, (theme_name, DESTINATION_ID))
+        """, (theme_name, destination_id))
         
         theme_row = cursor.fetchone()
 
@@ -76,8 +102,14 @@ def investigate_theme(theme_name):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python investigate_theme.py \"<Theme Name>\"")
+        print("Usage: python investigate_theme.py \"<Theme Name>\" [destination_id]")
+        print("Example: python investigate_theme.py \"Deep-Dish Pizza Culture\"")
+        print("Example: python investigate_theme.py \"Deep-Dish Pizza Culture\" \"dest_chicago,_united_states\"")
+        available = get_available_destinations()
+        if available:
+            print(f"Available destinations: {', '.join(available)}")
         sys.exit(1)
     
     theme_to_investigate = sys.argv[1]
-    investigate_theme(theme_to_investigate) 
+    destination_arg = sys.argv[2] if len(sys.argv) > 2 else None
+    investigate_theme(theme_to_investigate, destination_arg) 

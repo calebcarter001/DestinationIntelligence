@@ -21,8 +21,8 @@ from src.agents.enhanced_crewai_destination_analyst import EnhancedCrewAIDestina
 from src.tools.enhanced_theme_analysis_tool import EnhancedThemeAnalysisTool, EnhancedThemeAnalysisInput
 from src.tools.priority_data_extraction_tool import PriorityDataExtractor
 from src.tools.web_discovery_tools import DiscoverAndFetchContentTool
-from src.core.enhanced_data_models import Evidence, Theme
-from src.schemas import PageContent
+from src.core.enhanced_data_models import Theme
+from src.schemas import PageContent, EnhancedEvidence
 from src.core.evidence_hierarchy import SourceCategory, EvidenceType
 
 
@@ -240,7 +240,24 @@ class TestEvidencePipelineFix:
     
     @pytest.mark.asyncio
     async def test_enhanced_theme_analysis_preserves_evidence(self):
-        """Test that enhanced theme analysis preserves evidence data"""
+        """Test that evidence is properly preserved through theme analysis"""
+        # Create test evidence
+        evidence = EnhancedEvidence(
+            id="test_evidence",
+            source_url="https://example.com/test",
+            source_category=SourceCategory.BLOG,
+            evidence_type=EvidenceType.PRIMARY,
+            authority_weight=0.8,
+            text_snippet="Test evidence about destination attractions.",
+            timestamp=datetime.now().isoformat(),
+            confidence=0.9,
+            sentiment=0.7,
+            cultural_context={"is_local": True},
+            relationships=[],
+            agent_id="test_agent",
+            published_date=datetime.now().isoformat()  # Convert to ISO string format
+        )
+        
         tool = EnhancedThemeAnalysisTool()
         
         input_data = EnhancedThemeAnalysisInput(
@@ -395,24 +412,20 @@ class TestEvidencePipelineFix:
     def test_evidence_registry_structure(self):
         """Test that evidence registry has proper structure"""
         # Create test evidence
-        evidence = Evidence(
+        evidence = EnhancedEvidence(
             id="test-evidence-1",
-            source_url="https://example.com/test",
+            source_url="https://example.com",
             source_category=SourceCategory.BLOG,
-            evidence_type=EvidenceType.TERTIARY,
+            evidence_type=EvidenceType.PRIMARY,
             authority_weight=0.8,
-            text_snippet="Test evidence snippet",
-            timestamp=datetime.now(),
+            text_snippet="Test evidence about destination attractions.",
+            timestamp=datetime.now().isoformat(),
             confidence=0.9,
-            sentiment=0.7,  # Enhanced field
-            cultural_context={  # Enhanced field
-                "is_local_source": True,
-                "local_entities": ["Test Beach"],
-                "content_type": "experience"
-            },
-            relationships=[],  # Enhanced field
-            agent_id="test_agent",  # Enhanced field
-            published_date=datetime.now()  # Enhanced field
+            sentiment=0.7,
+            cultural_context={"is_local": True},
+            relationships=[],
+            agent_id="test_agent",
+            published_date=datetime.now().isoformat()  # Convert to ISO string format
         )
         
         # Test evidence has all enhanced fields after our fix
@@ -423,9 +436,9 @@ class TestEvidencePipelineFix:
         assert hasattr(evidence, 'published_date'), "Evidence should have published_date field"
         
         assert evidence.sentiment == 0.7, "Sentiment should be correctly set"
-        assert evidence.cultural_context["is_local_source"] is True, "Cultural context should be correctly set"
+        assert evidence.cultural_context["is_local"] is True, "Cultural context should be correctly set"
         assert evidence.agent_id == "test_agent", "Agent ID should be correctly set"
-        assert evidence.published_date is not None, "Published date should be set"
+        assert evidence.published_date is not None and evidence.published_date != "", "Published date should be set"
 
 
 class TestWrapperToolFix:

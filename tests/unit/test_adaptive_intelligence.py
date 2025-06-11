@@ -21,6 +21,8 @@ class TestAdaptiveDataQualityClassifier(unittest.TestCase):
     
     def setUp(self):
         """Set up test configuration"""
+        from src.schemas import AuthorityType
+        from datetime import datetime
         self.test_config = {
             "data_quality_heuristics": {
                 "enabled": True,
