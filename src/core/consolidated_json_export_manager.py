@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 
 from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice
+from .safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
 from .export_config import ExportConfig, ExportMode, SmartViewGenerator, create_export_config_from_yaml
 from .authentic_insights_deduplicator import deduplicate_authentic_insights_for_export, AuthenticInsightsDeduplicator
@@ -59,7 +60,7 @@ class ConsolidatedJsonExportManager:
         self.logger.info(f"Export path: {self.consolidated_path}")
         
         # Log adaptive configuration status
-        heuristics_enabled = self.config.get("data_quality_heuristics", {}).get("enabled", False)
+        heuristics_enabled = safe_get_nested(self.config, ["data_quality_heuristics", "enabled"], False)
         self.logger.info(f"Adaptive data quality classification: {'enabled' if heuristics_enabled else 'disabled'}")
 
     def export_destination_insights(
@@ -209,13 +210,13 @@ class ConsolidatedJsonExportManager:
                 if hasattr(theme.confidence_breakdown, 'overall_confidence'):
                     theme_confidence = theme.confidence_breakdown.overall_confidence
                 elif isinstance(theme.confidence_breakdown, dict):
-                    theme_confidence = theme.confidence_breakdown.get('overall_confidence', 0.5)
+                    theme_confidence = safe_get_confidence_value(theme.confidence_breakdown, "overall_confidence", 0.5)
                 elif isinstance(theme.confidence_breakdown, str):
                     # Handle JSON string case
                     try:
                         import json
                         conf_dict = json.loads(theme.confidence_breakdown)
-                        theme_confidence = conf_dict.get('overall_confidence', 0.5)
+                        theme_confidence = safe_get(conf_dict, 'overall_confidence', 0.5)
                     except (json.JSONDecodeError, AttributeError):
                         theme_confidence = 0.5
                 else:
@@ -233,13 +234,13 @@ class ConsolidatedJsonExportManager:
             if hasattr(t.confidence_breakdown, 'overall_confidence'):
                 return t.confidence_breakdown.overall_confidence
             elif isinstance(t.confidence_breakdown, dict):
-                return t.confidence_breakdown.get('overall_confidence', 0.5)
+                return safe_get_confidence_value(t.confidence_breakdown, "overall_confidence", 0.5)
             elif isinstance(t.confidence_breakdown, str):
                 # Handle JSON string case
                 try:
                     import json
                     conf_dict = json.loads(t.confidence_breakdown)
-                    return conf_dict.get('overall_confidence', 0.5)
+                    return safe_get(conf_dict, 'overall_confidence', 0.5)
                 except (json.JSONDecodeError, AttributeError):
                     return 0.5
             else:
@@ -281,10 +282,10 @@ class ConsolidatedJsonExportManager:
             for theme_id, evidence_ids in export_data["relationships"]["theme_evidence"].items():
                 if len(evidence_ids) > max_evidence_per_theme:
                     # Keep highest authority evidence
-                    evidence_registry = export_data.get("data", {}).get("evidence", {})
+                    evidence_registry = safe_get_nested(export_data, ["data", "evidence"], {})
                     sorted_evidence = sorted(
                         evidence_ids,
-                        key=lambda eid: evidence_registry.get(eid, {}).get("authority_weight", 0),
+                        key=lambda eid: safe_get_nested(evidence_registry, [eid, "authority_weight"], 0),
                         reverse=True
                     )
                     export_data["relationships"]["theme_evidence"][theme_id] = sorted_evidence[:max_evidence_per_theme]
@@ -832,13 +833,14 @@ class ConsolidatedJsonExportManager:
                 if hasattr(t.confidence_breakdown, 'overall_confidence'):
                     confidence_scores.append(t.confidence_breakdown.overall_confidence)
                 elif isinstance(t.confidence_breakdown, dict):
-                    confidence_scores.append(t.confidence_breakdown.get('overall_confidence', 0))
+                    confidence_scores.append(safe_get_confidence_value(t.confidence_breakdown, "overall_confidence", 0))
                 elif isinstance(t.confidence_breakdown, str):
                     # Handle JSON string case
                     try:
                         import json
                         conf_dict = json.loads(t.confidence_breakdown)
-                        confidence_scores.append(conf_dict.get('overall_confidence', 0))
+                        if isinstance(conf_dict, dict): confidence_scores.append(safe_get(conf_dict, 'overall_confidence', 0)); 
+                        else: confidence_scores.append(0)
                     except (json.JSONDecodeError, AttributeError):
                         confidence_scores.append(0)
                 else:
@@ -904,42 +906,33 @@ class ConsolidatedJsonExportManager:
     
     def _get_theme_confidence_safe(self, theme_data: Dict[str, Any]) -> float:
         """Safely extract confidence from theme data regardless of format"""
-        confidence_breakdown = theme_data.get("confidence_breakdown", {})
+        confidence_breakdown = safe_get(theme_data, "confidence_breakdown", {})
         
         if not confidence_breakdown:
             return 0.0
             
         if isinstance(confidence_breakdown, dict):
-            return confidence_breakdown.get("overall_confidence", 0.0)
+            return safe_get_confidence_value(confidence_breakdown, "overall_confidence", 0.0)
         elif isinstance(confidence_breakdown, str):
             # Handle JSON string case
             try:
                 import json
                 conf_dict = json.loads(confidence_breakdown)
-                return conf_dict.get("overall_confidence", 0.0)
+                if isinstance(conf_dict, dict):
+                    return safe_get(conf_dict, "overall_confidence", 0.0)
+                else:
+                    return 0.0
             except (json.JSONDecodeError, AttributeError):
                 return 0.0
         else:
             return 0.0
     
-    def _safe_get_dict_attribute(self, obj: Any, attr_name: str, default: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Safely get a dictionary attribute that might be stored as a JSON string"""
-        if default is None:
-            default = {}
-            
-        attr_value = getattr(obj, attr_name, default)
-        
-        if isinstance(attr_value, dict):
-            return attr_value
-        elif isinstance(attr_value, str):
-            # Handle JSON string case
-            try:
-                import json
-                return json.loads(attr_value)
-            except (json.JSONDecodeError, TypeError):
-                return default
+    def _safe_get_dict_attribute(self, obj, attr):
+        """Safely get a dictionary attribute from an object"""
+        if hasattr(obj, attr):
+            return getattr(obj, attr)
         else:
-            return default
+            return {}
     
     def _save_json(self, data: Dict[str, Any], filepath: Path):
         """Save data to JSON file with configurable formatting"""
@@ -972,11 +965,4 @@ class ConsolidatedJsonExportManager:
             if filepath.stat().st_mtime < archive_date:
                 archive_file = self.base_path / "archive" / filepath.name
                 filepath.rename(archive_file)
-                self.logger.info(f"Archived old export: {filepath.name}")
-
-    def _safe_get_dict_attribute(self, obj, attr):
-        """Safely get a dictionary attribute from an object"""
-        if hasattr(obj, attr):
-            return getattr(obj, attr)
-        else:
-            return {} 
+                self.logger.info(f"Archived old export: {filepath.name}") 

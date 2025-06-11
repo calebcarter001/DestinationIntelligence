@@ -12,8 +12,9 @@ import os # Added for path joining
 import asyncio
 
 from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory, EvidenceType
+from ..core.safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 from ..core.confidence_scoring import ConfidenceScorer, AuthenticityScorer, UniquenessScorer, ActionabilityScorer, MultiDimensionalScore
-from ..core.enhanced_data_models import Evidence, Theme, Destination, TemporalSlice, AuthenticInsight, SeasonalWindow, LocalAuthority
+from ..core.enhanced_data_models import Evidence, Theme, Destination, TemporalSlice, AuthenticInsight, SeasonalWindow, LocalAuthority, safe_get_confidence_value
 from ..agents.specialized_agents import ValidationAgent, CulturalPerspectiveAgent, ContradictionDetectionAgent
 from ..schemas import DestinationInsight, PageContent, PriorityMetrics, InsightType, LocationExclusivity, AuthorityType
 from ..tools.priority_aggregation_tool import PriorityAggregationTool
@@ -378,14 +379,14 @@ class EnhancedThemeAnalysisTool:
             "themes": validation_task_input_themes, 
             "country_code": input_data.country_code
         })
-        print(f"DEBUG_ETA: STEP 4 (validation_agent) COMPLETED. Validated count: {validation_result.get('validated_count', 'N/A')}", file=sys.stderr)
+        print(f"DEBUG_ETA: STEP 4 (validation_agent) COMPLETED. Validated count: {safe_get(validation_result, 'validated_count', 'N/A')}", file=sys.stderr)
 
         # Step 5: Detect and resolve contradictions
         contradiction_result = await self.contradiction_agent.execute_task({
             "themes": validation_result["validated_themes"],
             "destination_name": input_data.destination_name
         })
-        print(f"DEBUG_ETA: STEP 5 (contradiction_agent) COMPLETED. Contradictions found: {contradiction_result.get('contradictions_found', 'N/A')}", file=sys.stderr)
+        print(f"DEBUG_ETA: STEP 5 (contradiction_agent) COMPLETED. Contradictions found: {safe_get(contradiction_result, 'contradictions_found', 'N/A')}", file=sys.stderr)
 
         # Step 6: Build enhanced themes with full metadata
         enhanced_themes = self._build_enhanced_themes(
@@ -424,7 +425,7 @@ class EnhancedThemeAnalysisTool:
                 theme_description = theme_dict['description']
             elif 'name' in theme_dict:
                 # Create description from theme name if description is missing
-                theme_description = f"{theme_dict['name']} experiences in {input_data.destination_name}. {theme_dict.get('micro_category', '')} category."
+                theme_description = f"{theme_dict['name']} experiences in {input_data.destination_name}. {safe_get(theme_dict, 'micro_category', '')} category."
             else:
                 self.logger.warning(f"Skipping theme without description or name: {theme_dict}")
                 continue
@@ -445,13 +446,13 @@ class EnhancedThemeAnalysisTool:
             # Analyze theme evidence for local authority indicators
             # Get actual evidence data from evidence references since we use reference-based architecture
             theme_evidence = []
-            evidence_refs = theme_dict.get("evidence_references", [])
+            evidence_refs = safe_get(theme_dict, "evidence_references", [])
             
-            self.logger.info(f"Processing theme '{theme_dict.get('name')}' with {len(evidence_refs)} evidence references")
+            self.logger.info(f"Processing theme '{safe_get(theme_dict, 'name')}' with {len(evidence_refs)} evidence references")
             
             # Get actual evidence data from registry using references
             for evidence_ref in evidence_refs:
-                evidence_id = evidence_ref.get("evidence_id")
+                evidence_id = safe_get(evidence_ref, "evidence_id")
                 if evidence_id:
                     evidence_data = self.evidence_registry.get_evidence(evidence_id)
                     if evidence_data:
@@ -461,8 +462,8 @@ class EnhancedThemeAnalysisTool:
             self.logger.info(f"Retrieved {len(theme_evidence)} actual evidence pieces from registry")
             
             for evidence_item in theme_evidence:
-                source_url = evidence_item.get("source_url", "")
-                text_snippet = evidence_item.get("text_snippet", "")
+                source_url = safe_get(evidence_item, "source_url", "")
+                text_snippet = safe_get(evidence_item, "text_snippet", "")
                 
                 self.logger.info(f"Checking evidence: URL={source_url[:50]}..., snippet={text_snippet[:100]}...")
                 
@@ -480,15 +481,15 @@ class EnhancedThemeAnalysisTool:
             # If no specific authorities found, create a default one based on source quality
             if not local_authorities_for_theme and theme_evidence:
                 self.logger.info("No specific authorities found, checking for high authority evidence...")
-                highest_authority_evidence = max(theme_evidence, key=lambda x: x.get("authority_weight", 0))
-                auth_weight = highest_authority_evidence.get("authority_weight", 0)
+                highest_authority_evidence = max(theme_evidence, key=lambda x: safe_get(x, "authority_weight", 0))
+                auth_weight = safe_get(highest_authority_evidence, "authority_weight", 0)
                 self.logger.info(f"Highest authority weight: {auth_weight}")
                 
                 if auth_weight > 0.6:
                     local_authority = LocalAuthority(
                         authority_type=AuthorityType.PROFESSIONAL,
                         local_tenure=2,  # Assume moderate tenure for professional sources
-                        expertise_domain=theme_dict.get('name', ''),
+                        expertise_domain=safe_get(theme_dict, 'name', ''),
                         community_validation=auth_weight
                     )
                     local_authorities_for_theme.append(local_authority)
@@ -581,25 +582,25 @@ class EnhancedThemeAnalysisTool:
         for theme_dict in enhanced_themes:
             # Create Theme object from dictionary with all enhanced fields
             theme_obj = Theme(
-                theme_id=theme_dict.get("theme_id", str(uuid.uuid4())),
-                name=theme_dict.get("name", ""),
-                macro_category=theme_dict.get("macro_category", ""),
-                micro_category=theme_dict.get("micro_category", ""),
-                description=theme_dict.get("description", ""),
-                fit_score=theme_dict.get("fit_score", 0.0),
-                tags=theme_dict.get("tags", []),
-                confidence_breakdown=theme_dict.get("confidence_breakdown"),
-                last_validated=datetime.fromisoformat(theme_dict.get("last_validated")) if theme_dict.get("last_validated") else datetime.now(),
+                theme_id=safe_get(theme_dict, "theme_id", str(uuid.uuid4())),
+                name=safe_get(theme_dict, "name", ""),
+                macro_category=safe_get(theme_dict, "macro_category", ""),
+                micro_category=safe_get(theme_dict, "micro_category", ""),
+                description=safe_get(theme_dict, "description", ""),
+                fit_score=safe_get(theme_dict, "fit_score", 0.0),
+                tags=safe_get(theme_dict, "tags", []),
+                confidence_breakdown=safe_get(theme_dict, "confidence_breakdown"),
+                last_validated=datetime.fromisoformat(safe_get(theme_dict, "last_validated")) if safe_get(theme_dict, "last_validated") else datetime.now(),
                 evidence=[],  # Will be populated from evidence registry if needed
-                authentic_insights=theme_dict.get("authentic_insights", []),
-                local_authorities=theme_dict.get("local_authorities", []),
-                seasonal_relevance=theme_dict.get("seasonal_relevance", {}),
-                regional_uniqueness=theme_dict.get("regional_uniqueness", 0.0),
-                insider_tips=theme_dict.get("insider_tips", []),
-                factors=theme_dict.get("factors", {}),
-                cultural_summary=theme_dict.get("cultural_summary", {}),
-                sentiment_analysis=theme_dict.get("sentiment_analysis", {}),
-                temporal_analysis=theme_dict.get("temporal_analysis", {})
+                authentic_insights=safe_get(theme_dict, "authentic_insights", []),
+                local_authorities=safe_get(theme_dict, "local_authorities", []),
+                seasonal_relevance=safe_get(theme_dict, "seasonal_relevance", {}),
+                regional_uniqueness=safe_get(theme_dict, "regional_uniqueness", 0.0),
+                insider_tips=safe_get(theme_dict, "insider_tips", []),
+                factors=safe_get(theme_dict, "factors", {}),
+                cultural_summary=safe_get(theme_dict, "cultural_summary", {}),
+                sentiment_analysis=safe_get(theme_dict, "sentiment_analysis", {}),
+                temporal_analysis=safe_get(theme_dict, "temporal_analysis", {})
             )
             theme_objects.append(theme_obj)
 
@@ -653,9 +654,9 @@ class EnhancedThemeAnalysisTool:
         self.logger.info(f"Extracting evidence from {len(content_list)} content sources")
         
         for idx, content_item in enumerate(content_list):
-            url = content_item.get("url", f"unknown_source_{idx}")
-            raw_content = content_item.get("content", "")
-            title = content_item.get("title", "")
+            url = safe_get(content_item, "url", f"unknown_source_{idx}")
+            raw_content = safe_get(content_item, "content", "")
+            title = safe_get(content_item, "title", "")
             
             if not raw_content or len(raw_content) < 50:
                 self.logger.warning(f"Skipping content item {idx}: insufficient content ({len(raw_content)} chars)")
@@ -1125,17 +1126,17 @@ class EnhancedThemeAnalysisTool:
         score = 0.0
         
         # Compare topics
-        shared_topics = set(context1.get("topics", [])) & set(context2.get("topics", []))
+        shared_topics = set(safe_get(context1, "topics", [])) & set(safe_get(context2, "topics", []))
         if shared_topics:
             score += len(shared_topics) * 0.2
         
         # Compare entities
-        shared_entities = set(context1.get("entities", [])) & set(context2.get("entities", []))
+        shared_entities = set(safe_get(context1, "entities", [])) & set(safe_get(context2, "entities", []))
         if shared_entities:
             score += len(shared_entities) * 0.3
         
         # Compare temporal indicators
-        shared_temporal = set(context1.get("temporal_indicators", [])) & set(context2.get("temporal_indicators", []))
+        shared_temporal = set(safe_get(context1, "temporal_indicators", [])) & set(safe_get(context2, "temporal_indicators", []))
         if shared_temporal:
             score += len(shared_temporal) * 0.1
         
@@ -1168,7 +1169,7 @@ class EnhancedThemeAnalysisTool:
         
         # First pass: identify local themes
         for evidence in evidence_list:
-            local_entities = evidence.cultural_context.get("local_entities", [])
+            local_entities = safe_get(evidence.cultural_context, "local_entities", [])
             if local_entities:
                 for entity in local_entities:
                     # Sanitize entity name to avoid issues with pipe character
@@ -1183,8 +1184,8 @@ class EnhancedThemeAnalysisTool:
         for evidence in evidence_list:
             evidence_processed += 1
             text_lower = evidence.text_snippet.lower()
-            content_type = evidence.cultural_context.get("content_type", "general")
-            semantic_topics = evidence.cultural_context.get("semantic_topics", [])
+            content_type = safe_get(evidence.cultural_context, "content_type", "general")
+            semantic_topics = safe_get(evidence.cultural_context, "semantic_topics", [])
             
             # Check generic themes from taxonomy
             for macro_category, micro_categories in self.theme_taxonomy.items():
@@ -1205,7 +1206,7 @@ class EnhancedThemeAnalysisTool:
                         theme_map["evidence"].append(evidence)
                         theme_map["content_types"].add(content_type)
                         theme_map["temporal_aspects"].update(
-                            evidence.cultural_context.get("temporal_indicators", [])
+                            safe_get(evidence.cultural_context, "temporal_indicators", [])
                         )
                         
                         for topic in semantic_topics:
@@ -1235,7 +1236,7 @@ class EnhancedThemeAnalysisTool:
                     theme_map["local_context"].add(local_theme) # Store original name in context
                     theme_map["content_types"].add(content_type)
                     theme_map["temporal_aspects"].update(
-                        evidence.cultural_context.get("temporal_indicators", [])
+                        safe_get(evidence.cultural_context, "temporal_indicators", [])
                     )
         
         self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Processed {evidence_processed} evidence pieces, found {theme_matches_found} theme matches")
@@ -1359,7 +1360,7 @@ class EnhancedThemeAnalysisTool:
                 return macro_category
 
         # Fallback to general content type if still no match and content type is relevant
-        content_type = cultural_context.get("content_type", "general")
+        content_type = safe_get(cultural_context, "content_type", "general")
         if content_type and content_type != "general": # Only use if a specific content_type is detected
             # Map common content types to macro categories
             content_type_mapping = {
@@ -1717,11 +1718,11 @@ class EnhancedThemeAnalysisTool:
             self.evidence_registry.add_evidence(ev)
 
         for theme_data in validated_themes:
-            theme_id = theme_data.get("theme_id", str(uuid.uuid4()))
+            theme_id = safe_get(theme_data, "theme_id", str(uuid.uuid4()))
             
             # Handle both evidence_references (from database) and original_evidence_objects (from validation)
-            evidence_refs = theme_data.get("evidence_references", [])
-            original_evidence = theme_data.get("original_evidence_objects", [])
+            evidence_refs = safe_get(theme_data, "evidence_references", [])
+            original_evidence = safe_get(theme_data, "original_evidence_objects", [])
             
             # Build evidence references for this theme
             theme_evidence_references = []
@@ -1765,13 +1766,13 @@ class EnhancedThemeAnalysisTool:
             
             enhanced_theme_dict = {
                 "theme_id": theme_id,
-                "name": theme_data.get("name"),
-                "macro_category": theme_data.get("macro_category"),
-                "micro_category": theme_data.get("micro_category"),
-                "description": theme_data.get("description"),
-                "fit_score": theme_data.get("fit_score", 0.0),
-                "tags": theme_data.get("tags", []),
-                "confidence_breakdown": theme_data.get("confidence_breakdown"),
+                "name": safe_get(theme_data, "name"),
+                "macro_category": safe_get(theme_data, "macro_category"),
+                "micro_category": safe_get(theme_data, "micro_category"),
+                "description": safe_get(theme_data, "description"),
+                "fit_score": safe_get(theme_data, "fit_score", 0.0),
+                "tags": safe_get(theme_data, "tags", []),
+                "confidence_breakdown": safe_get(theme_data, "confidence_breakdown"),
                 "last_validated": datetime.now().isoformat(),
                 
                 # CRITICAL: Always include evidence_references
@@ -1791,8 +1792,8 @@ class EnhancedThemeAnalysisTool:
                 "cultural_summary": self._generate_cultural_summary_from_refs(theme_evidence_references),
                 "sentiment_analysis": self._analyze_theme_sentiment_from_refs(theme_evidence_references),
                 "temporal_analysis": self._analyze_theme_temporal_aspects_from_refs(theme_evidence_references),
-                "traveler_relevance_factor": theme_data.get("traveler_relevance_factor"),
-                "adjusted_overall_confidence": theme_data.get("adjusted_overall_confidence"),
+                "traveler_relevance_factor": safe_get(theme_data, "traveler_relevance_factor"),
+                "adjusted_overall_confidence": safe_get(theme_data, "adjusted_overall_confidence"),
                 
                 # Properly populated fields
                 "authentic_insights": authentic_insights,
@@ -1907,7 +1908,7 @@ class EnhancedThemeAnalysisTool:
             return {}
         
         factors = {
-            "source_diversity": len(set(ev.get("source_url", "") for ev in evidence_data)),
+            "source_diversity": len(set(safe_get(ev, "source_url", "") for ev in evidence_data)),
             "authority_distribution": self._calculate_authority_distribution(evidence_data),
             "sentiment_consistency": self._calculate_sentiment_consistency(evidence_data),
             "cultural_breadth": self._calculate_cultural_breadth(evidence_data),
@@ -1971,21 +1972,21 @@ class EnhancedThemeAnalysisTool:
                 "authority_score": 0.0
             }
             
-        high_authority = sum(1 for ev in evidence_list if ev.get("authority_weight", 0) > 0.8)
-        medium_authority = sum(1 for ev in evidence_list if 0.5 < ev.get("authority_weight", 0) <= 0.8)
-        low_authority = sum(1 for ev in evidence_list if ev.get("authority_weight", 0) <= 0.5)
+        high_authority = sum(1 for ev in evidence_list if safe_get(ev, "authority_weight", 0) > 0.8)
+        medium_authority = sum(1 for ev in evidence_list if 0.5 < safe_get(ev, "authority_weight", 0) <= 0.8)
+        low_authority = sum(1 for ev in evidence_list if safe_get(ev, "authority_weight", 0) <= 0.5)
         total = len(evidence_list)
         
         return {
             "high_authority_ratio": high_authority / total,
             "medium_authority_ratio": medium_authority / total,
             "low_authority_ratio": low_authority / total,
-            "authority_score": sum(ev.get("authority_weight", 0) for ev in evidence_list) / total
+            "authority_score": sum(safe_get(ev, "authority_weight", 0) for ev in evidence_list) / total
         }
     
     def _calculate_sentiment_consistency(self, evidence_list: List[Dict]) -> Dict[str, float]:
         """Calculate sentiment consistency across evidence"""
-        sentiments = [ev.get("sentiment", 0) for ev in evidence_list if ev.get("sentiment") is not None]
+        sentiments = [safe_get(ev, "sentiment", 0) for ev in evidence_list if ev.get("sentiment") is not None]
         
         if not sentiments:
             return {"consistency": 0.0, "average_sentiment": 0.0, "sentiment_range": 0.0, "positive_evidence_ratio": 0.0}
@@ -2011,13 +2012,13 @@ class EnhancedThemeAnalysisTool:
             }
             
         local_sources = sum(1 for ev in evidence_list 
-                          if ev.get("cultural_context", {}).get("is_local_source", False))
+                          if safe_get_nested(ev, ["cultural_context", "is_local_source"], False))
         total_sources = len(evidence_list)
         
         # Language diversity
         languages = set()
         for ev in evidence_list:
-            lang_indicators = ev.get("cultural_context", {}).get("language_indicators", [])
+            lang_indicators = safe_get_nested(ev, ["cultural_context", "language_indicators"], [])
             languages.update(lang_indicators)
         
         return {
@@ -2032,7 +2033,7 @@ class EnhancedThemeAnalysisTool:
         freshness_scores = []
         
         for ev in evidence_list:
-            pub_date_str = ev.get("published_date")
+            pub_date_str = safe_get(ev, "published_date")
             if pub_date_str:
                 try:
                     pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00'))
@@ -2055,7 +2056,7 @@ class EnhancedThemeAnalysisTool:
         """Calculate average geographic specificity"""
         specificities = []
         for ev in evidence_list:
-            geo_spec = ev.get("cultural_context", {}).get("geographic_specificity", 0)
+            geo_spec = safe_get_nested(ev, ["cultural_context", "geographic_specificity"], 0)
             if isinstance(geo_spec, (int, float)):
                 specificities.append(geo_spec)
         
@@ -2065,7 +2066,7 @@ class EnhancedThemeAnalysisTool:
         """Calculate average content quality"""
         qualities = []
         for ev in evidence_list:
-            quality = ev.get("cultural_context", {}).get("content_quality_score", 0)
+            quality = safe_get_nested(ev, ["cultural_context", "content_quality_score"], 0)
             if isinstance(quality, (int, float)):
                 qualities.append(quality)
         
@@ -2084,12 +2085,12 @@ class EnhancedThemeAnalysisTool:
             }
             
         local_count = sum(1 for ev in evidence_list 
-                         if ev.get("cultural_context", {}).get("is_local_source", False))
+                         if safe_get_nested(ev, ["cultural_context", "is_local_source"], False))
         
         # Collect language indicators
         all_languages = []
         for ev in evidence_list:
-            lang_indicators = ev.get("cultural_context", {}).get("language_indicators", [])
+            lang_indicators = safe_get_nested(ev, ["cultural_context", "language_indicators"], [])
             all_languages.extend(lang_indicators)
         
         from collections import Counter
@@ -2107,7 +2108,7 @@ class EnhancedThemeAnalysisTool:
     
     def _analyze_theme_sentiment(self, evidence_list: List[Dict]) -> Dict[str, Any]:
         """Analyze sentiment patterns across theme evidence"""
-        sentiments = [ev.get("sentiment", 0) for ev in evidence_list if ev.get("sentiment") is not None]
+        sentiments = [safe_get(ev, "sentiment", 0) for ev in evidence_list if ev.get("sentiment") is not None]
         
         if not sentiments:
             return {"overall": "neutral", "confidence": 0.0, "distribution": {}}
@@ -2142,7 +2143,7 @@ class EnhancedThemeAnalysisTool:
         # Collect temporal markers from cultural context
         all_temporal_markers = []
         for ev in evidence_list:
-            markers = ev.get("cultural_context", {}).get("temporal_markers", [])
+            markers = safe_get_nested(ev, ["cultural_context", "temporal_markers"], [])
             all_temporal_markers.extend(markers)
         
         from collections import Counter
@@ -2151,7 +2152,7 @@ class EnhancedThemeAnalysisTool:
         # Analyze publication dates
         pub_dates = []
         for ev in evidence_list:
-            pub_date_str = ev.get("published_date")
+            pub_date_str = safe_get(ev, "published_date")
             if pub_date_str:
                 try:
                     pub_date = datetime.fromisoformat(pub_date_str.replace('Z', '+00:00'))
@@ -2239,8 +2240,8 @@ class EnhancedThemeAnalysisTool:
                         base_strength = theme.fit_score
                         theme_name = theme.name
                     else:  # Dictionary
-                        base_strength = theme.get("confidence_score", theme.get("fit_score", 0.5))
-                        theme_name = theme.get("name", "")
+                        base_strength = safe_get(theme, "confidence_score", safe_get(theme, "fit_score", 0.5))
+                        theme_name = safe_get(theme, "name", "")
                 
                 seasonal_modifier = self._calculate_seasonal_modifier(theme_name, season)
                 theme_strengths[theme_name] = base_strength * seasonal_modifier
@@ -2348,7 +2349,7 @@ class EnhancedThemeAnalysisTool:
                 if hasattr(theme, 'name'):  # Theme object
                     theme_name = theme.name
                 else:  # Dictionary
-                    theme_name = theme.get("name", "")
+                    theme_name = safe_get(theme, "name", "")
                 
                 if any(word.lower() in theme_name.lower() for word in activity.lower().split()):
                     matching_themes.append(theme_name)
@@ -2468,9 +2469,9 @@ class EnhancedThemeAnalysisTool:
                 confidence = theme.fit_score
                 theme_name = theme.name
             else:  # Dictionary
-                theme_name_lower = theme.get("name", "").lower()
-                confidence = theme.get("confidence_score", theme.get("fit_score", 0.5))
-                theme_name = theme.get("name", "")
+                theme_name_lower = safe_get(theme, "name", "").lower()
+                confidence = safe_get(theme, "confidence_score", safe_get(theme, "fit_score", 0.5))
+                theme_name = safe_get(theme, "name", "")
             
             # Check for exact matches first
             matched = False
@@ -2551,7 +2552,7 @@ class EnhancedThemeAnalysisTool:
                 if theme.confidence_breakdown and hasattr(theme.confidence_breakdown, 'overall_confidence'):
                     total_confidence += theme.confidence_breakdown.overall_confidence
                 elif theme.confidence_breakdown and isinstance(theme.confidence_breakdown, dict):
-                    total_confidence += theme.confidence_breakdown.get('overall_confidence', 0.0)
+                    total_confidence += safe_get_confidence_value(theme.confidence_breakdown, "overall_confidence", 0.0)
                 elif theme.confidence_breakdown and isinstance(theme.confidence_breakdown, str):
                     # Handle JSON string case
                     try:
@@ -2564,7 +2565,7 @@ class EnhancedThemeAnalysisTool:
                     total_confidence += theme.fit_score  # Fallback to fit_score
             else:  # Dictionary
                 # Try different confidence field names for backward compatibility
-                confidence = theme.get("confidence_score", theme.get("fit_score", 0.0))
+                confidence = safe_get(theme, "confidence_score", theme.get("fit_score", 0.0))
                 if isinstance(confidence, dict):
                     confidence = confidence.get("overall_confidence", 0.0)
                 total_confidence += confidence
@@ -2834,11 +2835,11 @@ class EnhancedThemeAnalysisTool:
         
         # Add thematic relationships based on chunk context
         current_chunk = chunks[chunk_idx]
-        current_topics = current_chunk.get("context", {}).get("topics", [])
+        current_topics = safe_get_nested(current_chunk, ["context", "topics"], [])
         
         for other_idx, other_chunk in enumerate(chunks):
             if other_idx != chunk_idx:
-                other_topics = other_chunk.get("context", {}).get("topics", [])
+                other_topics = safe_get_nested(other_chunk, ["context", "topics"], [])
                 shared_topics = set(current_topics) & set(other_topics)
                 if shared_topics:
                     relationships.append({
@@ -3356,7 +3357,7 @@ class EnhancedThemeAnalysisTool:
                 if hasattr(theme.confidence_breakdown, 'overall_confidence'):
                     theme_confidence = theme.confidence_breakdown.overall_confidence
                 elif isinstance(theme.confidence_breakdown, dict):
-                    theme_confidence = theme.confidence_breakdown.get('overall_confidence', 0.0)
+                    theme_confidence = safe_get_confidence_value(theme.confidence_breakdown, "overall_confidence", 0.0)
                 elif isinstance(theme.confidence_breakdown, str):
                     # Handle JSON string case
                     try:

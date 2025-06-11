@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
+from .safe_dict_utils import safe_get_nested, safe_get
 from src.schemas import PriorityMetrics, DestinationInsight
 
 logger = logging.getLogger(__name__)
@@ -155,12 +156,12 @@ class PriorityExportManager:
         for criterion in comparison_criteria:
             if criterion == "overall":
                 scores = [
-                    (d["destination"], d.get("scorecard", {}).get("overall_score", 0))
+                    (d["destination"], safe_get_nested(d, ["scorecard", "overall_score"], 0))
                     for d in destinations
                 ]
             else:
                 scores = [
-                    (d["destination"], d.get("scorecard", {}).get("category_scores", {}).get(criterion, 0))
+                    (d["destination"], safe_get_nested(d, ["scorecard", "category_scores", criterion], 0))
                     for d in destinations
                 ]
             
@@ -616,11 +617,11 @@ class PriorityExportManager:
                 best_for["luxury_travelers"].append(name)
             
             # Families
-            if scorecard.get("category_scores", {}).get("safety", 0) >= 8:
+            if safe_get_nested(scorecard, ["category_scores", "safety"], 0) >= 8:
                 best_for["families"].append(name)
             
             # Solo travelers
-            if (scorecard.get("category_scores", {}).get("safety", 0) >= 7 and
+            if (safe_get_nested(scorecard, ["category_scores", "safety"], 0) >= 7 and
                 metrics.english_proficiency and 
                 metrics.english_proficiency.lower() in ["good", "excellent", "native"]):
                 best_for["solo_travelers"].append(name)
