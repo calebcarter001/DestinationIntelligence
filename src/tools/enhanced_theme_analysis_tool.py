@@ -58,10 +58,14 @@ class EvidenceRegistry:
     
     def add_evidence(self, evidence: Evidence, similarity_threshold: float = 0.85) -> str:
         """
-        Add evidence to registry with deduplication.
-        Returns evidence ID (existing if duplicate, new if unique)
+        Add evidence to the registry with deduplication based on content similarity
+        SAFETY: Handle both Evidence objects and dictionaries
         """
-        content_hash = self._generate_content_hash(evidence.text_snippet, evidence.source_url)
+        # SAFETY: Handle both Evidence objects and dictionaries
+        text_snippet = getattr(evidence, 'text_snippet', None) or evidence.get('text_snippet', '') if isinstance(evidence, dict) else evidence.text_snippet if hasattr(evidence, 'text_snippet') else ''
+        source_url = getattr(evidence, 'source_url', None) or evidence.get('source_url', '') if isinstance(evidence, dict) else evidence.source_url if hasattr(evidence, 'source_url') else ''
+        
+        content_hash = self._generate_content_hash(text_snippet, source_url)
         
         # Check for exact hash match
         if content_hash in self.hash_to_id:
@@ -71,41 +75,52 @@ class EvidenceRegistry:
         
         # Check for similar content from same source
         for existing_hash, existing_evidence in self.evidence_by_hash.items():
-            if (existing_evidence["source_url"] == evidence.source_url and
-                self._calculate_similarity(existing_evidence["text_snippet"], evidence.text_snippet) > similarity_threshold):
+            if (existing_evidence["source_url"] == source_url and
+                self._calculate_similarity(existing_evidence["text_snippet"], text_snippet) > similarity_threshold):
                 
                 existing_id = self.hash_to_id[existing_hash]
-                logger.info(f"Found similar evidence (similarity: {self._calculate_similarity(existing_evidence['text_snippet'], evidence.text_snippet):.2f}), reusing ID: {existing_id}")
+                logger.info(f"Found similar evidence (similarity: {self._calculate_similarity(existing_evidence['text_snippet'], text_snippet):.2f}), reusing ID: {existing_id}")
                 return existing_id
         
         # Create new evidence entry
         evidence_id = f"ev_{len(self.evidence_by_id)}"
         
-        # Handle source_category and evidence_type which might be strings or enums
-        source_category_value = evidence.source_category
+        # SAFETY: Handle source_category and evidence_type which might be strings or enums
+        source_category_value = getattr(evidence, 'source_category', None) or evidence.get('source_category', 'unknown') if isinstance(evidence, dict) else evidence.source_category if hasattr(evidence, 'source_category') else 'unknown'
         if hasattr(source_category_value, 'value'):
             source_category_value = source_category_value.value
         
-        evidence_type_value = getattr(evidence, 'evidence_type', 'analysis')
+        evidence_type_value = getattr(evidence, 'evidence_type', 'analysis') or evidence.get('evidence_type', 'analysis') if isinstance(evidence, dict) else getattr(evidence, 'evidence_type', 'analysis')
         if hasattr(evidence_type_value, 'value'):
             evidence_type_value = evidence_type_value.value
+        
+        # SAFETY: Extract all fields safely
+        authority_weight = getattr(evidence, 'authority_weight', 0.0) or evidence.get('authority_weight', 0.0) if isinstance(evidence, dict) else 0.0
+        cultural_context = getattr(evidence, 'cultural_context', {}) or evidence.get('cultural_context', {}) if isinstance(evidence, dict) else {}
+        sentiment = getattr(evidence, 'sentiment', 0.0) or evidence.get('sentiment', 0.0) if isinstance(evidence, dict) else 0.0
+        relationships = getattr(evidence, 'relationships', []) or evidence.get('relationships', []) if isinstance(evidence, dict) else []
+        agent_id = getattr(evidence, 'agent_id', None) or evidence.get('agent_id', None) if isinstance(evidence, dict) else None
+        published_date = getattr(evidence, 'published_date', None) or evidence.get('published_date', None) if isinstance(evidence, dict) else None
+        confidence = getattr(evidence, 'confidence', 0.0) or evidence.get('confidence', 0.0) if isinstance(evidence, dict) else 0.0
+        timestamp = getattr(evidence, 'timestamp', None) or evidence.get('timestamp', None) if isinstance(evidence, dict) else None
+        factors = getattr(evidence, 'factors', {}) or evidence.get('factors', {}) if isinstance(evidence, dict) else {}
         
         evidence_data = {
             "id": evidence_id,
             "content_hash": content_hash,
-            "source_url": evidence.source_url,
+            "source_url": source_url,
             "source_category": source_category_value,
             "evidence_type": evidence_type_value,
-            "authority_weight": evidence.authority_weight,
-            "text_snippet": evidence.text_snippet,
-            "cultural_context": evidence.cultural_context,
-            "sentiment": evidence.sentiment,
-            "relationships": evidence.relationships,
-            "agent_id": evidence.agent_id,
-            "published_date": evidence.published_date.isoformat() if evidence.published_date else None,
-            "confidence": evidence.confidence,
-            "timestamp": evidence.timestamp if isinstance(evidence.timestamp, str) else evidence.timestamp.isoformat(),
-            "factors": getattr(evidence, 'factors', {})
+            "authority_weight": authority_weight,
+            "text_snippet": text_snippet,
+            "cultural_context": cultural_context,
+            "sentiment": sentiment,
+            "relationships": relationships,
+            "agent_id": agent_id,
+            "published_date": published_date.isoformat() if published_date and hasattr(published_date, 'isoformat') else published_date,
+            "confidence": confidence,
+            "timestamp": timestamp if isinstance(timestamp, str) else timestamp.isoformat() if timestamp and hasattr(timestamp, 'isoformat') else timestamp,
+            "factors": factors
         }
         
         self.evidence_by_hash[content_hash] = evidence_data
@@ -343,10 +358,14 @@ class EnhancedThemeAnalysisTool:
             if not all_evidence or len(all_evidence) == 0:
                 self.logger.warning("🚨 ARCHITECTURAL FIX: No evidence extracted - returning empty theme analysis")
                 return {
+                    "destination_name": input_data.destination_name,
+                    "country_code": input_data.country_code,
                     "themes": [],
                     "evidence": [],
+                    "evidence_summary": {"total_evidence": 0, "evidence_sources": 0, "evidence_quality": 0.0},  # ADD MISSING FIELD
                     "temporal_slices": [],
                     "dimensions": {},
+                    "quality_metrics": {"theme_count": 0, "avg_confidence": 0.0, "evidence_coverage": 0.0},  # ADD MISSING FIELD
                     "cultural_result": {
                         "total_evidence": 0,
                         "theme_count": 0,
@@ -368,10 +387,14 @@ class EnhancedThemeAnalysisTool:
             if not discovered_themes:
                 self.logger.warning("🚨 ARCHITECTURAL FIX: No themes discovered from evidence - returning minimal result")
                 return {
+                    "destination_name": input_data.destination_name,
+                    "country_code": input_data.country_code,
                     "themes": [],
                     "evidence": [ev.to_dict() for ev in all_evidence],
+                    "evidence_summary": {"total_evidence": len(all_evidence), "evidence_sources": len(set(ev.source_url for ev in all_evidence)), "evidence_quality": sum(ev.confidence for ev in all_evidence) / len(all_evidence) if all_evidence else 0.0},  # ADD MISSING FIELD
                     "temporal_slices": [],
                     "dimensions": {},
+                    "quality_metrics": {"theme_count": 0, "avg_confidence": 0.0, "evidence_coverage": len(all_evidence)},  # ADD MISSING FIELD
                     "cultural_result": {
                         "total_evidence": len(all_evidence),
                         "theme_count": 0,
@@ -457,20 +480,36 @@ class EnhancedThemeAnalysisTool:
             print(f"DEBUG_ETA: ANALYSIS COMPLETED. Architecture fix successful: {len(enhanced_themes)} themes, {len(all_evidence)} evidence, {total_evidence_links} evidence links.", file=sys.stderr)
             
             return {
+                "destination_name": input_data.destination_name,
+                "country_code": input_data.country_code,
                 "themes": enhanced_themes,
                 "evidence": [ev.to_dict() for ev in all_evidence],
+                "evidence_summary": {
+                    "total_evidence": len(all_evidence), 
+                    "evidence_sources": len(set(ev.source_url for ev in all_evidence)), 
+                    "evidence_quality": sum(ev.confidence for ev in all_evidence) / len(all_evidence) if all_evidence else 0.0
+                },
                 "temporal_slices": temporal_slices,
                 "dimensions": dimensions,
+                "quality_metrics": {
+                    "theme_count": len(enhanced_themes), 
+                    "avg_confidence": sum(theme.get('fit_score', 0) for theme in enhanced_themes) / len(enhanced_themes) if enhanced_themes else 0.0, 
+                    "evidence_coverage": total_evidence_links
+                },
                 "cultural_result": cultural_result
             }
             
         except Exception as e:
             self.logger.error(f"Enhanced theme analysis failed: {e}", exc_info=True)
             return {
+                "destination_name": input_data.destination_name,
+                "country_code": input_data.country_code,
                 "themes": [],
                 "evidence": [],
+                "evidence_summary": {"total_evidence": 0, "evidence_sources": 0, "evidence_quality": 0.0},
                 "temporal_slices": [],
                 "dimensions": {},
+                "quality_metrics": {"theme_count": 0, "avg_confidence": 0.0, "evidence_coverage": 0.0},
                 "cultural_result": {"error": str(e), "architecture": "failed"}
             }
     
