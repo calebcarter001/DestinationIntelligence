@@ -576,12 +576,17 @@ class EnhancedDatabaseManager:
                 errors.append(f"Theme {theme_name} has invalid fit_score: {theme_fit_score}")
             
             for evidence in evidence_list:
-                if not evidence.id:
+                # SAFETY: Handle both Evidence objects and dictionaries
+                evidence_id = getattr(evidence, 'id', None) or evidence.get('id', '') if isinstance(evidence, dict) else evidence.id if hasattr(evidence, 'id') else None
+                evidence_source_url = getattr(evidence, 'source_url', None) or evidence.get('source_url', '') if isinstance(evidence, dict) else evidence.source_url if hasattr(evidence, 'source_url') else None
+                evidence_confidence = getattr(evidence, 'confidence', 0) or evidence.get('confidence', 0) if isinstance(evidence, dict) else evidence.confidence if hasattr(evidence, 'confidence') else 0
+                
+                if not evidence_id:
                     errors.append(f"Evidence missing ID in theme {theme_name}")
-                if not evidence.source_url:
+                if not evidence_source_url:
                     errors.append(f"Evidence missing source_url in theme {theme_name}")
-                if evidence.confidence < 0 or evidence.confidence > 1:
-                    errors.append(f"Evidence has invalid confidence in theme {theme_name}: {evidence.confidence}")
+                if evidence_confidence < 0 or evidence_confidence > 1:
+                    errors.append(f"Evidence has invalid confidence in theme {theme_name}: {evidence_confidence}")
                     
         # Validate dimensions
         for dim_name, dim_value in destination.dimensions.items():
