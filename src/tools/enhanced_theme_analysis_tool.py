@@ -651,16 +651,32 @@ class EnhancedThemeAnalysisTool:
         all_evidence = []
         agent_id = f"enhanced_theme_analyzer_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        self.logger.info(f"Extracting evidence from {len(content_list)} content sources")
+        # VALIDATION: Log input structure to validate data flow
+        self.logger.info(f"🔍 EVIDENCE VALIDATION: Extracting evidence from {len(content_list)} content sources")
+        self._validate_evidence_extraction_input(content_list)
+        
+        content_processed = 0
+        content_skipped_short = 0
+        content_skipped_empty = 0
+        chunks_created = 0
+        chunks_skipped = 0
         
         for idx, content_item in enumerate(content_list):
             url = safe_get(content_item, "url", f"unknown_source_{idx}")
             raw_content = safe_get(content_item, "content", "")
             title = safe_get(content_item, "title", "")
             
-            if not raw_content or len(raw_content) < 50:
-                self.logger.warning(f"Skipping content item {idx}: insufficient content ({len(raw_content)} chars)")
+            if not raw_content:
+                content_skipped_empty += 1
+                self.logger.warning(f"🔍 VALIDATION: Content item {idx} has empty content - URL: {url[:50]}...")
                 continue
+            elif len(raw_content) < 50:
+                content_skipped_short += 1
+                self.logger.warning(f"🔍 VALIDATION: Content item {idx} too short ({len(raw_content)} chars) - URL: {url[:50]}...")
+                continue
+            
+            content_processed += 1
+            self.logger.info(f"🔍 VALIDATION: Processing content {idx}: {len(raw_content)} chars from {url[:50]}...")
             
             # Classify source category and evidence type
             source_category = self._classify_source_category(url, title, raw_content)
@@ -673,12 +689,16 @@ class EnhancedThemeAnalysisTool:
             # Smart content chunking
             chunks = self._smart_chunk_content(raw_content)
             
-            self.logger.info(f"Processing source {idx}: {url[:80]}... -> {len(chunks)} chunks, category: {source_category.value}")
+            self.logger.info(f"🔍 VALIDATION: Source {idx} produced {len(chunks)} chunks, category: {source_category.value}")
             
             for chunk_idx, chunk in enumerate(chunks):
                 chunk_text = chunk["text"]
                 if len(chunk_text) < 100:  # Skip very short chunks
+                    chunks_skipped += 1
+                    self.logger.debug(f"🔍 VALIDATION: Skipped chunk {chunk_idx} ({len(chunk_text)} chars)")
                     continue
+                
+                chunks_created += 1
                 
                 # Enhanced sentiment analysis
                 sentiment_score = self._analyze_enhanced_sentiment(chunk_text)
@@ -717,8 +737,52 @@ class EnhancedThemeAnalysisTool:
                 
                 all_evidence.append(evidence)
         
-        self.logger.info(f"Extracted {len(all_evidence)} evidence pieces from {len(content_list)} sources")
+        # COMPREHENSIVE VALIDATION SUMMARY
+        self.logger.info(f"🔍 EVIDENCE EXTRACTION SUMMARY:")
+        self.logger.info(f"  - Content items received: {len(content_list)}")
+        self.logger.info(f"  - Content items processed: {content_processed}")
+        self.logger.info(f"  - Content items skipped (empty): {content_skipped_empty}")
+        self.logger.info(f"  - Content items skipped (too short): {content_skipped_short}")
+        self.logger.info(f"  - Chunks created: {chunks_created}")
+        self.logger.info(f"  - Chunks skipped: {chunks_skipped}")
+        self.logger.info(f"  - Final evidence pieces: {len(all_evidence)}")
+        
+        if len(all_evidence) == 0:
+            self.logger.error(f"🚨 CRITICAL: Evidence extraction produced 0 evidence pieces!")
+            self.logger.error(f"🚨 DIAGNOSIS: This will cause theme discovery to fail!")
+        
         return all_evidence
+
+    def _validate_evidence_extraction_input(self, content_list: List[Dict[str, Any]]) -> None:
+        """Validate the structure and quality of content input for evidence extraction"""
+        self.logger.info(f"🔍 INPUT VALIDATION: Validating {len(content_list)} content items")
+        
+        if not content_list:
+            self.logger.error("🚨 INPUT VALIDATION: content_list is empty!")
+            return
+        
+        for idx, item in enumerate(content_list[:3]):  # Check first 3 items
+            self.logger.info(f"🔍 INPUT ITEM {idx}:")
+            self.logger.info(f"  - Type: {type(item)}")
+            self.logger.info(f"  - Keys: {list(item.keys()) if isinstance(item, dict) else 'Not a dict'}")
+            
+            if isinstance(item, dict):
+                url = item.get("url", "NO URL")
+                content = item.get("content", "NO CONTENT")
+                title = item.get("title", "NO TITLE")
+                
+                self.logger.info(f"  - URL: {url[:100]}...")
+                self.logger.info(f"  - Title: {title[:50]}...")
+                self.logger.info(f"  - Content length: {len(content) if content else 0}")
+                if content:
+                    self.logger.info(f"  - Content preview: {content[:150]}...")
+                else:
+                    self.logger.warning(f"  - ⚠️  Content is empty or None!")
+            
+            else:
+                self.logger.warning(f"🚨 VALIDATION: Unexpected content item format at index {idx}")
+        
+        self.logger.info("🔍 INPUT VALIDATION: Complete")
 
     def _analyze_enhanced_sentiment(self, text: str) -> float:
         """Enhanced sentiment analysis with destination-specific context"""
@@ -1251,7 +1315,7 @@ class EnhancedThemeAnalysisTool:
         self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Created {len(theme_evidence_map)} unique themes in evidence map")
         
         # PRIORITY FIX: ENFORCE MINIMUM EVIDENCE REQUIREMENT 
-        min_evidence_per_theme = 2  # Require at least 2 evidence pieces per theme
+        min_evidence_per_theme = 1  # Require at least 1 evidence piece per theme
         
         # Create enhanced themes with rich context
         themes_created = 0
