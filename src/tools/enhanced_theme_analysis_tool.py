@@ -1163,6 +1163,14 @@ class EnhancedThemeAnalysisTool:
         self, evidence_list: List[Evidence], destination_name: str, country_code: str = None
     ) -> List[Theme]:
         """Discover themes from evidence using enhanced analysis"""
+        
+        # PRIORITY FIX: NO THEMES WITHOUT EVIDENCE
+        if not evidence_list or len(evidence_list) == 0:
+            self.logger.warning("🚨 PRIORITY FIX: No evidence provided - cannot create themes without evidence!")
+            return []
+        
+        self.logger.info(f"🔍 EVIDENCE-FIRST DISCOVERY: Starting with {len(evidence_list)} evidence pieces")
+        
         discovered_themes = []
         theme_evidence_map = {}
         local_theme_candidates = set()
@@ -1178,7 +1186,7 @@ class EnhancedThemeAnalysisTool:
         
         self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Identified {len(local_theme_candidates)} potential local themes: {list(local_theme_candidates)[:5]}")
         
-        # Second pass: map evidence to themes
+        # Second pass: map evidence to themes (ONLY PROCESS IF WE HAVE EVIDENCE)
         evidence_processed = 0
         theme_matches_found = 0
         for evidence in evidence_list:
@@ -1242,6 +1250,9 @@ class EnhancedThemeAnalysisTool:
         self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Processed {evidence_processed} evidence pieces, found {theme_matches_found} theme matches")
         self.logger.info(f"🔍 DEBUG_THEME_DISCOVERY: Created {len(theme_evidence_map)} unique themes in evidence map")
         
+        # PRIORITY FIX: ENFORCE MINIMUM EVIDENCE REQUIREMENT 
+        min_evidence_per_theme = 2  # Require at least 2 evidence pieces per theme
+        
         # Create enhanced themes with rich context
         themes_created = 0
         themes_filtered_out = 0
@@ -1249,9 +1260,10 @@ class EnhancedThemeAnalysisTool:
             evidence_list = theme_data["evidence"]
             evidence_count = len(evidence_list)
             
-            if evidence_count < 1:
+            # STRICTER EVIDENCE REQUIREMENT
+            if evidence_count < min_evidence_per_theme:
                 themes_filtered_out += 1
-                self.logger.warning(f"🔍 DEBUG_THEME_DISCOVERY: Theme {theme_key} filtered out - no evidence (count: {evidence_count})")
+                self.logger.warning(f"🔍 DEBUG_THEME_DISCOVERY: Theme {theme_key} filtered out - insufficient evidence (count: {evidence_count}, required: {min_evidence_per_theme})")
                 continue
             
             # CULTURAL INTELLIGENCE: Enhanced confidence scoring with dual-track processing
