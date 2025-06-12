@@ -133,7 +133,7 @@ class WebDiscoveryLogic:
         self.max_poi_results_per_query = poi_config.get("max_poi_results_per_query", 3)  # Cost control per query
         
         # Load tourist gateway keywords from external config or use defaults
-        self.tourist_gateway_keywords = poi_config.get("tourist_gateway_keywords", self._get_default_tourist_gateway_keywords())
+        self.tourist_gateway_keywords = self._load_tourist_gateway_keywords(poi_config)
         
         # Built-in tourist gateway patterns (always checked regardless of config)
         self.tourist_gateway_patterns = [
@@ -743,7 +743,7 @@ class WebDiscoveryLogic:
                     for result in raw_web_search_results:
                         # Assuming the ID is present in a field like 'location_id' or 'id' for location type results
                         # This part is speculative and depends on the actual structure of Brave Web Search API's location results
-                        if result.get('result_type') == 'locations' and result.get('id'):
+                        if result.get("result_type") == "locations" and result.get("id"):
                             location_ids_to_fetch.append(result['id']) 
                         elif result.get('result_type') == 'locations' and result.get('local_id'): # Another common pattern
                              location_ids_to_fetch.append(result['local_id'])
@@ -1868,12 +1868,12 @@ class WebDiscoveryLogic:
             self._external_tourist_keywords = None
             self._external_authority_domains = None
 
-    def _get_default_tourist_gateway_keywords(self):
+    def _load_tourist_gateway_keywords(self, poi_config):
         """Get tourist gateway keywords from external config or return defaults."""
-        if self._external_tourist_keywords:
+        if poi_config.get("tourist_gateway_keywords"):
             # Combine all categories from the external config
             all_keywords = []
-            for category_keywords in self._external_tourist_keywords.values():
+            for category_keywords in poi_config["tourist_gateway_keywords"].values():
                 all_keywords.extend(category_keywords)
             return all_keywords
         else:

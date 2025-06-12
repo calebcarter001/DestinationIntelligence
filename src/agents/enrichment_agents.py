@@ -3,6 +3,7 @@ import requests
 import json
 from bs4 import BeautifulSoup
 from ..core.llm_factory import LLMFactory
+from ..core.safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 import calendar
 from ..core.enhanced_data_models import DimensionValue, Destination
 from typing import Dict, Any
@@ -33,7 +34,7 @@ class BaseEnrichmentAgent:
         self.llm = llm
         self.logger = logging.getLogger(f"app.enrichment.{self.__class__.__name__}")
         self.is_enabled = self.enrichment_config.get('enabled', False) and \
-                          self.enrichment_config.get('enrichment_modules', {}).get(self.module_name, False)
+                          safe_get_nested(self.enrichment_config, ["enrichment_modules", self.module_name], False)
 
     def run(self, destination: Destination):
         """
@@ -82,7 +83,7 @@ class DemographicAndGeographicAgent(BaseEnrichmentAgent):
             response.raise_for_status()
             search_results = response.json()
             
-            wiki_url = search_results.get('web', {}).get('results', [{}])[0].get('url')
+            wiki_url = safe_get(safe_get(safe_get(search_results, "web", {}), "results", [{}])[0], "url")
             if not wiki_url or "wikipedia.org" not in wiki_url:
                 self.logger.warning(f"No valid Wikipedia page found for {dest_name}.")
                 return
@@ -133,9 +134,9 @@ class DemographicAndGeographicAgent(BaseEnrichmentAgent):
                 return
 
             # Safely access the data and update the destination object
-            destination.population = extracted_data.get('population')
-            destination.area_km2 = extracted_data.get('area_km2')
-            destination.primary_language = extracted_data.get('primary_language')
+            destination.population = safe_get(extracted_data, 'population')
+            destination.area_km2 = safe_get(extracted_data, 'area_km2')
+            destination.primary_language = safe_get(extracted_data, 'primary_language')
             
             self.logger.info(f"Successfully enriched {dest_name} with demographic data.")
 
@@ -173,11 +174,11 @@ class VibeAndGastronomyAgent(BaseEnrichmentAgent):
             clean_response = llm_content.strip().lstrip("```json").rstrip("```").strip()
             extracted_data = json.loads(clean_response)
             
-            if extracted_data.get('vibe_descriptors'):
+            if safe_get(extracted_data, 'vibe_descriptors'):
                 destination.vibe_descriptors = extracted_data['vibe_descriptors']
                 self.logger.info(f"Updated vibe for {dest_name}: {destination.vibe_descriptors}")
 
-            if extracted_data.get('gastronomic_culture'):
+            if safe_get(extracted_data, 'gastronomic_culture'):
                 destination.dimensions['gastronomic_culture'] = DimensionValue(value=extracted_data['gastronomic_culture'], confidence=0.7)
                 self.logger.info(f"Updated gastronomic culture for {dest_name}: {extracted_data['gastronomic_culture']}")
 
@@ -213,7 +214,7 @@ class HistoricalAndCulturalAgent(BaseEnrichmentAgent):
             response.raise_for_status()
             search_results = response.json()
             
-            wiki_url = search_results.get('web', {}).get('results', [{}])[0].get('url')
+            wiki_url = safe_get(safe_get(safe_get(search_results, "web", {}), "results", [{}])[0], "url")
             if not wiki_url or "wikipedia.org" not in wiki_url:
                 self.logger.warning(f"No valid Wikipedia page found for {dest_name}.")
                 return
@@ -242,13 +243,13 @@ class HistoricalAndCulturalAgent(BaseEnrichmentAgent):
             clean_response = llm_content.strip().lstrip("```json").rstrip("```").strip()
             extracted_data = json.loads(clean_response)
             
-            if extracted_data.get('historical_summary'):
+            if safe_get(extracted_data, 'historical_summary'):
                 destination.historical_summary = extracted_data['historical_summary']
                 self.logger.info(f"Updated historical summary for {dest_name}.")
-            if extracted_data.get('unesco_sites'):
+            if safe_get(extracted_data, 'unesco_sites'):
                 destination.unesco_sites = extracted_data['unesco_sites']
                 self.logger.info(f"Updated UNESCO sites for {dest_name}: {destination.unesco_sites}")
-            if extracted_data.get('dominant_religions'):
+            if safe_get(extracted_data, 'dominant_religions'):
                 destination.dominant_religions = extracted_data['dominant_religions']
                 self.logger.info(f"Updated dominant religions for {dest_name}: {destination.dominant_religions}")
 
@@ -287,10 +288,10 @@ class EconomicAndDevelopmentAgent(BaseEnrichmentAgent):
             clean_response = llm_content.strip().lstrip("```json").rstrip("```").strip()
             extracted_data = json.loads(clean_response)
 
-            if extracted_data.get('gdp_per_capita_usd'):
+            if safe_get(extracted_data, 'gdp_per_capita_usd'):
                 destination.gdp_per_capita_usd = int(extracted_data['gdp_per_capita_usd'])
                 self.logger.info(f"Updated GDP per capita for {country_name}: ${destination.gdp_per_capita_usd}")
-            if extracted_data.get('hdi'):
+            if safe_get(extracted_data, 'hdi'):
                 destination.hdi = float(extracted_data['hdi'])
                 self.logger.info(f"Updated HDI for {country_name}: {destination.hdi}")
 
@@ -328,13 +329,13 @@ class TourismAndTrendAgent(BaseEnrichmentAgent):
             clean_response = llm_content.strip().lstrip("```json").rstrip("```").strip()
             extracted_data = json.loads(clean_response)
 
-            if extracted_data.get('annual_tourist_arrivals'):
+            if safe_get(extracted_data, 'annual_tourist_arrivals'):
                 destination.annual_tourist_arrivals = int(extracted_data['annual_tourist_arrivals'])
                 self.logger.info(f"Updated tourist arrivals for {dest_name}: {destination.annual_tourist_arrivals}")
-            if extracted_data.get('popularity_stage'):
+            if safe_get(extracted_data, 'popularity_stage'):
                 destination.popularity_stage = extracted_data['popularity_stage']
                 self.logger.info(f"Updated popularity stage for {dest_name}: {destination.popularity_stage}")
-            if extracted_data.get('visa_info_url'):
+            if safe_get(extracted_data, 'visa_info_url'):
                 destination.visa_info_url = extracted_data['visa_info_url']
                 self.logger.info(f"Updated visa info URL for {dest_name}.")
 
@@ -381,7 +382,7 @@ class EventCalendarAgent(BaseEnrichmentAgent):
             month_map = {name: num for num, name in enumerate(calendar.month_name) if num}
 
             for event in events_data:
-                month_num = month_map.get(event.get("month"))
+                month_num = month_map.get(safe_get(event, "month"))
                 if not month_num: continue
                 
                 # Create a dummy date, we only care about the event itself for now
@@ -389,11 +390,11 @@ class EventCalendarAgent(BaseEnrichmentAgent):
                 end_date = date(current_year, month_num, 28)
 
                 special_event = SpecialEvent(
-                    name=event.get("name"),
+                    name=safe_get(event, "name"),
                     start_date=start_date,
                     end_date=end_date,
-                    genre=event.get("genre"),
-                    scale=event.get("scale")
+                    genre=safe_get(event, "genre"),
+                    scale=safe_get(event, "scale")
                 )
                 destination.temporal_slices[0].special_events.append(special_event)
             

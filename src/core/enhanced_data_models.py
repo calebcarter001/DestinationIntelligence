@@ -1,16 +1,55 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, TYPE_CHECKING
+from typing import List, Dict, Optional, Any, TYPE_CHECKING, Union
 from datetime import datetime, date
 from enum import Enum
 import hashlib
 import json
+import uuid
 
 # Forward references for type hints to avoid circular imports
 if TYPE_CHECKING:
     from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
 
 from .evidence_hierarchy import EvidenceType, SourceCategory
+from .safe_dict_utils import safe_get
 from src.schemas import InsightType, AuthorityType, LocationExclusivity
+
+def safe_get_confidence_value(confidence_breakdown: Any, key: str = 'overall_confidence', default: float = 0.0) -> float:
+    """
+    Safely extract confidence values from confidence_breakdown that could be:
+    - Dict
+    - Object with attributes
+    - JSON string
+    - None
+    """
+    if not confidence_breakdown:
+        return default
+    
+    # Handle dictionary
+    if isinstance(confidence_breakdown, dict):
+        return safe_get(confidence_breakdown, key, default)
+    
+    # Handle object with attributes
+    if hasattr(confidence_breakdown, key):
+        return getattr(confidence_breakdown, key, default)
+    
+    # Handle object with to_dict method
+    if hasattr(confidence_breakdown, 'to_dict') and callable(getattr(confidence_breakdown, 'to_dict')):
+        try:
+            conf_dict = confidence_breakdown.to_dict()
+            return safe_get(conf_dict, key, default)
+        except Exception:
+            return default
+    
+    # Handle JSON string
+    if isinstance(confidence_breakdown, str):
+        try:
+            conf_dict = json.loads(confidence_breakdown)
+            return safe_get(conf_dict, key, default)
+        except (json.JSONDecodeError, TypeError):
+            return default
+    
+    return default
 
 @dataclass
 class SpecialEvent:
@@ -181,7 +220,7 @@ class Theme:
                 return self.confidence_breakdown.confidence_level
             elif isinstance(self.confidence_breakdown, dict):
                 # Dictionary format - get confidence_level or default
-                confidence_level_value = self.confidence_breakdown.get('confidence_level')
+                confidence_level_value = safe_get_confidence_value(self.confidence_breakdown, 'confidence_level', None)
                 if confidence_level_value:
                     # Import here to avoid circular import
                     from .confidence_scoring import ConfidenceLevel
@@ -195,7 +234,7 @@ class Theme:
                         return confidence_level_value
                 else:
                     # Fallback to overall_confidence if available
-                    overall_confidence = self.confidence_breakdown.get('overall_confidence', 0.0)
+                    overall_confidence = safe_get_confidence_value(self.confidence_breakdown, 'overall_confidence', 0.0)
                     from .confidence_scoring import ConfidenceLevel
                     if overall_confidence >= 0.8:
                         return ConfidenceLevel.HIGH

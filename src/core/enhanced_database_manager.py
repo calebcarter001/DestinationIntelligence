@@ -9,6 +9,7 @@ import uuid
 from .enhanced_data_models import Destination, Theme, Evidence, TemporalSlice, DimensionValue, AuthenticInsight, SeasonalWindow, LocalAuthority, PointOfInterest, SpecialEvent
 from .confidence_scoring import ConfidenceBreakdown, ConfidenceLevel
 from .consolidated_json_export_manager import ConsolidatedJsonExportManager
+from .safe_dict_utils import safe_get_nested
 from src.schemas import InsightType, LocationExclusivity, AuthorityType
 
 
@@ -750,12 +751,12 @@ class EnhancedDatabaseManager:
             str(uuid.uuid4()), # Generate a new UUID for the insight ID
             destination_id,
             # Safe attribute access for both dict and object formats
-            getattr(insight, 'insight_type', {}).get('value', getattr(insight, 'insight_type', 'unknown')) if isinstance(insight, dict) else (insight.insight_type.value if hasattr(insight.insight_type, 'value') else str(insight.insight_type)),
+            safe_get_nested(insight, ['insight_type', 'value'], getattr(insight, 'insight_type', 'unknown')) if isinstance(insight, dict) else (insight.insight_type.value if hasattr(insight.insight_type, 'value') else str(insight.insight_type)),
             getattr(insight, 'authenticity_score', 0.0),
             getattr(insight, 'uniqueness_score', 0.0),
             getattr(insight, 'actionability_score', 0.0),
             getattr(insight, 'temporal_relevance', 0.0),
-            getattr(insight, 'location_exclusivity', {}).get('value', getattr(insight, 'location_exclusivity', 'unknown')) if isinstance(insight, dict) else (insight.location_exclusivity.value if hasattr(insight.location_exclusivity, 'value') else str(insight.location_exclusivity)),
+            safe_get_nested(insight, ['location_exclusivity', 'value'], getattr(insight, 'location_exclusivity', 'unknown')) if isinstance(insight, dict) else (insight.location_exclusivity.value if hasattr(insight.location_exclusivity, 'value') else str(insight.location_exclusivity)),
             seasonal_window_id,
             getattr(insight, 'local_validation_count', 0)
         ))
@@ -787,7 +788,7 @@ class EnhancedDatabaseManager:
         """, (
             str(uuid.uuid4()), # Generate a new UUID for the local authority ID
             destination_id,
-            getattr(authority, 'authority_type', {}).get('value', getattr(authority, 'authority_type', 'unknown')) if isinstance(authority, dict) else (authority.authority_type.value if hasattr(authority.authority_type, 'value') else str(authority.authority_type)),
+            safe_get_nested(authority, ['authority_type', 'value'], getattr(authority, 'authority_type', 'unknown')) if isinstance(authority, dict) else (authority.authority_type.value if hasattr(authority.authority_type, 'value') else str(authority.authority_type)),
             getattr(authority, 'local_tenure', None),
             getattr(authority, 'expertise_domain', ''),
             getattr(authority, 'community_validation', 0.0)
@@ -1370,7 +1371,7 @@ class EnhancedDatabaseManager:
             annual_tourist_arrivals=dest_data.get('annual_tourist_arrivals'),
             popularity_stage=dest_data.get('popularity_stage'),
             visa_info_url=dest_data.get('visa_info_url'),
-            last_updated=datetime.fromisoformat(dest_data.get('last_updated')) if dest_data.get('last_updated') else datetime.now(),
+            last_updated=datetime.fromisoformat(dest_data.get("last_updated")) if dest_data.get("last_updated") else datetime.now(),
             admin_levels=json.loads(dest_data.get('admin_levels') or '{}'),
             core_geo=json.loads(dest_data.get('core_geo') or '{}'),
             timezone=dest_data.get('timezone')

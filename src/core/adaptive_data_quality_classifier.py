@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 from collections import Counter
 from urllib.parse import urlparse
 import re
+from .safe_dict_utils import safe_get_nested
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class AdaptiveDataQualityClassifier:
         
         # High authority domains for quality assessment
         processing_config = config.get("processing_settings", {})
-        priority_config = processing_config.get("content_intelligence", {}).get("priority_extraction", {})
+        priority_config = safe_get_nested(processing_config, ["content_intelligence", "priority_extraction"], {})
         self.high_authority_domains = priority_config.get("high_authority_domains", [])
         self.medium_authority_domains = priority_config.get("medium_authority_domains", [])
         
@@ -336,7 +337,7 @@ class AdaptiveDataQualityClassifier:
             "confidence_threshold": export_settings.get(f"{config_key}confidence", 0.55),
             "max_evidence_per_theme": export_settings.get(f"{config_key}max_evidence_per_theme", 5),
             "max_themes": theme_settings.get(f"{config_key}max_themes", 35),
-            "min_authority": evidence_settings.get("adaptive_quality_thresholds", {}).get(f"{config_key}min_authority", 0.5),
+            "min_authority": safe_get_nested(evidence_settings, ["adaptive_quality_thresholds", f"{config_key}min_authority"], 0.5),
             "semantic_intensive": semantic_settings.get(f"{config_key}semantic_intensive", True),
             "output_priority": output_settings.get(f"{config_key}database_priority", False)
         }

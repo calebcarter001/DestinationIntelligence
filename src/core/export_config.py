@@ -6,6 +6,8 @@ Provides configurable export modes and smart view generation options
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
+from .enhanced_data_models import safe_get_confidence_value
+from .safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 
 
 class ExportMode(Enum):
@@ -120,39 +122,10 @@ class SmartViewGenerator:
         for theme_id, theme in themes_data.items():
             # Handle both Theme objects and dictionaries
             if hasattr(theme, 'confidence_breakdown'):  # Theme object
-                confidence_breakdown = theme.confidence_breakdown
-                if confidence_breakdown and hasattr(confidence_breakdown, 'overall_confidence'):
-                    confidence = confidence_breakdown.overall_confidence
-                elif confidence_breakdown and isinstance(confidence_breakdown, dict):
-                    confidence = confidence_breakdown.get('overall_confidence', 0)
-                elif confidence_breakdown and isinstance(confidence_breakdown, str):
-                    # Handle JSON string case
-                    try:
-                        import json
-                        conf_dict = json.loads(confidence_breakdown)
-                        confidence = conf_dict.get('overall_confidence', 0)
-                    except (json.JSONDecodeError, AttributeError):
-                        confidence = 0
-                else:
-                    confidence = 0
+                confidence = safe_get_confidence_value(theme.confidence_breakdown, 'overall_confidence', 0)
             else:  # Dictionary
-                confidence_breakdown = theme.get("confidence_breakdown", {})
-                # Handle None confidence_breakdown
-                if confidence_breakdown:
-                    if isinstance(confidence_breakdown, dict):
-                        confidence = confidence_breakdown.get('overall_confidence', 0)
-                    elif isinstance(confidence_breakdown, str):
-                        # Handle JSON string case
-                        try:
-                            import json
-                            conf_dict = json.loads(confidence_breakdown)
-                            confidence = conf_dict.get('overall_confidence', 0)
-                        except (json.JSONDecodeError, AttributeError):
-                            confidence = 0
-                    else:
-                        confidence = 0
-                else:
-                    confidence = 0
+                confidence_breakdown = safe_get(theme, "confidence_breakdown", {})
+                confidence = safe_get_confidence_value(confidence_breakdown, 'overall_confidence', 0)
             
             if confidence >= 0.7:  # High confidence threshold
                 # Handle both Theme objects and dictionaries
@@ -161,9 +134,9 @@ class SmartViewGenerator:
                     theme_category = theme.macro_category
                     theme_fit_score = theme.fit_score
                 else:  # Dictionary
-                    theme_name = theme.get("name", "Unknown")
-                    theme_category = theme.get("macro_category", "General")
-                    theme_fit_score = theme.get("fit_score", 0.0)
+                    theme_name = safe_get(theme, "name", "Unknown")
+                    theme_category = safe_get(theme, "macro_category", "General")
+                    theme_fit_score = safe_get(theme, "fit_score", 0.0)
                 
                 high_confidence_themes.append({
                     "theme_id": theme_id,
@@ -197,7 +170,7 @@ class SmartViewGenerator:
             if hasattr(theme, 'macro_category'):  # Theme object
                 category = theme.macro_category
             else:  # Dictionary
-                category = theme.get("macro_category", "General")
+                category = safe_get(theme, "macro_category", "General")
             
             if category not in categories:
                 categories[category] = []
@@ -212,7 +185,7 @@ class SmartViewGenerator:
                 if hasattr(theme, 'fit_score'):  # Theme object
                     fit_score = theme.fit_score
                 else:  # Dictionary
-                    fit_score = theme.get("fit_score", 0.0)
+                    fit_score = safe_get(theme, "fit_score", 0.0)
                 theme_scores.append((tid, fit_score))
             
             theme_scores.sort(key=lambda x: x[1], reverse=True)
@@ -224,14 +197,14 @@ class SmartViewGenerator:
         """Generate evidence organized by source type"""
         sources = {}
         for evidence_id, evidence in evidence_registry.items():
-            source_type = evidence.get("source_category", "unknown")
+            source_type = safe_get(evidence, "source_category", "unknown")
             if source_type not in sources:
                 sources[source_type] = []
             sources[source_type].append(evidence_id)
             
         # Sort by authority weight within each source type
         for source_type in sources:
-            evidence_weights = [(eid, evidence_registry[eid].get("authority_weight", 0)) 
+            evidence_weights = [(eid, safe_get(evidence_registry[eid], "authority_weight", 0)) 
                                for eid in sources[source_type]]
             evidence_weights.sort(key=lambda x: x[1], reverse=True)
             sources[source_type] = [eid for eid, _ in evidence_weights]
@@ -249,8 +222,8 @@ class SmartViewGenerator:
                 seasonal_relevance = theme.seasonal_relevance or {}
                 theme_name = theme.name
             else:  # Dictionary
-                seasonal_relevance = theme.get("seasonal_relevance", {})
-                theme_name = theme.get("name", "Unknown")
+                seasonal_relevance = safe_get(theme, "seasonal_relevance", {})
+                theme_name = safe_get(theme, "name", "Unknown")
             
             # Handle seasonal_relevance as dict or JSON string
             if seasonal_relevance:
@@ -274,7 +247,7 @@ class SmartViewGenerator:
                             })
                             
                     # Check for current season relevance (simplified)
-                    current_relevance = seasonal_relevance.get("current", 0)
+                    current_relevance = safe_get(seasonal_relevance, "current", 0)
                 if current_relevance > 0.7:
                     current_season_themes.append({
                         "theme_id": theme_id,
@@ -299,8 +272,8 @@ class SmartViewGenerator:
                                    themes_data: Dict[str, Any]) -> Dict[str, Any]:
         """Generate quality metrics dashboard"""
         # Evidence quality metrics
-        evidence_confidences = [ev.get("confidence", 0) for ev in evidence_registry.values()]
-        evidence_authorities = [ev.get("authority_weight", 0) for ev in evidence_registry.values()]
+        evidence_confidences = [safe_get(ev, "confidence", 0) for ev in evidence_registry.values()]
+        evidence_authorities = [safe_get(ev, "authority_weight", 0) for ev in evidence_registry.values()]
         
         # Theme quality metrics
         theme_confidences = []
@@ -312,29 +285,29 @@ class SmartViewGenerator:
                 if confidence_breakdown and hasattr(confidence_breakdown, 'overall_confidence'):
                     theme_confidences.append(confidence_breakdown.overall_confidence)
                 elif confidence_breakdown and isinstance(confidence_breakdown, dict):
-                    theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                    theme_confidences.append(safe_get_confidence_value(confidence_breakdown, 'overall_confidence', 0))
                 elif confidence_breakdown and isinstance(confidence_breakdown, str):
                     # Handle JSON string case
                     try:
                         import json
                         conf_dict = json.loads(confidence_breakdown)
-                        theme_confidences.append(conf_dict.get('overall_confidence', 0))
+                        theme_confidences.append(safe_get(conf_dict, 'overall_confidence', 0))
                     except (json.JSONDecodeError, AttributeError):
                         theme_confidences.append(0)
                 else:
                     theme_confidences.append(0)
             else:  # Dictionary
-                confidence_breakdown = theme.get("confidence_breakdown", {})
+                confidence_breakdown = safe_get(theme, "confidence_breakdown", {})
                 # Handle None confidence_breakdown
                 if confidence_breakdown:
                     if isinstance(confidence_breakdown, dict):
-                        theme_confidences.append(confidence_breakdown.get('overall_confidence', 0))
+                        theme_confidences.append(safe_get_confidence_value(confidence_breakdown, 'overall_confidence', 0))
                     elif isinstance(confidence_breakdown, str):
                         # Handle JSON string case
                         try:
                             import json
                             conf_dict = json.loads(confidence_breakdown)
-                            theme_confidences.append(conf_dict.get('overall_confidence', 0))
+                            theme_confidences.append(safe_get(conf_dict, 'overall_confidence', 0))
                         except (json.JSONDecodeError, AttributeError):
                             theme_confidences.append(0)
                     else:
@@ -346,11 +319,11 @@ class SmartViewGenerator:
             if hasattr(theme, 'fit_score'):  # Theme object
                 theme_fit_scores.append(theme.fit_score)
             else:  # Dictionary
-                theme_fit_scores.append(theme.get("fit_score", 0))
+                theme_fit_scores.append(safe_get(theme, "fit_score", 0))
         
         # Source diversity
-        source_types = set(ev.get("source_category") for ev in evidence_registry.values())
-        unique_sources = set(ev.get("source_url") for ev in evidence_registry.values())
+        source_types = set(safe_get(ev, "source_category") for ev in evidence_registry.values())
+        unique_sources = set(safe_get(ev, "source_url") for ev in evidence_registry.values())
         
         return {
             "evidence_quality": {
@@ -397,14 +370,14 @@ class SmartViewGenerator:
                     if confidence_breakdown and hasattr(confidence_breakdown, 'overall_confidence'):
                         confidence = confidence_breakdown.overall_confidence
                     elif confidence_breakdown and isinstance(confidence_breakdown, dict):
-                        confidence = confidence_breakdown.get('overall_confidence', 0)
+                        confidence = safe_get_confidence_value(confidence_breakdown, 'overall_confidence', 0)
                     else:
                         confidence = 0
                 else:  # Dictionary
-                    confidence_breakdown = theme.get("confidence_breakdown", {})
+                    confidence_breakdown = safe_get(theme, "confidence_breakdown", {})
                     # Handle None confidence_breakdown
                     if confidence_breakdown:
-                        confidence = confidence_breakdown.get("overall_confidence", 0)
+                        confidence = safe_get_confidence_value(confidence_breakdown, 'overall_confidence', 0)
                     else:
                         confidence = 0
                 
@@ -412,7 +385,7 @@ class SmartViewGenerator:
                 if hasattr(theme, 'macro_category'):  # Theme object
                     category = theme.macro_category
                 else:  # Dictionary
-                    category = theme.get("macro_category", "")
+                    category = safe_get(theme, "macro_category", "")
                 
                 if confidence >= min_confidence and (not categories or category in categories):
                     filtered_themes[theme_id] = theme
@@ -455,13 +428,13 @@ class SmartViewGenerator:
             if hasattr(theme, 'confidence_breakdown'):  # Theme object
                 confidence_breakdown = theme.confidence_breakdown
             else:  # Dictionary
-                confidence_breakdown = theme.get("confidence_breakdown", {})
+                confidence_breakdown = safe_get(theme, "confidence_breakdown", {})
             
             if confidence_breakdown:
                 if hasattr(confidence_breakdown, 'overall_confidence'):  # ConfidenceBreakdown object
                     overall_confidence = confidence_breakdown.overall_confidence
                 else:  # Dictionary
-                    overall_confidence = confidence_breakdown.get("overall_confidence", 0.0)
+                    overall_confidence = safe_get_confidence_value(confidence_breakdown, 'overall_confidence', 0.0)
                 
                 if overall_confidence >= self.min_confidence_threshold:
                     filtered.append(theme)
@@ -470,7 +443,7 @@ class SmartViewGenerator:
                 if hasattr(theme, 'fit_score'):  # Theme object
                     fit_score = theme.fit_score
                 else:  # Dictionary
-                    fit_score = theme.get("fit_score", 0.0)
+                    fit_score = safe_get(theme, "fit_score", 0.0)
                 
                 if fit_score >= self.min_confidence_threshold:
                     filtered.append(theme)
@@ -490,9 +463,9 @@ class SmartViewGenerator:
                 theme_category = theme.macro_category
                 theme_fit_score = theme.fit_score
             else:  # Dictionary
-                theme_name = theme.get("name", "Unknown")
-                theme_category = theme.get("macro_category", "General")
-                theme_fit_score = theme.get("fit_score", 0.0)
+                theme_name = safe_get(theme, "name", "Unknown")
+                theme_category = safe_get(theme, "macro_category", "General")
+                theme_fit_score = safe_get(theme, "fit_score", 0.0)
         
         if self.max_themes_per_category:
             # Group by category and limit each
@@ -501,7 +474,7 @@ class SmartViewGenerator:
                 if hasattr(theme, 'macro_category'):  # Theme object
                     category = theme.macro_category
                 else:  # Dictionary
-                    category = theme.get("macro_category", "General")
+                    category = safe_get(theme, "macro_category", "General")
                 
                 if category not in category_themes:
                     category_themes[category] = []
@@ -511,7 +484,7 @@ class SmartViewGenerator:
             limited_themes = []
             for category, cat_themes in category_themes.items():
                 sorted_themes = sorted(cat_themes, key=lambda t: (
-                    t.fit_score if hasattr(t, 'fit_score') else t.get("fit_score", 0.0)
+                    t.fit_score if hasattr(t, 'fit_score') else safe_get(t, "fit_score", 0.0)
                 ), reverse=True)
                 limited_themes.extend(sorted_themes[:self.max_themes_per_category])
             
@@ -520,7 +493,7 @@ class SmartViewGenerator:
         # Apply overall limit
         if self.max_themes_overall:
             themes = sorted(themes, key=lambda t: (
-                t.fit_score if hasattr(t, 'fit_score') else t.get("fit_score", 0.0)
+                t.fit_score if hasattr(t, 'fit_score') else safe_get(t, "fit_score", 0.0)
             ), reverse=True)[:self.max_themes_overall]
         
         return themes
@@ -534,14 +507,14 @@ class SmartViewGenerator:
             if hasattr(theme, 'evidence'):  # Theme object
                 evidence_list = theme.evidence
             else:  # Dictionary
-                evidence_list = theme.get("evidence", [])
+                evidence_list = safe_get(theme, "evidence", [])
             
             for evidence in evidence_list:
                 # Handle both Evidence objects and dictionaries
                 if hasattr(evidence, 'source_category'):  # Evidence object
                     source_type = evidence.source_category.value if hasattr(evidence.source_category, 'value') else str(evidence.source_category)
                 else:  # Dictionary
-                    source_type = evidence.get("source_category", "unknown")
+                    source_type = safe_get(evidence, "source_category", "unknown")
                 
                 if source_type not in source_groups:
                     source_groups[source_type] = []
@@ -559,8 +532,8 @@ class SmartViewGenerator:
                 seasonal_relevance = theme.seasonal_relevance
                 theme_name = theme.name
             else:  # Dictionary
-                seasonal_relevance = theme.get("seasonal_relevance", {})
-                theme_name = theme.get("name", "Unknown")
+                seasonal_relevance = safe_get(theme, "seasonal_relevance", {})
+                theme_name = safe_get(theme, "name", "Unknown")
             
             # Handle seasonal_relevance as dict or JSON string
             if isinstance(seasonal_relevance, str):

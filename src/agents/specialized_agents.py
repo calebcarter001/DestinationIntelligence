@@ -22,6 +22,7 @@ except ImportError:
 from collections import Counter # ADDED Counter import
 
 from .base_agent import BaseAgent, MessageBroker, AgentMessage, MessageType
+from ..core.safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 from ..core.evidence_hierarchy import EvidenceHierarchy, SourceCategory
 from ..core.confidence_scoring import ConfidenceScorer, ConfidenceBreakdown, ConfidenceLevel
 from ..core.enhanced_data_models import Evidence, Theme, Destination
@@ -269,13 +270,13 @@ class ValidationAgent(BaseAgent):
     def _calculate_semantic_relevance(self, theme_data: Dict[str, Any]) -> float:
         """Calculate semantic relevance using multiple archetype categories (single theme processing)."""
         if not self.sentence_model:
-            self.logger.warning(f"Sentence model not available for semantic relevance calculation of theme '{theme_data.get('name', '')}'.")
+            self.logger.warning(f"Sentence model not available for semantic relevance calculation of theme '{safe_get(theme_data, 'name', '')}'.")
             return 0.5  # Default if no model available
 
-        theme_name = theme_data.get('name', '')
-        theme_description = theme_data.get('description', '')
-        theme_category = theme_data.get('macro_category', '')
-        theme_subcategory = theme_data.get('micro_category', '')
+        theme_name = safe_get(theme_data, 'name', '')
+        theme_description = safe_get(theme_data, 'description', '')
+        theme_category = safe_get(theme_data, 'macro_category', '')
+        theme_subcategory = safe_get(theme_data, 'micro_category', '')
         
         theme_text = f"{theme_name}. {theme_description}. {theme_category} - {theme_subcategory}"
         
@@ -297,9 +298,9 @@ class ValidationAgent(BaseAgent):
         if not isinstance(theme_data, dict):
             return 0.5
             
-        theme_name = theme_data.get("name", "") or ""
-        theme_description = theme_data.get("description", "") or ""
-        theme_category = theme_data.get("macro_category", "") or ""
+        theme_name = safe_get(theme_data, "name", "") or ""
+        theme_description = safe_get(theme_data, "description", "") or ""
+        theme_category = safe_get(theme_data, "macro_category", "") or ""
         
         # Convert to lowercase safely
         theme_name = str(theme_name).lower()
@@ -456,9 +457,9 @@ class ValidationAgent(BaseAgent):
         Args:
             task_data: Should contain 'destination' and 'themes'
         """
-        destination_name = task_data.get("destination_name", "Unknown")
-        themes = task_data.get("themes", [])
-        destination_country_code = task_data.get("country_code")
+        destination_name = safe_get(task_data, "destination_name", "Unknown")
+        themes = safe_get(task_data, "themes", [])
+        destination_country_code = safe_get(task_data, "country_code")
         
         self.logger.info(f"Validating {len(themes)} themes for {destination_name} (Country: {destination_country_code})")
         
@@ -492,16 +493,16 @@ class ValidationAgent(BaseAgent):
             if hasattr(theme_data, 'name'):
                 theme_name = theme_data.name
             else:
-                theme_name = theme_data.get("name", "Unknown Theme")
+                theme_name = safe_get(theme_data, "name", "Unknown Theme")
             
             # Handle both evidence formats - dictionary key vs original objects
             if hasattr(theme_data, 'evidence'):
                 evidence_list = theme_data.evidence
             else:
-                evidence_list = theme_data.get("evidence", [])
+                evidence_list = safe_get(theme_data, "evidence", [])
                 if not evidence_list:
                     # Fallback to original_evidence_objects from validation
-                    evidence_list = theme_data.get("original_evidence_objects", [])
+                    evidence_list = safe_get(theme_data, "original_evidence_objects", [])
             
             if not evidence_list:
                 self.logger.warning(f"Theme '{theme_name}' received no original evidence objects for validation. Assigning default INSUFFICIENT confidence.")
@@ -584,7 +585,7 @@ class ValidationAgent(BaseAgent):
             )
             
             # --- CRITICAL DEBUG & FIX: Preserve the original fit_score --- 
-            original_fit_score_from_input = theme_data.get("fit_score") # Get what was passed in
+            original_fit_score_from_input = safe_get(theme_data, "fit_score") # Get what was passed in
             
             if original_fit_score_from_input is not None:
                 theme_data["fit_score"] = original_fit_score_from_input # Ensure it is preserved
@@ -655,9 +656,9 @@ class CulturalPerspectiveAgent(BaseAgent):
         Args:
             task_data: Should contain 'sources' and 'destination_country_code'
         """
-        sources = task_data.get("sources", [])
-        country_code = task_data.get("country_code", "").upper()
-        destination_name = task_data.get("destination_name", "Unknown")
+        sources = safe_get(task_data, "sources", [])
+        country_code = safe_get(task_data, "country_code", "").upper()
+        destination_name = safe_get(task_data, "destination_name", "Unknown")
         
         self.logger.info(f"Analyzing cultural perspective for {len(sources)} sources from {destination_name}")
         
@@ -811,8 +812,8 @@ class ContradictionDetectionAgent(BaseAgent):
         Args:
             task_data: Should contain 'themes' with evidence
         """
-        themes = task_data.get("themes", [])
-        destination_name = task_data.get("destination_name", "Unknown")
+        themes = safe_get(task_data, "themes", [])
+        destination_name = safe_get(task_data, "destination_name", "Unknown")
         
         self.logger.info(f"Detecting contradictions for {len(themes)} themes in {destination_name}")
         
@@ -824,16 +825,16 @@ class ContradictionDetectionAgent(BaseAgent):
             if hasattr(theme, 'name'):
                 theme_name = theme.name
             else:
-                theme_name = theme.get("name", "Unknown Theme")
+                theme_name = safe_get(theme, "name", "Unknown Theme")
             
             # Handle both evidence formats - dictionary key vs original objects
             if hasattr(theme, 'evidence'):
                 evidence_list = theme.evidence
             else:
-                evidence_list = theme.get("evidence", [])
+                evidence_list = safe_get(theme, "evidence", [])
                 if not evidence_list:
                     # Fallback to original_evidence_objects from validation
-                    evidence_list = theme.get("original_evidence_objects", [])
+                    evidence_list = safe_get(theme, "original_evidence_objects", [])
             
             if len(evidence_list) < 2:
                 resolved_themes.append(theme)
@@ -885,18 +886,18 @@ class ContradictionDetectionAgent(BaseAgent):
                     source1 = evidence1.source_url if hasattr(evidence1, 'source_url') else ""
                     snippet1 = evidence1.text_snippet if evidence1.text_snippet else ""
                 else:  # Dictionary
-                    text1 = evidence1.get("text_snippet", "").lower()
-                    source1 = evidence1.get("source_url", "")
-                    snippet1 = evidence1.get("text_snippet", "")
+                    text1 = safe_get(evidence1, "text_snippet", "").lower()
+                    source1 = safe_get(evidence1, "source_url", "")
+                    snippet1 = safe_get(evidence1, "text_snippet", "")
                 
                 if hasattr(evidence2, 'text_snippet'):  # Evidence object
                     text2 = evidence2.text_snippet.lower() if evidence2.text_snippet else ""
                     source2 = evidence2.source_url if hasattr(evidence2, 'source_url') else ""
                     snippet2 = evidence2.text_snippet if evidence2.text_snippet else ""
                 else:  # Dictionary
-                    text2 = evidence2.get("text_snippet", "").lower()
-                    source2 = evidence2.get("source_url", "")
-                    snippet2 = evidence2.get("text_snippet", "")
+                    text2 = safe_get(evidence2, "text_snippet", "").lower()
+                    source2 = safe_get(evidence2, "source_url", "")
+                    snippet2 = safe_get(evidence2, "text_snippet", "")
                 
                 # Check for contradictory terms
                 for positive, negative in self.contradiction_indicators:
@@ -953,9 +954,9 @@ class ContradictionDetectionAgent(BaseAgent):
                     source_url = evidence.source_url if hasattr(evidence, 'source_url') else ""
                     published_date = evidence.published_date if hasattr(evidence, 'published_date') else None
                 else:  # Dictionary
-                    text = evidence.get("text_snippet", "").lower()
-                    source_url = evidence.get("source_url", "")
-                    published_date = evidence.get("published_date")
+                    text = safe_get(evidence, "text_snippet", "").lower()
+                    source_url = safe_get(evidence, "source_url", "")
+                    published_date = safe_get(evidence, "published_date")
                 
                 # Get authority weight
                 authority, _ = EvidenceHierarchy.get_source_authority(source_url, published_date)

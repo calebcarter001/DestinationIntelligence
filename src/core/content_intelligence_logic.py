@@ -9,6 +9,7 @@ from tqdm import tqdm # For sync iteration
 # Adjusted import path for data_models
 from ..data_models import DestinationInsight
 from ..schemas import PageContent, ThemeInsightOutput, ChromaSearchResult, DestinationInsight as PydanticDestinationInsight # Added ChromaSearchResult and PydanticDestinationInsight
+from .safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested
 
 # Try to import transformers, fall back gracefully if not available
 try:
@@ -367,10 +368,10 @@ class ContentIntelligenceLogic:
         validated_themes: List[DestinationInsight] = []
         discovered_themes_candidates: Dict[str, Dict[str, Any]] = {}
 
-        seed_themes_from_config = self.config.get("content_intelligence", {}).get("seed_themes", self.seed_themes)
-        min_validated_confidence = self.config.get("content_intelligence", {}).get("min_validated_theme_confidence", self.min_validated_theme_confidence)
-        min_discovered_confidence = self.config.get("content_intelligence", {}).get("min_discovered_theme_confidence", self.min_discovered_theme_confidence)
-        max_discovered_themes = self.config.get("content_intelligence", {}).get("max_discovered_themes_per_destination", self.max_discovered_themes_per_destination)
+        seed_themes_from_config = safe_get_nested(self.config, ["content_intelligence", "seed_themes"], self.seed_themes)
+        min_validated_confidence = safe_get_nested(self.config, ["content_intelligence", "min_validated_theme_confidence"], self.min_validated_theme_confidence)
+        min_discovered_confidence = safe_get_nested(self.config, ["content_intelligence", "min_discovered_theme_confidence"], self.min_discovered_theme_confidence)
+        max_discovered_themes = safe_get_nested(self.config, ["content_intelligence", "max_discovered_themes_per_destination"], self.max_discovered_themes_per_destination)
 
         # --- 1. Validate Seed Themes ---
         self.logger.info(f"Validating {len(seed_themes_from_config)} seed themes...")

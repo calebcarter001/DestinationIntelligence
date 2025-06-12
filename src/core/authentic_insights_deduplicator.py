@@ -10,6 +10,7 @@ from datetime import datetime
 import logging
 
 from .enhanced_data_models import AuthenticInsight, Theme, Destination
+from .safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 
 logger = logging.getLogger(__name__)
 
@@ -116,21 +117,21 @@ class AuthenticInsightsRegistry:
         if isinstance(insight, dict):
             # Create hash based on core content for dictionary format
             content_parts = [
-                str(insight.get('insight_type', {}).get('value', insight.get('insight_type', ''))),
-                str(insight.get('authenticity_score', 0)),
-                str(insight.get('uniqueness_score', 0)),
-                str(insight.get('actionability_score', 0)),
-                str(insight.get('location_exclusivity', {}).get('value', insight.get('location_exclusivity', ''))),
-                str(insight.get('local_validation_count', 0))
+                str(safe_get_nested(insight, ['insight_type', 'value'], safe_get(insight, 'insight_type', ''))),
+                str(safe_get(insight, 'authenticity_score', 0)),
+                str(safe_get(insight, 'uniqueness_score', 0)),
+                str(safe_get(insight, 'actionability_score', 0)),
+                str(safe_get_nested(insight, ['location_exclusivity', 'value'], safe_get(insight, 'location_exclusivity', ''))),
+                str(safe_get(insight, 'local_validation_count', 0))
             ]
             
             # Add seasonal window if present
-            seasonal_window = insight.get('seasonal_window')
+            seasonal_window = safe_get(insight, 'seasonal_window')
             if seasonal_window:
                 content_parts.extend([
-                    str(seasonal_window.get('start_month', '')),
-                    str(seasonal_window.get('end_month', '')),
-                    str(seasonal_window.get('booking_lead_time', ''))
+                    str(safe_get(seasonal_window, 'start_month', '')),
+                    str(safe_get(seasonal_window, 'end_month', '')),
+                    str(safe_get(seasonal_window, 'booking_lead_time', ''))
                 ])
         else:
             # Handle object format - use safe attribute access
@@ -226,10 +227,10 @@ class AuthenticInsightsDeduplicator:
         
         # Process theme-level insights
         for theme in destination.themes:
-            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else theme.get('theme_id', None) if isinstance(theme, dict) else None
+            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else safe_get(theme, 'theme_id', None) if isinstance(theme, dict) else None
             
             # Process insights associated with this theme - safe access
-            authentic_insights = getattr(theme, 'authentic_insights', []) if hasattr(theme, 'authentic_insights') else theme.get('authentic_insights', []) if isinstance(theme, dict) else []
+            authentic_insights = getattr(theme, 'authentic_insights', []) if hasattr(theme, 'authentic_insights') else safe_get(theme, 'authentic_insights', []) if isinstance(theme, dict) else []
             for insight in authentic_insights:
                 self.registry.add_insight(insight, theme_id=theme_id, destination_id=destination.id)
         
@@ -267,7 +268,7 @@ class AuthenticInsightsDeduplicator:
         
         # Update themes to use insight references instead of duplicating insights
         for theme in destination.themes:
-            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else theme.get('theme_id', None) if isinstance(theme, dict) else None
+            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else safe_get(theme, 'theme_id', None) if isinstance(theme, dict) else None
             
             # Clear theme-level authentic insights to avoid duplication - safe access
             if isinstance(theme, dict):

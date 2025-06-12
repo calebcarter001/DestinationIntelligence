@@ -1,0 +1,3841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cultural Intelligence Report - Flagstaff, Arizona</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #9C27B0 0%, #2196F3 50%, #4CAF50 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .category-legend {
+            background: white;
+            margin: 1rem 2rem;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        
+        .legend-cultural {
+            background: rgba(156, 39, 176, 0.1);
+            border-left: 4px solid #9C27B0;
+        }
+        
+        .legend-practical {
+            background: rgba(33, 150, 243, 0.1);
+            border-left: 4px solid #2196F3;
+        }
+        
+        .legend-hybrid {
+            background: rgba(76, 175, 80, 0.1);
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .controls {
+            background: white;
+            padding: 1.5rem;
+            margin: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .control-group label {
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .control-group input, .control-group select {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .apply-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        .apply-btn:hover {
+            background: #3367d6;
+        }
+        
+        .themes-container {
+            margin: 0 2rem 2rem 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .theme-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 4px solid var(--theme-color);
+            position: relative;
+        }
+        
+        .theme-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        
+        .theme-header {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--theme-color);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .category-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            background: var(--theme-color);
+        }
+        
+        .theme-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+        }
+        
+        .meta-label {
+            font-weight: 500;
+            color: #666;
+        }
+        
+        .meta-value {
+            font-weight: 600;
+        }
+        
+        .confidence-high { color: #34a853; }
+        .confidence-moderate { color: #fbbc04; }
+        .confidence-low { color: #ea4335; }
+        .confidence-unknown { color: #9aa0a6; }
+        
+        .description {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .expandable {
+            margin-top: 1rem;
+        }
+        
+        .expand-btn {
+            background: #f1f3f4;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--theme-color);
+            width: 100%;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .expand-btn:hover {
+            background: #e8f0fe;
+        }
+        
+        .expand-content {
+            display: none;
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .expand-content.show {
+            display: block;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 4rem;
+            color: #666;
+            font-size: 1.2rem;
+        }
+        
+        .pagination {
+            text-align: center;
+            margin: 2rem;
+        }
+        
+        .pagination button {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 0.5rem 1rem;
+            margin: 0 0.25rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .pagination button.active {
+            background: #4285f4;
+            color: white;
+            border-color: #4285f4;
+        }
+        
+        .pagination button:hover:not(.active) {
+            background: #f1f3f4;
+        }
+        
+        @media (max-width: 768px) {
+            .themes-container {
+                grid-template-columns: 1fr;
+                margin: 0 1rem 2rem 1rem;
+            }
+            
+            .controls {
+                margin: 1rem;
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .control-group {
+                justify-content: space-between;
+            }
+            
+            .category-legend {
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Cultural Intelligence Report - Flagstaff, Arizona</h1>
+        <p>🎭 Cultural Intelligence analysis of 72 destination themes</p>
+        <p>🎯 Cultural: 0 | 📋 Practical: 10 | ⚖️ Hybrid: 58</p>
+    </div>
+    
+    <div class="category-legend">
+        <div class="legend-item legend-cultural">
+            <span>🎭</span>
+            <span><strong>Cultural:</strong> Authenticity & Local Character</span>
+        </div>
+        <div class="legend-item legend-practical">
+            <span>📋</span>
+            <span><strong>Practical:</strong> Essential Travel Information</span>
+        </div>
+        <div class="legend-item legend-hybrid">
+            <span>⚖️</span>
+            <span><strong>Hybrid:</strong> Balanced Practical & Cultural</span>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="filterInput">Filter by Name/Desc:</label>
+            <input type="text" id="filterInput" placeholder="Enter keyword...">
+        </div>
+        <div class="control-group">
+            <label for="categoryFilter">Category:</label>
+            <select id="categoryFilter">
+                <option value="all">All Categories</option>
+                <option value="cultural">🎭 Cultural</option>
+                <option value="practical">📋 Practical</option>
+                <option value="hybrid">⚖️ Hybrid</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="sortSelect">Sort by:</label>
+            <select id="sortSelect">
+                <option value="confidence_desc" selected>Tourist Relevance (High-Low)</option>
+                <option value="fit_score_desc">Evidence Quality (High-Low)</option>
+                <option value="fit_score_asc">Evidence Quality (Low-High)</option>
+                <option value="confidence_asc">Tourist Relevance (Low-High)</option>
+                <option value="name_asc">Name (A-Z)</option>
+                <option value="name_desc">Name (Z-A)</option>
+                <option value="category_asc">Category (Cultural First)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="itemsPerPage">Items per page:</label>
+            <select id="itemsPerPage">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+        <button class="apply-btn" onclick="applyFilters()">Apply</button>
+    </div>
+    
+    <div id="themesContainer" class="themes-container">
+        <!-- Themes will be populated by JavaScript -->
+    </div>
+    
+    <div id="pagination" class="pagination">
+        <!-- Pagination will be populated by JavaScript -->
+    </div>
+    
+    <script>
+        // Theme data from database with cultural intelligence
+        const allThemes = [
+  {
+    "id": null,
+    "name": "Medical Tourism",
+    "macro_category": "Health & Medical",
+    "micro_category": "Medical Tourism",
+    "description": "Theme about Medical Tourism",
+    "fit_score": 0.8215789473684211,
+    "confidence_level": "high",
+    "overall_confidence": 0.7548522622345338,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7548522622345338,
+      "confidence_level": "high",
+      "evidence_count": 19,
+      "source_diversity": 0.8,
+      "authority_score": 0.5631578947368423,
+      "recency_score": 1.0,
+      "consistency_score": 0.9335180055401662,
+      "locality_score": 0.14035087719298245,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.16000000000000003,
+        "authority": 0.14078947368421058,
+        "recency": 0.15,
+        "consistency": 0.14002770083102492,
+        "locality": 0.014035087719298246
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "medical",
+      "tourism"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.11842105263157894, \"confidence\": 0.11842105263157894, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 15}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Budget Travel",
+    "macro_category": "Budget & Costs",
+    "micro_category": "Budget Travel",
+    "description": "Theme about Budget Travel",
+    "fit_score": 0.8197916666666666,
+    "confidence_level": "high",
+    "overall_confidence": 0.7569328703703704,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7569328703703704,
+      "confidence_level": "high",
+      "evidence_count": 36,
+      "source_diversity": 1.0,
+      "authority_score": 0.41069444444444464,
+      "recency_score": 1.0,
+      "consistency_score": 0.9111111111111111,
+      "locality_score": 0.17592592592592587,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10267361111111116,
+        "recency": 0.15,
+        "consistency": 0.13666666666666666,
+        "locality": 0.017592592592592587
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "budget",
+      "travel"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.1440972222222222, \"confidence\": 0.1440972222222222, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 27}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Travel Documents",
+    "macro_category": "Visa & Documentation",
+    "micro_category": "Travel Documents",
+    "description": "Theme about Travel Documents",
+    "fit_score": 0.8177027027027026,
+    "confidence_level": "high",
+    "overall_confidence": 0.7568663257852448,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7568663257852448,
+      "confidence_level": "high",
+      "evidence_count": 37,
+      "source_diversity": 1.0,
+      "authority_score": 0.4064864864864867,
+      "recency_score": 1.0,
+      "consistency_score": 0.9088385682980278,
+      "locality_score": 0.18918918918918912,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10162162162162168,
+        "recency": 0.15,
+        "consistency": 0.13632578524470415,
+        "locality": 0.018918918918918913
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "documents",
+      "travel"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.15371621621621623, \"confidence\": 0.15371621621621623, \"distribution\": {\"positive\": 10, \"negative\": 0, \"neutral\": 27}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Transportation",
+    "macro_category": "Transportation & Access",
+    "micro_category": "Transportation",
+    "description": "Theme about Transportation",
+    "fit_score": 0.8071951219512196,
+    "confidence_level": "high",
+    "overall_confidence": 0.7543129089827484,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7543129089827484,
+      "confidence_level": "high",
+      "evidence_count": 41,
+      "source_diversity": 1.0,
+      "authority_score": 0.3931707317073172,
+      "recency_score": 1.0,
+      "consistency_score": 0.9100535395597859,
+      "locality_score": 0.19512195121951212,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.0982926829268293,
+        "recency": 0.15,
+        "consistency": 0.13650803093396788,
+        "locality": 0.019512195121951213
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "transportation"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.13871951219512196, \"confidence\": 0.13871951219512196, \"distribution\": {\"positive\": 10, \"negative\": 0, \"neutral\": 31}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Travel Documentation",
+    "macro_category": "Logistics & Planning",
+    "micro_category": "Travel Documentation",
+    "description": "Theme about Travel Documentation",
+    "fit_score": 0.8054285714285714,
+    "confidence_level": "high",
+    "overall_confidence": 0.7582554421768708,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7582554421768708,
+      "confidence_level": "high",
+      "evidence_count": 35,
+      "source_diversity": 1.0,
+      "authority_score": 0.4147142857142859,
+      "recency_score": 1.0,
+      "consistency_score": 0.9098775510204082,
+      "locality_score": 0.1809523809523809,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10367857142857148,
+        "recency": 0.15,
+        "consistency": 0.13648163265306124,
+        "locality": 0.01809523809523809
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "documentation",
+      "travel"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.14821428571428572, \"confidence\": 0.14821428571428572, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 26}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Safe Areas",
+    "macro_category": "Safety & Security",
+    "micro_category": "Safe Areas",
+    "description": "Theme about Safe Areas",
+    "fit_score": 0.7891666666666667,
+    "confidence_level": "high",
+    "overall_confidence": 0.7594444444444445,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7594444444444445,
+      "confidence_level": "high",
+      "evidence_count": 12,
+      "source_diversity": 1.0,
+      "authority_score": 0.29333333333333333,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 0.3611111111111111,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.07333333333333333,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.036111111111111115
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "safe",
+      "areas"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.22395833333333334, \"confidence\": 0.22395833333333334, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 7}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Airport Access",
+    "macro_category": "Transportation & Access",
+    "micro_category": "Airport Access",
+    "description": "Theme about Airport Access",
+    "fit_score": 0.7848333333333333,
+    "confidence_level": "high",
+    "overall_confidence": 0.7579277777777779,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7579277777777779,
+      "confidence_level": "high",
+      "evidence_count": 15,
+      "source_diversity": 1.0,
+      "authority_score": 0.3936666666666667,
+      "recency_score": 1.0,
+      "consistency_score": 0.9004444444444445,
+      "locality_score": 0.24444444444444446,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09841666666666668,
+        "recency": 0.15,
+        "consistency": 0.13506666666666667,
+        "locality": 0.02444444444444445
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "airport",
+      "access"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.19583333333333333, \"confidence\": 0.19583333333333333, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 10}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Booking Information",
+    "macro_category": "Logistics & Planning",
+    "micro_category": "Booking Information",
+    "description": "Theme about Booking Information",
+    "fit_score": 0.7801785714285714,
+    "confidence_level": "high",
+    "overall_confidence": 0.7520535714285714,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7520535714285714,
+      "confidence_level": "high",
+      "evidence_count": 14,
+      "source_diversity": 1.0,
+      "authority_score": 0.3825000000000001,
+      "recency_score": 1.0,
+      "consistency_score": 0.9,
+      "locality_score": 0.21428571428571433,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09562500000000003,
+        "recency": 0.15,
+        "consistency": 0.135,
+        "locality": 0.021428571428571436
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "information",
+      "booking"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.22767857142857142, \"confidence\": 0.22767857142857142, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 9}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Camping & RV",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Camping & RV",
+    "description": "Theme about Camping & RV",
+    "fit_score": 0.7741025641025642,
+    "confidence_level": "high",
+    "overall_confidence": 0.7502777777777779,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7502777777777779,
+      "confidence_level": "high",
+      "evidence_count": 39,
+      "source_diversity": 1.0,
+      "authority_score": 0.3792307692307694,
+      "recency_score": 1.0,
+      "consistency_score": 0.9111111111111111,
+      "locality_score": 0.18803418803418795,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09480769230769236,
+        "recency": 0.15,
+        "consistency": 0.13666666666666666,
+        "locality": 0.018803418803418796
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "camping",
+      "rv"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.13942307692307693, \"confidence\": 0.13942307692307693, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 30}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Local Markets",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Local Markets",
+    "description": "Theme about Local Markets",
+    "fit_score": 0.76762,
+    "confidence_level": "high",
+    "overall_confidence": 0.777374,
+    "confidence_breakdown": {
+      "overall_confidence": 0.777374,
+      "confidence_level": "high",
+      "evidence_count": 25,
+      "source_diversity": 1.0,
+      "authority_score": 0.42540000000000006,
+      "recency_score": 1.0,
+      "consistency_score": 0.90016,
+      "locality_score": 0.35999999999999993,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10635000000000001,
+        "recency": 0.15,
+        "consistency": 0.13502399999999998,
+        "locality": 0.036
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "markets",
+      "local"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.1575, \"confidence\": 0.1575, \"distribution\": {\"positive\": 7, \"negative\": 0, \"neutral\": 18}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Local Products",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Local Products",
+    "description": "Theme about Local Products",
+    "fit_score": 0.7661730769230769,
+    "confidence_level": "high",
+    "overall_confidence": 0.7678069526627218,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7678069526627218,
+      "confidence_level": "high",
+      "evidence_count": 26,
+      "source_diversity": 1.0,
+      "authority_score": 0.3913461538461538,
+      "recency_score": 1.0,
+      "consistency_score": 0.9023668639053255,
+      "locality_score": 0.3461538461538461,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09783653846153845,
+        "recency": 0.15,
+        "consistency": 0.13535502958579881,
+        "locality": 0.03461538461538461
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "products",
+      "local"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.15144230769230768, \"confidence\": 0.15144230769230768, \"distribution\": {\"positive\": 7, \"negative\": 0, \"neutral\": 19}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Entertainment Districts",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Entertainment Districts",
+    "description": "Theme about Entertainment Districts",
+    "fit_score": 0.7660961538461538,
+    "confidence_level": "high",
+    "overall_confidence": 0.7648261834319527,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7648261834319527,
+      "confidence_level": "high",
+      "evidence_count": 26,
+      "source_diversity": 1.0,
+      "authority_score": 0.4255769230769232,
+      "recency_score": 1.0,
+      "consistency_score": 0.9023668639053255,
+      "locality_score": 0.2307692307692307,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.1063942307692308,
+        "recency": 0.15,
+        "consistency": 0.13535502958579881,
+        "locality": 0.02307692307692307
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "entertainment",
+      "districts"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.16105769230769232, \"confidence\": 0.16105769230769232, \"distribution\": {\"positive\": 7, \"negative\": 0, \"neutral\": 19}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Live Music Venues",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Live Music Venues",
+    "description": "Theme about Live Music Venues",
+    "fit_score": 0.7653571428571428,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7425340136054422,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7425340136054422,
+      "confidence_level": "moderate",
+      "evidence_count": 28,
+      "source_diversity": 1.0,
+      "authority_score": 0.3807142857142858,
+      "recency_score": 1.0,
+      "consistency_score": 0.8474489795918367,
+      "locality_score": 0.20238095238095233,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09517857142857145,
+        "recency": 0.15,
+        "consistency": 0.1271173469387755,
+        "locality": 0.020238095238095236
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "live",
+      "music",
+      "venues"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.140625, \"confidence\": 0.140625, \"distribution\": {\"positive\": 7, \"negative\": 0, \"neutral\": 21}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Local Specialties",
+    "macro_category": "Food & Dining",
+    "micro_category": "Local Specialties",
+    "description": "Theme about Local Specialties",
+    "fit_score": 0.7650217391304347,
+    "confidence_level": "high",
+    "overall_confidence": 0.7767414933837429,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7767414933837429,
+      "confidence_level": "high",
+      "evidence_count": 23,
+      "source_diversity": 1.0,
+      "authority_score": 0.4076086956521739,
+      "recency_score": 1.0,
+      "consistency_score": 0.904725897920605,
+      "locality_score": 0.39130434782608686,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10190217391304347,
+        "recency": 0.15,
+        "consistency": 0.13570888468809075,
+        "locality": 0.03913043478260869
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "specialties",
+      "local"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.17119565217391305, \"confidence\": 0.17119565217391305, \"distribution\": {\"positive\": 7, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Children's Museums",
+    "macro_category": "Family & Education",
+    "micro_category": "Children's Museums",
+    "description": "Theme about Children's Museums",
+    "fit_score": 0.7645697674418606,
+    "confidence_level": "high",
+    "overall_confidence": 0.7542682981791959,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7542682981791959,
+      "confidence_level": "high",
+      "evidence_count": 43,
+      "source_diversity": 1.0,
+      "authority_score": 0.39406976744186056,
+      "recency_score": 1.0,
+      "consistency_score": 0.9091400757166036,
+      "locality_score": 0.19379844961240303,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09851744186046514,
+        "recency": 0.15,
+        "consistency": 0.13637101135749052,
+        "locality": 0.019379844961240303
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "museums",
+      "culture",
+      "history",
+      "children's",
+      "art"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.12063953488372094, \"confidence\": 0.12063953488372094, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 34}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Family Entertainment",
+    "macro_category": "Family & Education",
+    "micro_category": "Family Entertainment",
+    "description": "Theme about Family Entertainment",
+    "fit_score": 0.7644000000000001,
+    "confidence_level": "high",
+    "overall_confidence": 0.7559555555555556,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7559555555555556,
+      "confidence_level": "high",
+      "evidence_count": 30,
+      "source_diversity": 1.0,
+      "authority_score": 0.39466666666666683,
+      "recency_score": 1.0,
+      "consistency_score": 0.9004444444444444,
+      "locality_score": 0.22222222222222215,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09866666666666671,
+        "recency": 0.15,
+        "consistency": 0.13506666666666664,
+        "locality": 0.022222222222222216
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "entertainment",
+      "kids",
+      "children",
+      "family",
+      "all-ages"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.17291666666666666, \"confidence\": 0.17291666666666666, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 21}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Handmade Crafts",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Handmade Crafts",
+    "description": "Theme about Handmade Crafts",
+    "fit_score": 0.7642954545454544,
+    "confidence_level": "high",
+    "overall_confidence": 0.7563481404958678,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7563481404958678,
+      "confidence_level": "high",
+      "evidence_count": 44,
+      "source_diversity": 1.0,
+      "authority_score": 0.3975,
+      "recency_score": 1.0,
+      "consistency_score": 0.9101239669421488,
+      "locality_score": 0.2045454545454545,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.099375,
+        "recency": 0.15,
+        "consistency": 0.13651859504132233,
+        "locality": 0.02045454545454545
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "handmade",
+      "crafts"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.11789772727272728, \"confidence\": 0.11789772727272728, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 35}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Local Cuisine",
+    "macro_category": "Food & Dining",
+    "micro_category": "Local Cuisine",
+    "description": "Theme about Local Cuisine",
+    "fit_score": 0.7638478260869564,
+    "confidence_level": "high",
+    "overall_confidence": 0.7725921550094519,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7725921550094519,
+      "confidence_level": "high",
+      "evidence_count": 23,
+      "source_diversity": 1.0,
+      "authority_score": 0.39282608695652177,
+      "recency_score": 1.0,
+      "consistency_score": 0.9017013232514178,
+      "locality_score": 0.39130434782608686,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09820652173913044,
+        "recency": 0.15,
+        "consistency": 0.13525519848771267,
+        "locality": 0.03913043478260869
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "cuisine",
+      "local"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.19293478260869565, \"confidence\": 0.19293478260869565, \"distribution\": {\"positive\": 8, \"negative\": 0, \"neutral\": 15}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Craft Shops",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Craft Shops",
+    "description": "Theme about Craft Shops",
+    "fit_score": 0.7633571428571428,
+    "confidence_level": "high",
+    "overall_confidence": 0.756998299319728,
+    "confidence_breakdown": {
+      "overall_confidence": 0.756998299319728,
+      "confidence_level": "high",
+      "evidence_count": 42,
+      "source_diversity": 1.0,
+      "authority_score": 0.3973809523809525,
+      "recency_score": 1.0,
+      "consistency_score": 0.9081632653061225,
+      "locality_score": 0.21428571428571425,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09934523809523813,
+        "recency": 0.15,
+        "consistency": 0.13622448979591836,
+        "locality": 0.021428571428571425
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "craft",
+      "shops"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.12351190476190477, \"confidence\": 0.12351190476190477, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 33}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Food Markets",
+    "macro_category": "Food & Dining",
+    "micro_category": "Food Markets",
+    "description": "Theme about Food Markets",
+    "fit_score": 0.761078947368421,
+    "confidence_level": "high",
+    "overall_confidence": 0.7856590489381349,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7856590489381349,
+      "confidence_level": "high",
+      "evidence_count": 19,
+      "source_diversity": 1.0,
+      "authority_score": 0.4607894736842106,
+      "recency_score": 1.0,
+      "consistency_score": 0.9024930747922437,
+      "locality_score": 0.350877192982456,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.11519736842105265,
+        "recency": 0.15,
+        "consistency": 0.13537396121883655,
+        "locality": 0.035087719298245605
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "food",
+      "markets"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.15460526315789475, \"confidence\": 0.15460526315789475, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 14}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Farmers Markets",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Farmers Markets",
+    "description": "Theme about Farmers Markets",
+    "fit_score": 0.761078947368421,
+    "confidence_level": "high",
+    "overall_confidence": 0.7856590489381349,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7856590489381349,
+      "confidence_level": "high",
+      "evidence_count": 19,
+      "source_diversity": 1.0,
+      "authority_score": 0.4607894736842106,
+      "recency_score": 1.0,
+      "consistency_score": 0.9024930747922437,
+      "locality_score": 0.350877192982456,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.11519736842105265,
+        "recency": 0.15,
+        "consistency": 0.13537396121883655,
+        "locality": 0.035087719298245605
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "farmers",
+      "markets"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.15460526315789475, \"confidence\": 0.15460526315789475, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 14}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Food Festivals",
+    "macro_category": "Food & Dining",
+    "micro_category": "Food Festivals",
+    "description": "Theme about Food Festivals",
+    "fit_score": 0.7602105263157894,
+    "confidence_level": "high",
+    "overall_confidence": 0.75778162511542,
+    "confidence_breakdown": {
+      "overall_confidence": 0.75778162511542,
+      "confidence_level": "high",
+      "evidence_count": 19,
+      "source_diversity": 1.0,
+      "authority_score": 0.34263157894736834,
+      "recency_score": 1.0,
+      "consistency_score": 0.913573407202216,
+      "locality_score": 0.350877192982456,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08565789473684209,
+        "recency": 0.15,
+        "consistency": 0.1370360110803324,
+        "locality": 0.035087719298245605
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "food",
+      "festivals"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.24671052631578946, \"confidence\": 0.24671052631578946, \"distribution\": {\"positive\": 8, \"negative\": 0, \"neutral\": 11}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Bars & Pubs",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Bars & Pubs",
+    "description": "Theme about Bars & Pubs",
+    "fit_score": 0.7570937499999999,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7475260416666667,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7475260416666667,
+      "confidence_level": "moderate",
+      "evidence_count": 32,
+      "source_diversity": 1.0,
+      "authority_score": 0.34843750000000007,
+      "recency_score": 1.0,
+      "consistency_score": 0.875,
+      "locality_score": 0.29166666666666663,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08710937500000002,
+        "recency": 0.15,
+        "consistency": 0.13125,
+        "locality": 0.029166666666666664
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "bars",
+      "pubs"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.162109375, \"confidence\": 0.162109375, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 23}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Nightlife",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Nightlife",
+    "description": "Theme about Nightlife",
+    "fit_score": 0.7555192307692307,
+    "confidence_level": "high",
+    "overall_confidence": 0.7562956114398421,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7562956114398421,
+      "confidence_level": "high",
+      "evidence_count": 26,
+      "source_diversity": 1.0,
+      "authority_score": 0.3978846153846153,
+      "recency_score": 1.0,
+      "consistency_score": 0.8745562130177514,
+      "locality_score": 0.25641025641025633,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09947115384615382,
+        "recency": 0.15,
+        "consistency": 0.13118343195266272,
+        "locality": 0.025641025641025633
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "evening",
+      "social",
+      "nightlife",
+      "fun"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.15144230769230768, \"confidence\": 0.15144230769230768, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 20}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Restaurants",
+    "macro_category": "Food & Dining",
+    "micro_category": "Restaurants",
+    "description": "Theme about Restaurants",
+    "fit_score": 0.7533958333333333,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7498437499999999,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7498437499999999,
+      "confidence_level": "moderate",
+      "evidence_count": 24,
+      "source_diversity": 1.0,
+      "authority_score": 0.3410416666666667,
+      "recency_score": 1.0,
+      "consistency_score": 0.9027777777777778,
+      "locality_score": 0.2916666666666666,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08526041666666667,
+        "recency": 0.15,
+        "consistency": 0.13541666666666666,
+        "locality": 0.02916666666666666
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "restaurants"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.17447916666666666, \"confidence\": 0.17447916666666666, \"distribution\": {\"positive\": 8, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Fine Dining",
+    "macro_category": "Food & Dining",
+    "micro_category": "Fine Dining",
+    "description": "Theme about Fine Dining",
+    "fit_score": 0.7533958333333333,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7498437499999999,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7498437499999999,
+      "confidence_level": "moderate",
+      "evidence_count": 24,
+      "source_diversity": 1.0,
+      "authority_score": 0.3410416666666667,
+      "recency_score": 1.0,
+      "consistency_score": 0.9027777777777778,
+      "locality_score": 0.2916666666666666,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08526041666666667,
+        "recency": 0.15,
+        "consistency": 0.13541666666666666,
+        "locality": 0.02916666666666666
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "food",
+      "taste",
+      "culinary",
+      "fine",
+      "dining"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.17447916666666666, \"confidence\": 0.17447916666666666, \"distribution\": {\"positive\": 8, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Mountains & Peaks",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Mountains & Peaks",
+    "description": "Theme about Mountains & Peaks",
+    "fit_score": 0.753,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7275465715418153,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7275465715418153,
+      "confidence_level": "moderate",
+      "evidence_count": 29,
+      "source_diversity": 1.0,
+      "authority_score": 0.26896551724137924,
+      "recency_score": 1.0,
+      "consistency_score": 0.9001189060642093,
+      "locality_score": 0.2528735632183907,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.06724137931034481,
+        "recency": 0.15,
+        "consistency": 0.1350178359096314,
+        "locality": 0.025287356321839073
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "mountains",
+      "peaks"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.21336206896551724, \"confidence\": 0.21336206896551724, \"distribution\": {\"positive\": 11, \"negative\": 0, \"neutral\": 18}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Rooftop Bars",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Rooftop Bars",
+    "description": "Theme about Rooftop Bars",
+    "fit_score": 0.7474,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.732524,
+    "confidence_breakdown": {
+      "overall_confidence": 0.732524,
+      "confidence_level": "moderate",
+      "evidence_count": 25,
+      "source_diversity": 1.0,
+      "authority_score": 0.29719999999999996,
+      "recency_score": 1.0,
+      "consistency_score": 0.86816,
+      "locality_score": 0.2799999999999999,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.07429999999999999,
+        "recency": 0.15,
+        "consistency": 0.130224,
+        "locality": 0.027999999999999994
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "rooftop",
+      "bars"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.2075, \"confidence\": 0.2075, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Outdoor Adventures",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Outdoor Adventures",
+    "description": "Theme about Outdoor Adventures",
+    "fit_score": 0.7471774193548387,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7299215227193895,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7299215227193895,
+      "confidence_level": "moderate",
+      "evidence_count": 31,
+      "source_diversity": 1.0,
+      "authority_score": 0.28499999999999986,
+      "recency_score": 1.0,
+      "consistency_score": 0.9001040582726326,
+      "locality_score": 0.23655913978494614,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.07124999999999997,
+        "recency": 0.15,
+        "consistency": 0.13501560874089488,
+        "locality": 0.023655913978494616
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "outdoor",
+      "adventures"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.18346774193548387, \"confidence\": 0.18346774193548387, \"distribution\": {\"positive\": 10, \"negative\": 0, \"neutral\": 21}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Breweries & Distilleries",
+    "macro_category": "Food & Dining",
+    "micro_category": "Breweries & Distilleries",
+    "description": "Theme about Breweries & Distilleries",
+    "fit_score": 0.7465,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7447830578512397,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7447830578512397,
+      "confidence_level": "moderate",
+      "evidence_count": 33,
+      "source_diversity": 1.0,
+      "authority_score": 0.38772727272727275,
+      "recency_score": 1.0,
+      "consistency_score": 0.8846648301193756,
+      "locality_score": 0.1515151515151515,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09693181818181819,
+        "recency": 0.15,
+        "consistency": 0.13269972451790632,
+        "locality": 0.01515151515151515
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "distilleries",
+      "breweries"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.07386363636363637, \"confidence\": 0.07386363636363637, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 29}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Family Activities",
+    "macro_category": "Family & Education",
+    "micro_category": "Family Activities",
+    "description": "Theme about Family Activities",
+    "fit_score": 0.7453333333333334,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7438888888888889,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7438888888888889,
+      "confidence_level": "moderate",
+      "evidence_count": 18,
+      "source_diversity": 1.0,
+      "authority_score": 0.2955555555555555,
+      "recency_score": 1.0,
+      "consistency_score": 0.9111111111111111,
+      "locality_score": 0.33333333333333326,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.07388888888888888,
+        "recency": 0.15,
+        "consistency": 0.13666666666666666,
+        "locality": 0.033333333333333326
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "kids",
+      "children",
+      "family",
+      "activities",
+      "all-ages"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.2881944444444444, \"confidence\": 0.2881944444444444, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 9}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Parks & Recreation",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Parks & Recreation",
+    "description": "Theme about Parks & Recreation",
+    "fit_score": 0.7449411764705882,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7437485582468281,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7437485582468281,
+      "confidence_level": "moderate",
+      "evidence_count": 17,
+      "source_diversity": 1.0,
+      "authority_score": 0.27294117647058824,
+      "recency_score": 1.0,
+      "consistency_score": 0.9086505190311418,
+      "locality_score": 0.3921568627450979,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.06823529411764706,
+        "recency": 0.15,
+        "consistency": 0.13629757785467125,
+        "locality": 0.039215686274509796
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "recreation",
+      "parks"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.30514705882352944, \"confidence\": 0.30514705882352944, \"distribution\": {\"positive\": 9, \"negative\": 0, \"neutral\": 8}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Social Venues",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Social Venues",
+    "description": "Theme about Social Venues",
+    "fit_score": 0.7423478260869565,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.746135790800252,
+    "confidence_breakdown": {
+      "overall_confidence": 0.746135790800252,
+      "confidence_level": "moderate",
+      "evidence_count": 23,
+      "source_diversity": 1.0,
+      "authority_score": 0.3821739130434783,
+      "recency_score": 1.0,
+      "consistency_score": 0.8396975425330813,
+      "locality_score": 0.24637681159420283,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09554347826086958,
+        "recency": 0.15,
+        "consistency": 0.12595463137996218,
+        "locality": 0.024637681159420284
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "social",
+      "venues"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.13858695652173914, \"confidence\": 0.13858695652173914, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 17}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Nature Viewing",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Nature Viewing",
+    "description": "Theme about Nature Viewing",
+    "fit_score": 0.7294166666666666,
+    "confidence_level": "high",
+    "overall_confidence": 0.7640277777777778,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7640277777777778,
+      "confidence_level": "high",
+      "evidence_count": 12,
+      "source_diversity": 1.0,
+      "authority_score": 0.32333333333333336,
+      "recency_score": 1.0,
+      "consistency_score": 0.925,
+      "locality_score": 0.44444444444444436,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08083333333333334,
+        "recency": 0.15,
+        "consistency": 0.13875,
+        "locality": 0.04444444444444444
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "nature",
+      "viewing"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3489583333333333, \"confidence\": 0.3489583333333333, \"distribution\": {\"positive\": 7, \"negative\": 0, \"neutral\": 5}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Spas & Wellness",
+    "macro_category": "Health & Wellness",
+    "micro_category": "Spas & Wellness",
+    "description": "Theme about Spas & Wellness",
+    "fit_score": 0.71784375,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7316145833333334,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7316145833333334,
+      "confidence_level": "moderate",
+      "evidence_count": 16,
+      "source_diversity": 1.0,
+      "authority_score": 0.27718750000000003,
+      "recency_score": 1.0,
+      "consistency_score": 0.9015625,
+      "locality_score": 0.2708333333333333,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.06929687500000001,
+        "recency": 0.15,
+        "consistency": 0.135234375,
+        "locality": 0.027083333333333334
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "spas",
+      "wellness"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.18359375, \"confidence\": 0.18359375, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 11}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Travel News",
+    "macro_category": "Adventure & Sports",
+    "micro_category": "Travel News",
+    "description": "Theme about Travel News",
+    "fit_score": 0.716,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.637962962962963,
+    "confidence_breakdown": {
+      "overall_confidence": 0.637962962962963,
+      "confidence_level": "moderate",
+      "evidence_count": 9,
+      "source_diversity": 0.4,
+      "authority_score": 0.4711111111111109,
+      "recency_score": 1.0,
+      "consistency_score": 0.9111111111111111,
+      "locality_score": 0.18518518518518517,
+      "factors": {
+        "evidence_count": 0.135,
+        "source_diversity": 0.08000000000000002,
+        "authority": 0.11777777777777773,
+        "recency": 0.15,
+        "consistency": 0.13666666666666666,
+        "locality": 0.018518518518518517
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "news",
+      "Travel News",
+      "travel"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "unknown",
+    "category_color": "#666666",
+    "category_border_color": "#444444",
+    "category_icon": "\ud83d\udccc",
+    "category_description": "Unknown category",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.1388888888888889, \"confidence\": 0.1388888888888889, \"distribution\": {\"positive\": 2, \"negative\": 0, \"neutral\": 7}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Relaxation",
+    "macro_category": "Health & Wellness",
+    "micro_category": "Relaxation",
+    "description": "Theme about Relaxation",
+    "fit_score": 0.7153,
+    "confidence_level": "high",
+    "overall_confidence": 0.7558750000000001,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7558750000000001,
+      "confidence_level": "high",
+      "evidence_count": 20,
+      "source_diversity": 1.0,
+      "authority_score": 0.38350000000000006,
+      "recency_score": 1.0,
+      "consistency_score": 0.9,
+      "locality_score": 0.24999999999999994,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09587500000000002,
+        "recency": 0.15,
+        "consistency": 0.135,
+        "locality": 0.024999999999999994
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "relaxation"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.284375, \"confidence\": 0.284375, \"distribution\": {\"positive\": 10, \"negative\": 0, \"neutral\": 10}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Travel And Tour World",
+    "macro_category": "Adventure & Sports",
+    "micro_category": "Travel And Tour World",
+    "description": "Theme about Travel And Tour World",
+    "fit_score": 0.7130000000000001,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6142708333333334,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6142708333333334,
+      "confidence_level": "moderate",
+      "evidence_count": 8,
+      "source_diversity": 0.4,
+      "authority_score": 0.43000000000000005,
+      "recency_score": 1.0,
+      "consistency_score": 0.90625,
+      "locality_score": 0.20833333333333331,
+      "factors": {
+        "evidence_count": 0.12,
+        "source_diversity": 0.08000000000000002,
+        "authority": 0.10750000000000001,
+        "recency": 0.15,
+        "consistency": 0.1359375,
+        "locality": 0.020833333333333332
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "travel",
+      "and",
+      "tour",
+      "world",
+      "Travel And Tour World"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "unknown",
+    "category_color": "#666666",
+    "category_border_color": "#444444",
+    "category_icon": "\ud83d\udccc",
+    "category_description": "Unknown category",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.15625, \"confidence\": 0.15625, \"distribution\": {\"positive\": 2, \"negative\": 0, \"neutral\": 6}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Bike-Friendly",
+    "macro_category": "Transportation & Access",
+    "micro_category": "Bike-Friendly",
+    "description": "Theme about Bike-Friendly",
+    "fit_score": 0.7095454545454546,
+    "confidence_level": "high",
+    "overall_confidence": 0.7749035812672177,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7749035812672177,
+      "confidence_level": "high",
+      "evidence_count": 11,
+      "source_diversity": 1.0,
+      "authority_score": 0.42181818181818187,
+      "recency_score": 1.0,
+      "consistency_score": 0.9074380165289256,
+      "locality_score": 0.33333333333333337,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10545454545454547,
+        "recency": 0.15,
+        "consistency": 0.13611570247933885,
+        "locality": 0.03333333333333334
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "bike-friendly"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.26704545454545453, \"confidence\": 0.26704545454545453, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 5}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Seasonal Planning",
+    "macro_category": "Logistics & Planning",
+    "micro_category": "Seasonal Planning",
+    "description": "Theme about Seasonal Planning",
+    "fit_score": 0.7090909090909091,
+    "confidence_level": "high",
+    "overall_confidence": 0.7751308539944903,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7751308539944903,
+      "confidence_level": "high",
+      "evidence_count": 11,
+      "source_diversity": 1.0,
+      "authority_score": 0.38636363636363635,
+      "recency_score": 1.0,
+      "consistency_score": 0.9074380165289256,
+      "locality_score": 0.4242424242424242,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09659090909090909,
+        "recency": 0.15,
+        "consistency": 0.13611570247933885,
+        "locality": 0.04242424242424242
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "seasonal",
+      "planning"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "practical",
+    "category_color": "#2196F3",
+    "category_border_color": "#1976D2",
+    "category_icon": "\ud83d\udccb",
+    "category_description": "Practical themes provide essential travel information and logistics",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.2897727272727273, \"confidence\": 0.2897727272727273, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 5}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Scenic Views",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Scenic Views",
+    "description": "Theme about Scenic Views",
+    "fit_score": 0.6952941176470588,
+    "confidence_level": "high",
+    "overall_confidence": 0.7561534025374855,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7561534025374855,
+      "confidence_level": "high",
+      "evidence_count": 17,
+      "source_diversity": 1.0,
+      "authority_score": 0.37294117647058816,
+      "recency_score": 1.0,
+      "consistency_score": 0.9031141868512111,
+      "locality_score": 0.2745098039215686,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09323529411764704,
+        "recency": 0.15,
+        "consistency": 0.13546712802768165,
+        "locality": 0.027450980392156862
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "views",
+      "scenic"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.1875, \"confidence\": 0.1875, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 11}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Dance Clubs",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Dance Clubs",
+    "description": "Theme about Dance Clubs",
+    "fit_score": 0.69,
+    "confidence_level": "high",
+    "overall_confidence": 0.7575246548323472,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7575246548323472,
+      "confidence_level": "high",
+      "evidence_count": 13,
+      "source_diversity": 1.0,
+      "authority_score": 0.34615384615384615,
+      "recency_score": 1.0,
+      "consistency_score": 0.9005917159763314,
+      "locality_score": 0.3589743589743589,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08653846153846154,
+        "recency": 0.15,
+        "consistency": 0.1350887573964497,
+        "locality": 0.035897435897435895
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "clubs",
+      "dance"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.28365384615384615, \"confidence\": 0.28365384615384615, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 7}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Cross-Country Skiing",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Cross-Country Skiing",
+    "description": "Theme about Cross-Country Skiing",
+    "fit_score": 0.6854545454545454,
+    "confidence_level": "high",
+    "overall_confidence": 0.7752961432506886,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7752961432506886,
+      "confidence_level": "high",
+      "evidence_count": 11,
+      "source_diversity": 1.0,
+      "authority_score": 0.4154545454545453,
+      "recency_score": 1.0,
+      "consistency_score": 0.9206611570247933,
+      "locality_score": 0.33333333333333337,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10386363636363632,
+        "recency": 0.15,
+        "consistency": 0.138099173553719,
+        "locality": 0.03333333333333334
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "skiing",
+      "cross-country"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.17613636363636365, \"confidence\": 0.17613636363636365, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 8}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Theater & Performances",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Theater & Performances",
+    "description": "Theme about Theater & Performances",
+    "fit_score": 0.6823636363636363,
+    "confidence_level": "high",
+    "overall_confidence": 0.7537258953168043,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7537258953168043,
+      "confidence_level": "high",
+      "evidence_count": 22,
+      "source_diversity": 1.0,
+      "authority_score": 0.38818181818181813,
+      "recency_score": 1.0,
+      "consistency_score": 0.9132231404958677,
+      "locality_score": 0.19696969696969696,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09704545454545453,
+        "recency": 0.15,
+        "consistency": 0.13698347107438016,
+        "locality": 0.0196969696969697
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "theater",
+      "performances"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.16761363636363635, \"confidence\": 0.16761363636363635, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.5}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Science Centers",
+    "macro_category": "Family & Education",
+    "micro_category": "Science Centers",
+    "description": "Theme about Science Centers",
+    "fit_score": 0.6808076923076923,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7379240631163708,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7379240631163708,
+      "confidence_level": "moderate",
+      "evidence_count": 13,
+      "source_diversity": 1.0,
+      "authority_score": 0.29,
+      "recency_score": 1.0,
+      "consistency_score": 0.914792899408284,
+      "locality_score": 0.28205128205128205,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.0725,
+        "recency": 0.15,
+        "consistency": 0.1372189349112426,
+        "locality": 0.028205128205128206
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "science",
+      "centers"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.1875, \"confidence\": 0.1875, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 9}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Rivers & Lakes",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Rivers & Lakes",
+    "description": "Theme about Rivers & Lakes",
+    "fit_score": 0.6791,
+    "confidence_level": "high",
+    "overall_confidence": 0.7524,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7524,
+      "confidence_level": "high",
+      "evidence_count": 10,
+      "source_diversity": 1.0,
+      "authority_score": 0.288,
+      "recency_score": 1.0,
+      "consistency_score": 0.9359999999999999,
+      "locality_score": 0.4,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.072,
+        "recency": 0.15,
+        "consistency": 0.1404,
+        "locality": 0.04000000000000001
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "lakes",
+      "rivers"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.21875, \"confidence\": 0.21875, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 6}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Boutiques",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Boutiques",
+    "description": "Theme about Boutiques",
+    "fit_score": 0.6705,
+    "confidence_level": "high",
+    "overall_confidence": 0.7577343750000001,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7577343750000001,
+      "confidence_level": "high",
+      "evidence_count": 16,
+      "source_diversity": 1.0,
+      "authority_score": 0.41500000000000015,
+      "recency_score": 1.0,
+      "consistency_score": 0.9015625,
+      "locality_score": 0.1875,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10375000000000004,
+        "recency": 0.15,
+        "consistency": 0.135234375,
+        "locality": 0.018750000000000003
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "boutiques"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.10546875, \"confidence\": 0.10546875, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 13}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Shopping",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Shopping",
+    "description": "Theme about Shopping",
+    "fit_score": 0.6672105263157895,
+    "confidence_level": "high",
+    "overall_confidence": 0.7568651892890121,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7568651892890121,
+      "confidence_level": "high",
+      "evidence_count": 19,
+      "source_diversity": 1.0,
+      "authority_score": 0.41578947368421065,
+      "recency_score": 1.0,
+      "consistency_score": 0.9024930747922437,
+      "locality_score": 0.1754385964912281,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10394736842105266,
+        "recency": 0.15,
+        "consistency": 0.13537396121883655,
+        "locality": 0.01754385964912281
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "shopping"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.08881578947368421, \"confidence\": 0.08881578947368421, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Shopping Districts",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Shopping Districts",
+    "description": "Theme about Shopping Districts",
+    "fit_score": 0.6672105263157895,
+    "confidence_level": "high",
+    "overall_confidence": 0.7568651892890121,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7568651892890121,
+      "confidence_level": "high",
+      "evidence_count": 19,
+      "source_diversity": 1.0,
+      "authority_score": 0.41578947368421065,
+      "recency_score": 1.0,
+      "consistency_score": 0.9024930747922437,
+      "locality_score": 0.1754385964912281,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10394736842105266,
+        "recency": 0.15,
+        "consistency": 0.13537396121883655,
+        "locality": 0.01754385964912281
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "shopping",
+      "districts"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.08881578947368421, \"confidence\": 0.08881578947368421, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 16}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Hot Springs",
+    "macro_category": "Health & Wellness",
+    "micro_category": "Hot Springs",
+    "description": "Theme about Hot Springs",
+    "fit_score": 0.6584285714285714,
+    "confidence_level": "high",
+    "overall_confidence": 0.7532227891156462,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7532227891156462,
+      "confidence_level": "high",
+      "evidence_count": 14,
+      "source_diversity": 1.0,
+      "authority_score": 0.34785714285714286,
+      "recency_score": 1.0,
+      "consistency_score": 0.9020408163265305,
+      "locality_score": 0.3095238095238095,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.08696428571428572,
+        "recency": 0.15,
+        "consistency": 0.13530612244897958,
+        "locality": 0.03095238095238095
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "springs",
+      "hot"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.24553571428571427, \"confidence\": 0.24553571428571427, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 8}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Fitness",
+    "macro_category": "Health & Wellness",
+    "micro_category": "Fitness",
+    "description": "Theme about Fitness",
+    "fit_score": 0.6573125,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.62515625,
+    "confidence_breakdown": {
+      "overall_confidence": 0.62515625,
+      "confidence_level": "moderate",
+      "evidence_count": 8,
+      "source_diversity": 0.6,
+      "authority_score": 0.266875,
+      "recency_score": 1.0,
+      "consistency_score": 0.95625,
+      "locality_score": 0.24999999999999997,
+      "factors": {
+        "evidence_count": 0.12,
+        "source_diversity": 0.12,
+        "authority": 0.06671875,
+        "recency": 0.15,
+        "consistency": 0.1434375,
+        "locality": 0.024999999999999998
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "fitness"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.0625, \"confidence\": 0.0625, \"distribution\": {\"positive\": 1, \"negative\": 0, \"neutral\": 7}, \"consistency\": 0.75}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "New York",
+    "macro_category": "Adventure & Sports",
+    "micro_category": "New York",
+    "description": "Theme about New York",
+    "fit_score": 0.6543333333333333,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6425,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6425,
+      "confidence_level": "moderate",
+      "evidence_count": 6,
+      "source_diversity": 0.4,
+      "authority_score": 0.6766666666666666,
+      "recency_score": 1.0,
+      "consistency_score": 0.9111111111111111,
+      "locality_score": 0.16666666666666666,
+      "factors": {
+        "evidence_count": 0.09,
+        "source_diversity": 0.08000000000000002,
+        "authority": 0.16916666666666666,
+        "recency": 0.15,
+        "consistency": 0.13666666666666666,
+        "locality": 0.016666666666666666
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "york",
+      "new",
+      "New York"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "unknown",
+    "category_color": "#666666",
+    "category_border_color": "#444444",
+    "category_icon": "\ud83d\udccc",
+    "category_description": "Unknown category",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.125, \"confidence\": 0.125, \"distribution\": {\"positive\": 2, \"negative\": 0, \"neutral\": 4}, \"consistency\": 0.75}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": \"2025-06-07T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Zoos & Aquariums",
+    "macro_category": "Family & Education",
+    "micro_category": "Zoos & Aquariums",
+    "description": "Theme about Zoos & Aquariums",
+    "fit_score": 0.6499166666666667,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7072916666666667,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7072916666666667,
+      "confidence_level": "moderate",
+      "evidence_count": 6,
+      "source_diversity": 0.8,
+      "authority_score": 0.4625000000000001,
+      "recency_score": 1.0,
+      "consistency_score": 0.9444444444444444,
+      "locality_score": 0.5,
+      "factors": {
+        "evidence_count": 0.09,
+        "source_diversity": 0.16000000000000003,
+        "authority": 0.11562500000000002,
+        "recency": 0.15,
+        "consistency": 0.14166666666666666,
+        "locality": 0.05
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "zoos",
+      "aquariums"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3645833333333333, \"confidence\": 0.3645833333333333, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 2}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 1, \"newest_evidence\": \"2025-06-07T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "International Visitors",
+    "macro_category": "Adventure & Sports",
+    "micro_category": "International Visitors",
+    "description": "Theme about International Visitors",
+    "fit_score": 0.6492,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6150666666666668,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6150666666666668,
+      "confidence_level": "moderate",
+      "evidence_count": 5,
+      "source_diversity": 0.4,
+      "authority_score": 0.652,
+      "recency_score": 1.0,
+      "consistency_score": 0.9359999999999999,
+      "locality_score": 0.06666666666666667,
+      "factors": {
+        "evidence_count": 0.075,
+        "source_diversity": 0.08000000000000002,
+        "authority": 0.163,
+        "recency": 0.15,
+        "consistency": 0.1404,
+        "locality": 0.006666666666666667
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "International Visitors",
+      "visitors",
+      "international"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "unknown",
+    "category_color": "#666666",
+    "category_border_color": "#444444",
+    "category_icon": "\ud83d\udccc",
+    "category_description": "Unknown category",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.2, \"confidence\": 0.2, \"distribution\": {\"positive\": 2, \"negative\": 0, \"neutral\": 3}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Biking & Cycling",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Biking & Cycling",
+    "description": "Theme about Biking & Cycling",
+    "fit_score": 0.6471071428571429,
+    "confidence_level": "high",
+    "overall_confidence": 0.7571726190476191,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7571726190476191,
+      "confidence_level": "high",
+      "evidence_count": 14,
+      "source_diversity": 1.0,
+      "authority_score": 0.38392857142857156,
+      "recency_score": 1.0,
+      "consistency_score": 0.9,
+      "locality_score": 0.2619047619047619,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.09598214285714289,
+        "recency": 0.15,
+        "consistency": 0.135,
+        "locality": 0.026190476190476195
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "biking",
+      "cycling"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.19196428571428573, \"confidence\": 0.19196428571428573, \"distribution\": {\"positive\": 5, \"negative\": 0, \"neutral\": 9}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Comedy Shows",
+    "macro_category": "Entertainment & Nightlife",
+    "micro_category": "Comedy Shows",
+    "description": "Theme about Comedy Shows",
+    "fit_score": 0.631,
+    "confidence_level": "high",
+    "overall_confidence": 0.7569444444444444,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7569444444444444,
+      "confidence_level": "high",
+      "evidence_count": 9,
+      "source_diversity": 1.0,
+      "authority_score": 0.4433333333333333,
+      "recency_score": 1.0,
+      "consistency_score": 0.9012345679012346,
+      "locality_score": 0.25925925925925924,
+      "factors": {
+        "evidence_count": 0.135,
+        "source_diversity": 0.2,
+        "authority": 0.11083333333333333,
+        "recency": 0.15,
+        "consistency": 0.13518518518518519,
+        "locality": 0.025925925925925925
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "comedy",
+      "shows"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"neutral\", \"average_score\": 0.10416666666666667, \"confidence\": 0.10416666666666667, \"distribution\": {\"positive\": 2, \"negative\": 0, \"neutral\": 7}, \"consistency\": 0.65625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Kid-Friendly",
+    "macro_category": "Family & Education",
+    "micro_category": "Kid-Friendly",
+    "description": "Theme about Kid-Friendly",
+    "fit_score": 0.6266363636363637,
+    "confidence_level": "high",
+    "overall_confidence": 0.7749035812672177,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7749035812672177,
+      "confidence_level": "high",
+      "evidence_count": 11,
+      "source_diversity": 1.0,
+      "authority_score": 0.42181818181818187,
+      "recency_score": 1.0,
+      "consistency_score": 0.9074380165289256,
+      "locality_score": 0.33333333333333337,
+      "factors": {
+        "evidence_count": 0.15,
+        "source_diversity": 0.2,
+        "authority": 0.10545454545454547,
+        "recency": 0.15,
+        "consistency": 0.13611570247933885,
+        "locality": 0.03333333333333334
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "kid-friendly"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.26704545454545453, \"confidence\": 0.26704545454545453, \"distribution\": {\"positive\": 6, \"negative\": 0, \"neutral\": 5}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Wildlife",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Wildlife",
+    "description": "Theme about Wildlife",
+    "fit_score": 0.6198000000000001,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6726833333333334,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6726833333333334,
+      "confidence_level": "moderate",
+      "evidence_count": 5,
+      "source_diversity": 0.8,
+      "authority_score": 0.395,
+      "recency_score": 1.0,
+      "consistency_score": 0.904,
+      "locality_score": 0.5333333333333333,
+      "factors": {
+        "evidence_count": 0.075,
+        "source_diversity": 0.16000000000000003,
+        "authority": 0.09875,
+        "recency": 0.15,
+        "consistency": 0.1356,
+        "locality": 0.05333333333333334
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "wildlife"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3875, \"confidence\": 0.3875, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 2}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 1, \"newest_evidence\": \"2025-06-07T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Educational",
+    "macro_category": "Family & Education",
+    "micro_category": "Educational",
+    "description": "Theme about Educational",
+    "fit_score": 0.6181666666666666,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7037962962962964,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7037962962962964,
+      "confidence_level": "moderate",
+      "evidence_count": 9,
+      "source_diversity": 1.0,
+      "authority_score": 0.2544444444444445,
+      "recency_score": 1.0,
+      "consistency_score": 0.8123456790123457,
+      "locality_score": 0.33333333333333326,
+      "factors": {
+        "evidence_count": 0.135,
+        "source_diversity": 0.2,
+        "authority": 0.06361111111111112,
+        "recency": 0.15,
+        "consistency": 0.12185185185185185,
+        "locality": 0.033333333333333326
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "educational"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.2708333333333333, \"confidence\": 0.2708333333333333, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 5}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Food Tours",
+    "macro_category": "Food & Dining",
+    "micro_category": "Food Tours",
+    "description": "Theme about Food Tours",
+    "fit_score": 0.6181428571428571,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7421428571428572,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7421428571428572,
+      "confidence_level": "moderate",
+      "evidence_count": 7,
+      "source_diversity": 1.0,
+      "authority_score": 0.32,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 0.5714285714285714,
+      "factors": {
+        "evidence_count": 0.105,
+        "source_diversity": 0.2,
+        "authority": 0.08,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.05714285714285714
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "tours",
+      "food"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3125, \"confidence\": 0.3125, \"distribution\": {\"positive\": 4, \"negative\": 0, \"neutral\": 3}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 5, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-07T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Snowshoeing",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Snowshoeing",
+    "description": "Theme about Snowshoeing",
+    "fit_score": 0.5888333333333333,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.704861111111111,
+    "confidence_breakdown": {
+      "overall_confidence": 0.704861111111111,
+      "confidence_level": "moderate",
+      "evidence_count": 6,
+      "source_diversity": 1.0,
+      "authority_score": 0.3416666666666666,
+      "recency_score": 1.0,
+      "consistency_score": 0.9,
+      "locality_score": 0.4444444444444444,
+      "factors": {
+        "evidence_count": 0.09,
+        "source_diversity": 0.2,
+        "authority": 0.08541666666666665,
+        "recency": 0.15,
+        "consistency": 0.135,
+        "locality": 0.044444444444444446
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "snowshoeing"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3229166666666667, \"confidence\": 0.3229166666666667, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 3}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6980, \"newest_evidence\": \"2025-06-07T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Antiques",
+    "macro_category": "Shopping & Local Craft",
+    "micro_category": "Antiques",
+    "description": "Theme about Antiques",
+    "fit_score": 0.5798333333333333,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6740277777777779,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6740277777777779,
+      "confidence_level": "moderate",
+      "evidence_count": 6,
+      "source_diversity": 1.0,
+      "authority_score": 0.21833333333333335,
+      "recency_score": 1.0,
+      "consistency_score": 0.9,
+      "locality_score": 0.4444444444444445,
+      "factors": {
+        "evidence_count": 0.09,
+        "source_diversity": 0.2,
+        "authority": 0.05458333333333334,
+        "recency": 0.15,
+        "consistency": 0.135,
+        "locality": 0.04444444444444445
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "antiques"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3645833333333333, \"confidence\": 0.3645833333333333, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 3}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Kayaking & Rafting",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Kayaking & Rafting",
+    "description": "Theme about Kayaking & Rafting",
+    "fit_score": 0.5641428571428572,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.7139965986394557,
+    "confidence_breakdown": {
+      "overall_confidence": 0.7139965986394557,
+      "confidence_level": "moderate",
+      "evidence_count": 7,
+      "source_diversity": 1.0,
+      "authority_score": 0.30428571428571427,
+      "recency_score": 1.0,
+      "consistency_score": 0.9020408163265305,
+      "locality_score": 0.4761904761904762,
+      "factors": {
+        "evidence_count": 0.105,
+        "source_diversity": 0.2,
+        "authority": 0.07607142857142857,
+        "recency": 0.15,
+        "consistency": 0.13530612244897958,
+        "locality": 0.04761904761904762
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "kayaking",
+      "rafting"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.24107142857142858, \"confidence\": 0.24107142857142858, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 4}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6985, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Street Food",
+    "macro_category": "Food & Dining",
+    "micro_category": "Street Food",
+    "description": "Theme about Street Food",
+    "fit_score": 0.56125,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6775,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6775,
+      "confidence_level": "moderate",
+      "evidence_count": 4,
+      "source_diversity": 0.8,
+      "authority_score": 0.33,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 0.75,
+      "factors": {
+        "evidence_count": 0.06,
+        "source_diversity": 0.16000000000000003,
+        "authority": 0.0825,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.07500000000000001
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "food",
+      "street"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.421875, \"confidence\": 0.421875, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 1}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-12T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Pebble Beach",
+    "macro_category": "Food & Dining",
+    "micro_category": "Pebble Beach",
+    "description": "Theme about Pebble Beach",
+    "fit_score": 0.5599999999999999,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.655,
+    "confidence_breakdown": {
+      "overall_confidence": 0.655,
+      "confidence_level": "moderate",
+      "evidence_count": 1,
+      "source_diversity": 0.2,
+      "authority_score": 0.8,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 1.0,
+      "factors": {
+        "evidence_count": 0.015,
+        "source_diversity": 0.04000000000000001,
+        "authority": 0.2,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.1
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "Pebble Beach",
+      "beach",
+      "pebble"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.25, \"confidence\": 0.25, \"distribution\": {\"positive\": 1, \"negative\": 0, \"neutral\": 0}, \"consistency\": 1.0}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": null, \"oldest_evidence\": null, \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "In Monterey",
+    "macro_category": "Food & Dining",
+    "micro_category": "In Monterey",
+    "description": "Theme about In Monterey",
+    "fit_score": 0.5599999999999999,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.655,
+    "confidence_breakdown": {
+      "overall_confidence": 0.655,
+      "confidence_level": "moderate",
+      "evidence_count": 1,
+      "source_diversity": 0.2,
+      "authority_score": 0.8,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 1.0,
+      "factors": {
+        "evidence_count": 0.015,
+        "source_diversity": 0.04000000000000001,
+        "authority": 0.2,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.1
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "in",
+      "monterey",
+      "In Monterey"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.25, \"confidence\": 0.25, \"distribution\": {\"positive\": 1, \"negative\": 0, \"neutral\": 0}, \"consistency\": 1.0}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": null, \"oldest_evidence\": null, \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Mile Drive Pebble Beach",
+    "macro_category": "Food & Dining",
+    "micro_category": "Mile Drive Pebble Beach",
+    "description": "Theme about Mile Drive Pebble Beach",
+    "fit_score": 0.5599999999999999,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.655,
+    "confidence_breakdown": {
+      "overall_confidence": 0.655,
+      "confidence_level": "moderate",
+      "evidence_count": 1,
+      "source_diversity": 0.2,
+      "authority_score": 0.8,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 1.0,
+      "factors": {
+        "evidence_count": 0.015,
+        "source_diversity": 0.04000000000000001,
+        "authority": 0.2,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.1
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "Mile Drive Pebble Beach",
+      "drive",
+      "beach",
+      "mile",
+      "pebble"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.25, \"confidence\": 0.25, \"distribution\": {\"positive\": 1, \"negative\": 0, \"neutral\": 0}, \"consistency\": 1.0}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": null, \"oldest_evidence\": null, \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "North America",
+    "macro_category": "Food & Dining",
+    "micro_category": "North America",
+    "description": "Theme about North America",
+    "fit_score": 0.5599999999999999,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.655,
+    "confidence_breakdown": {
+      "overall_confidence": 0.655,
+      "confidence_level": "moderate",
+      "evidence_count": 1,
+      "source_diversity": 0.2,
+      "authority_score": 0.8,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 1.0,
+      "factors": {
+        "evidence_count": 0.015,
+        "source_diversity": 0.04000000000000001,
+        "authority": 0.2,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.1
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "north",
+      "america",
+      "North America"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.25, \"confidence\": 0.25, \"distribution\": {\"positive\": 1, \"negative\": 0, \"neutral\": 0}, \"consistency\": 1.0}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": null, \"oldest_evidence\": null, \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Is Monterey",
+    "macro_category": "Food & Dining",
+    "micro_category": "Is Monterey",
+    "description": "Theme about Is Monterey",
+    "fit_score": 0.5599999999999999,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.655,
+    "confidence_breakdown": {
+      "overall_confidence": 0.655,
+      "confidence_level": "moderate",
+      "evidence_count": 1,
+      "source_diversity": 0.2,
+      "authority_score": 0.8,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 1.0,
+      "factors": {
+        "evidence_count": 0.015,
+        "source_diversity": 0.04000000000000001,
+        "authority": 0.2,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.1
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "Is Monterey",
+      "is",
+      "monterey"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.25, \"confidence\": 0.25, \"distribution\": {\"positive\": 1, \"negative\": 0, \"neutral\": 0}, \"consistency\": 1.0}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": null, \"oldest_evidence\": null, \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Health Retreats",
+    "macro_category": "Health & Wellness",
+    "micro_category": "Health Retreats",
+    "description": "Theme about Health Retreats",
+    "fit_score": 0.55525,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6664583333333333,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6664583333333333,
+      "confidence_level": "moderate",
+      "evidence_count": 6,
+      "source_diversity": 1.0,
+      "authority_score": 0.2058333333333333,
+      "recency_score": 1.0,
+      "consistency_score": 0.9444444444444444,
+      "locality_score": 0.3333333333333333,
+      "factors": {
+        "evidence_count": 0.09,
+        "source_diversity": 0.2,
+        "authority": 0.05145833333333333,
+        "recency": 0.15,
+        "consistency": 0.14166666666666666,
+        "locality": 0.03333333333333333
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "health",
+      "retreats"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.23958333333333334, \"confidence\": 0.23958333333333334, \"distribution\": {\"positive\": 2, \"negative\": 0, \"neutral\": 4}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6, \"newest_evidence\": \"2025-06-12T00:00:00\", \"oldest_evidence\": \"2025-06-06T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Hiking & Trails",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Hiking & Trails",
+    "description": "Theme about Hiking & Trails",
+    "fit_score": 0.5493,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.6635833333333334,
+    "confidence_breakdown": {
+      "overall_confidence": 0.6635833333333334,
+      "confidence_level": "moderate",
+      "evidence_count": 5,
+      "source_diversity": 1.0,
+      "authority_score": 0.14100000000000001,
+      "recency_score": 1.0,
+      "consistency_score": 1.0,
+      "locality_score": 0.5333333333333333,
+      "factors": {
+        "evidence_count": 0.075,
+        "source_diversity": 0.2,
+        "authority": 0.035250000000000004,
+        "recency": 0.15,
+        "consistency": 0.15,
+        "locality": 0.05333333333333334
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "nature",
+      "adventure",
+      "outdoor",
+      "hiking",
+      "trails"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.3875, \"confidence\": 0.3875, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 2}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 6979, \"newest_evidence\": \"2025-06-06T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  },
+  {
+    "id": null,
+    "name": "Fishing",
+    "macro_category": "Nature & Outdoor",
+    "micro_category": "Fishing",
+    "description": "Theme about Fishing",
+    "fit_score": 0.5475,
+    "confidence_level": "moderate",
+    "overall_confidence": 0.65875,
+    "confidence_breakdown": {
+      "overall_confidence": 0.65875,
+      "confidence_level": "moderate",
+      "evidence_count": 6,
+      "source_diversity": 0.8,
+      "authority_score": 0.28833333333333333,
+      "recency_score": 1.0,
+      "consistency_score": 0.9111111111111111,
+      "locality_score": 0.5,
+      "factors": {
+        "evidence_count": 0.09,
+        "source_diversity": 0.16000000000000003,
+        "authority": 0.07208333333333333,
+        "recency": 0.15,
+        "consistency": 0.13666666666666666,
+        "locality": 0.05
+      }
+    },
+    "created_date": null,
+    "tags": [
+      "fishing"
+    ],
+    "traveler_relevance_factor": 0.5,
+    "processing_type": "hybrid",
+    "category_color": "#4CAF50",
+    "category_border_color": "#388E3C",
+    "category_icon": "\u2696\ufe0f",
+    "category_description": "Hybrid themes balance practical information with cultural authenticity",
+    "metadata": {
+      "theme_id": null,
+      "description": null,
+      "sentiment_analysis": "{\"overall\": \"positive\", \"average_score\": 0.28125, \"confidence\": 0.28125, \"distribution\": {\"positive\": 3, \"negative\": 0, \"neutral\": 3}, \"consistency\": 0.625}",
+      "temporal_analysis": "{\"temporal_markers\": {}, \"evidence_span_days\": 0, \"newest_evidence\": \"2006-04-28T00:00:00\", \"oldest_evidence\": \"2006-04-28T00:00:00\", \"seasonal_indicators\": []}"
+    }
+  }
+];
+        
+        let filteredThemes = [...allThemes];
+        let currentPage = 1;
+        let itemsPerPage = 100;
+        
+        function formatConfidenceLevelCssClass(level) {
+            switch(level) {
+                case 'high': return 'confidence-high';
+                case 'moderate': return 'confidence-moderate';
+                case 'low': return 'confidence-low';
+                default: return 'confidence-unknown';
+            }
+        }
+        
+        function formatJsonForDisplay(obj) {
+            if (!obj) return 'No data available';
+            return '<pre>' + JSON.stringify(obj, null, 2) + '</pre>';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function renderThemes() {
+            const container = document.getElementById('themesContainer');
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const themesToShow = filteredThemes.slice(startIndex, endIndex);
+            
+            if (themesToShow.length === 0) {
+                container.innerHTML = '<div class="no-results">No themes found matching your criteria.</div>';
+                return;
+            }
+            
+            let html = '';
+            themesToShow.forEach((theme, index) => {
+                const globalIndex = startIndex + index + 1;
+                const name = escapeHtml(theme.name || 'Unnamed Theme');
+                const fitScore = typeof theme.fit_score === 'number' ? theme.fit_score.toFixed(4) : 'N/A';
+                const adjustedConfidence = typeof theme.overall_confidence === 'number' ? theme.overall_confidence.toFixed(4) : 'N/A';
+                const confidenceLevelDisplay = escapeHtml(theme.confidence_level || 'N/A');
+                const confidenceClass = formatConfidenceLevelCssClass(theme.confidence_level);
+                const relevanceFactor = typeof theme.traveler_relevance_factor === 'number' ? theme.traveler_relevance_factor.toFixed(2) : 'N/A';
+                
+                // CULTURAL INTELLIGENCE: Theme styling based on processing type
+                const themeColor = theme.category_color || '#4285f4';
+                const categoryIcon = theme.category_icon || '📌';
+                const processingType = theme.processing_type || 'unknown';
+                const categoryDescription = theme.category_description || 'Unknown category';
+                
+                html += `
+                <div class="theme-card" style="--theme-color: ${themeColor}">
+                    <div class="category-badge">${categoryIcon} ${processingType.toUpperCase()}</div>
+                    <div class="theme-header">
+                        <span>${categoryIcon}</span>
+                        <span>${globalIndex}. ${name}</span>
+                    </div>
+                    
+                    <div class="theme-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">Fit Score:</span>
+                            <span class="meta-value">${fitScore}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Overall Confidence:</span>
+                            <span class="meta-value ${confidenceClass}">${adjustedConfidence} (Level: ${confidenceLevelDisplay})</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Category:</span>
+                            <span class="meta-value">${escapeHtml(theme.macro_category)}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Processing Type:</span>
+                            <span class="meta-value" style="color: ${themeColor}">${processingType.toUpperCase()}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="description">
+                        <strong>Description:</strong> ${escapeHtml(theme.description || 'No description available')}
+                        <br><small style="color: #888; margin-top: 0.5rem; display: block;"><em>${categoryDescription}</em></small>
+                    </div>
+                    
+                    <div class="expandable">
+                        <button class="expand-btn" onclick="toggleExpand(this)">
+                            <span>▶ Full Confidence Breakdown</span>
+                        </button>
+                        <div class="expand-content">
+                            ${formatJsonForDisplay(theme.confidence_breakdown)}
+                        </div>
+                    </div>
+                    
+                    <div class="expandable">
+                        <button class="expand-btn" onclick="toggleExpand(this)">
+                            <span>▶ Additional Metadata</span>
+                        </button>
+                        <div class="expand-content">
+                            <p><strong>Theme ID:</strong> ${theme.id}</p>
+                            <p><strong>Category:</strong> ${escapeHtml(theme.macro_category)}</p>
+                            <p><strong>Subcategory:</strong> ${escapeHtml(theme.micro_category)}</p>
+                            <p><strong>Processing Type:</strong> <span style="color: ${themeColor}">${processingType.toUpperCase()}</span></p>
+                            <p><strong>Traveler Relevance:</strong> ${relevanceFactor}</p>
+                            ${theme.tags && theme.tags.length > 0 ? '<p><strong>Tags:</strong> ' + theme.tags.map(tag => escapeHtml(tag)).join(', ') + '</p>' : ''}
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            renderPagination();
+        }
+        
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredThemes.length / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Previous button
+            if (currentPage > 1) {
+                html += `<button onclick="goToPage(${currentPage - 1})">Previous</button>`;
+            }
+            
+            // Page numbers
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const activeClass = i === currentPage ? 'active' : '';
+                html += `<button class="${activeClass}" onclick="goToPage(${i})">${i}</button>`;
+            }
+            
+            // Next button
+            if (currentPage < totalPages) {
+                html += `<button onclick="goToPage(${currentPage + 1})">Next</button>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+        
+        function goToPage(page) {
+            currentPage = page;
+            renderThemes();
+        }
+        
+        function toggleExpand(button) {
+            const content = button.nextElementSibling;
+            const icon = button.querySelector('span');
+            
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                icon.textContent = icon.textContent.replace('▼', '▶');
+            } else {
+                content.classList.add('show');
+                icon.textContent = icon.textContent.replace('▶', '▼');
+            }
+        }
+        
+        function applyFilters() {
+            const filterText = document.getElementById('filterInput').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const sortBy = document.getElementById('sortSelect').value;
+            itemsPerPage = parseInt(document.getElementById('itemsPerPage').value);
+            
+            // Filter themes
+            filteredThemes = allThemes.filter(theme => {
+                const nameMatch = theme.name && theme.name.toLowerCase().includes(filterText);
+                const descMatch = theme.description && theme.description.toLowerCase().includes(filterText);
+                const textMatch = nameMatch || descMatch;
+                
+                // CULTURAL INTELLIGENCE: Category filtering
+                const categoryMatch = categoryFilter === 'all' || theme.processing_type === categoryFilter;
+                
+                return textMatch && categoryMatch;
+            });
+            
+            // Sort themes
+            filteredThemes.sort((a, b) => {
+                switch(sortBy) {
+                    case 'fit_score_desc':
+                        return (b.fit_score || 0) - (a.fit_score || 0);
+                    case 'fit_score_asc':
+                        return (a.fit_score || 0) - (b.fit_score || 0);
+                    case 'confidence_desc':
+                        return (b.overall_confidence || 0) - (a.overall_confidence || 0);
+                    case 'confidence_asc':
+                        return (a.overall_confidence || 0) - (b.overall_confidence || 0);
+                    case 'name_asc':
+                        return (a.name || '').localeCompare(b.name || '');
+                    case 'name_desc':
+                        return (b.name || '').localeCompare(a.name || '');
+                    case 'category_asc':
+                        // Sort by processing type: cultural, practical, hybrid
+                        const order = {'cultural': 0, 'practical': 1, 'hybrid': 2, 'unknown': 3};
+                        return (order[a.processing_type] || 3) - (order[b.processing_type] || 3);
+                    default:
+                        // DEFAULT: Sort by tourist relevance (overall_confidence which includes traveler_relevance_factor)
+                        return (b.overall_confidence || 0) - (a.overall_confidence || 0);
+                }
+            });
+            
+            currentPage = 1;
+            renderThemes();
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            renderThemes();
+            
+            // Add enter key support for filter
+            document.getElementById('filterInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    applyFilters();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

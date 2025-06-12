@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 
 from .base_agent import BaseAgent, AgentMessage, MessageType
+from ..core.safe_dict_utils import safe_get, safe_get_confidence_value, safe_get_nested, safe_get_dict
 from src.schemas import PriorityMetrics
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ class SafetyValidationAgent(BaseAgent):
         }
         
         # Validate crime index
-        if safety_data.get("crime_index") is not None:
+        if safe_get(safety_data, "crime_index") is not None:
             crime_index = safety_data["crime_index"]
             if not (0 <= crime_index <= 100):
                 validation_results["issues"].append(f"Crime index {crime_index} out of valid range (0-100)")
@@ -61,7 +62,7 @@ class SafetyValidationAgent(BaseAgent):
                 validation_results["validated"] = False
         
         # Validate safety rating
-        if safety_data.get("safety_rating") is not None:
+        if safe_get(safety_data, "safety_rating") is not None:
             safety_rating = safety_data["safety_rating"]
             if not (0 <= safety_rating <= 10):
                 validation_results["issues"].append(f"Safety rating {safety_rating} out of valid range (0-10)")
@@ -69,7 +70,7 @@ class SafetyValidationAgent(BaseAgent):
                 validation_results["validated"] = False
         
         # Cross-validate crime index and safety rating
-        if safety_data.get("crime_index") and safety_data.get("safety_rating"):
+        if safe_get(safety_data, "crime_index") and safe_get(safety_data, "safety_rating"):
             # They should be inversely correlated
             expected_safety = 10 - (safety_data["crime_index"] / 10)
             if abs(safety_data["safety_rating"] - expected_safety) > 3:
@@ -77,14 +78,14 @@ class SafetyValidationAgent(BaseAgent):
                 validation_results["confidence"] *= 0.8
         
         # Validate travel advisory level
-        if safety_data.get("travel_advisory_level"):
+        if safe_get(safety_data, "travel_advisory_level"):
             level = safety_data["travel_advisory_level"]
             if level not in [1, 2, 3, 4]:
                 validation_results["issues"].append(f"Invalid travel advisory level: {level}")
                 validation_results["validated"] = False
         
         # Validate emergency contacts
-        if safety_data.get("emergency_contacts"):
+        if safe_get(safety_data, "emergency_contacts"):
             for contact_type, number in safety_data["emergency_contacts"].items():
                 if not re.match(r"^\+?\d+$", str(number).replace("-", "").replace(" ", "")):
                     validation_results["issues"].append(f"Invalid emergency number format: {number}")
@@ -166,7 +167,7 @@ class CostValidationAgent(BaseAgent):
         budget_values = []
         
         for field in budget_fields:
-            if cost_data.get(field) is not None:
+            if safe_get(cost_data, field) is not None:
                 value = cost_data[field]
                 if value < 0:
                     validation_results["issues"].append(f"{field} cannot be negative: {value}")
@@ -184,7 +185,7 @@ class CostValidationAgent(BaseAgent):
                 validation_results["corrections"]["budget_order"] = sorted(budget_values)
         
         # Validate currency
-        if cost_data.get("currency"):
+        if safe_get(cost_data, "currency"):
             currency = cost_data["currency"]
             if currency not in self.currency_rates:
                 validation_results["issues"].append(f"Unrecognized currency: {currency}")
@@ -205,7 +206,7 @@ class CostValidationAgent(BaseAgent):
         ]
         
         for item, min_val, max_val in cost_items:
-            if cost_data.get(item) is not None:
+            if safe_get(cost_data, item) is not None:
                 value = cost_data[item]
                 if not (min_val <= value <= max_val):
                     validation_results["issues"].append(
@@ -214,7 +215,7 @@ class CostValidationAgent(BaseAgent):
                     validation_results["confidence"] *= 0.9
         
         # Cross-validate meal costs with daily budget
-        if cost_data.get("meal_cost_budget") and cost_data.get("budget_per_day_low"):
+        if safe_get(cost_data, "meal_cost_budget") and safe_get(cost_data, "budget_per_day_low"):
             meal_percentage = (cost_data["meal_cost_budget"] * 3) / cost_data["budget_per_day_low"]
             if meal_percentage > 0.8:
                 validation_results["issues"].append(
@@ -286,14 +287,14 @@ class PracticalInfoAgent(BaseAgent):
             health_data = data["health"]
             
             # Validate water safety
-            if health_data.get("water_safety"):
+            if safe_get(health_data, "water_safety"):
                 valid_water_statuses = ["safe to drink", "bottled water recommended", "not safe"]
                 if health_data["water_safety"].lower() not in [s.lower() for s in valid_water_statuses]:
                     validation_results["issues"].append(f"Invalid water safety status: {health_data['water_safety']}")
                     validation_results["confidence"] *= 0.9
             
             # Validate vaccinations
-            if health_data.get("required_vaccinations"):
+            if safe_get(health_data, "required_vaccinations"):
                 known_vaccines = {
                     "yellow fever", "hepatitis a", "hepatitis b", "typhoid",
                     "japanese encephalitis", "rabies", "malaria", "polio"
@@ -304,7 +305,7 @@ class PracticalInfoAgent(BaseAgent):
                         validation_results["confidence"] *= 0.95
             
             # Validate medical facility quality
-            if health_data.get("medical_facility_quality"):
+            if safe_get(health_data, "medical_facility_quality"):
                 valid_qualities = ["excellent", "good", "adequate", "limited", "poor"]
                 if health_data["medical_facility_quality"].lower() not in valid_qualities:
                     validation_results["issues"].append(
@@ -317,13 +318,13 @@ class PracticalInfoAgent(BaseAgent):
             access_data = data["accessibility"]
             
             # Validate visa information
-            if access_data.get("visa_required") is not None:
-                if access_data.get("visa_cost") and not access_data["visa_required"]:
+            if safe_get(access_data, "visa_required") is not None:
+                if safe_get(access_data, "visa_cost") and not access_data["visa_required"]:
                     validation_results["issues"].append("Visa cost specified but visa not required")
                     validation_results["confidence"] *= 0.8
             
             # Validate infrastructure rating
-            if access_data.get("infrastructure_rating") is not None:
+            if safe_get(access_data, "infrastructure_rating") is not None:
                 rating = access_data["infrastructure_rating"]
                 if not (0 <= rating <= 5):
                     validation_results["issues"].append(f"Infrastructure rating {rating} out of range (0-5)")
@@ -331,7 +332,7 @@ class PracticalInfoAgent(BaseAgent):
                     validation_results["validated"] = False
             
             # Validate language information
-            if access_data.get("primary_language"):
+            if safe_get(access_data, "primary_language"):
                 if access_data["primary_language"] not in self.valid_languages:
                     validation_results["issues"].append(
                         f"Unrecognized language: {access_data['primary_language']}"
@@ -339,7 +340,7 @@ class PracticalInfoAgent(BaseAgent):
                     validation_results["confidence"] *= 0.9
             
             # Validate english proficiency
-            if access_data.get("english_proficiency"):
+            if safe_get(access_data, "english_proficiency"):
                 valid_levels = ["none", "basic", "moderate", "good", "excellent", "native"]
                 if access_data["english_proficiency"].lower() not in valid_levels:
                     validation_results["issues"].append(
@@ -359,7 +360,7 @@ class PracticalInfoAgent(BaseAgent):
             ]
             
             for field in temp_fields:
-                if weather_data.get(field) is not None:
+                if safe_get(weather_data, field) is not None:
                     temp = weather_data[field]
                     if not (-50 <= temp <= 60):  # Celsius
                         validation_results["issues"].append(
@@ -368,7 +369,7 @@ class PracticalInfoAgent(BaseAgent):
                         validation_results["confidence"] *= 0.8
             
             # Validate rainfall
-            if weather_data.get("rainfall_mm_annual") is not None:
+            if safe_get(weather_data, "rainfall_mm_annual") is not None:
                 rainfall = weather_data["rainfall_mm_annual"]
                 if not (0 <= rainfall <= 5000):
                     validation_results["issues"].append(

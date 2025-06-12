@@ -2561,11 +2561,14 @@ class EnhancedThemeAnalysisTool:
                 elif theme.confidence_breakdown and isinstance(theme.confidence_breakdown, dict):
                     total_confidence += safe_get_confidence_value(theme.confidence_breakdown, "overall_confidence", 0.0)
                 elif theme.confidence_breakdown and isinstance(theme.confidence_breakdown, str):
-                    # Handle JSON string case
+                    # Handle JSON string case - SAFETY CHECK: Ensure json.loads returns dict
                     try:
                         import json
                         conf_dict = json.loads(theme.confidence_breakdown)
-                        total_confidence += conf_dict.get('overall_confidence', 0.0)
+                        if isinstance(conf_dict, dict):
+                            total_confidence += conf_dict.get('overall_confidence', 0.0)
+                        else:
+                            total_confidence += theme.fit_score  # Fallback if not dict
                     except (json.JSONDecodeError, AttributeError):
                         total_confidence += theme.fit_score  # Fallback to fit_score
                 else:
@@ -3366,11 +3369,14 @@ class EnhancedThemeAnalysisTool:
                 elif isinstance(theme.confidence_breakdown, dict):
                     theme_confidence = safe_get_confidence_value(theme.confidence_breakdown, "overall_confidence", 0.0)
                 elif isinstance(theme.confidence_breakdown, str):
-                    # Handle JSON string case
+                    # Handle JSON string case - SAFETY CHECK: Ensure json.loads returns dict
                     try:
                         import json
                         conf_dict = json.loads(theme.confidence_breakdown)
-                        theme_confidence = conf_dict.get('overall_confidence', 0.0)
+                        if isinstance(conf_dict, dict):
+                            theme_confidence = conf_dict.get('overall_confidence', 0.0)
+                        else:
+                            theme_confidence = 0.0  # Fallback if not dict
                     except (json.JSONDecodeError, AttributeError):
                         theme_confidence = 0.0
             
