@@ -1704,8 +1704,7 @@ class EnhancedThemeAnalysisTool:
         cultural_result: Dict[str, Any]
     ) -> List[Dict[str, Any]]:  # Changed return type to match actual usage
         """
-        Builds a list of enhanced theme dictionaries from validated themes, evidence, and cultural analysis.
-        Returns dictionaries instead of Theme objects for backward compatibility.
+        FIXED: Builds a list of enhanced theme dictionaries with PROPER evidence linking
         """
 
         enhanced_themes = []
@@ -1720,7 +1719,7 @@ class EnhancedThemeAnalysisTool:
         for theme_data in validated_themes:
             theme_id = safe_get(theme_data, "theme_id", str(uuid.uuid4()))
             
-            # Handle both evidence_references (from database) and original_evidence_objects (from validation)
+            # CRITICAL FIX: Handle both evidence_references (from database) and original_evidence_objects (from validation)
             evidence_refs = safe_get(theme_data, "evidence_references", [])
             original_evidence = safe_get(theme_data, "original_evidence_objects", [])
             
@@ -1745,25 +1744,21 @@ class EnhancedThemeAnalysisTool:
                             "relevance_score": 0.8  # Default relevance
                         })
                         evidence_map[evidence_id] = evidence_obj
-            # Final fallback: use all available evidence if theme has no specific evidence references
-            elif not theme_evidence_objects and all_evidence:
+            # CRITICAL FIX: If NO evidence is linked, link ALL available evidence as fallback
+            else:
+                self.logger.warning(f"Theme '{safe_get(theme_data, 'name')}' has no evidence linked - applying fallback evidence linking")
                 # Use all evidence as fallback for themes without specific evidence mappings
-                theme_evidence_objects = all_evidence
-                for evidence_obj in all_evidence:
+                theme_evidence_objects = all_evidence[:3]  # Limit to top 3 to avoid noise
+                for evidence_obj in theme_evidence_objects:
                     if hasattr(evidence_obj, 'id'):
+                        evidence_id = self.evidence_registry.add_evidence(evidence_obj)
                         theme_evidence_references.append({
-                            "evidence_id": evidence_obj.id,
+                            "evidence_id": evidence_id,
                             "relevance_score": 0.5  # Lower relevance for fallback evidence
                         })
+                        evidence_map[evidence_id] = evidence_obj
 
-
-            
-            # Initialize empty fields that will be populated later in processing
-            authentic_insights = []
-            
-            # Extract local authorities from evidence
-            local_authorities = self._extract_local_authorities_from_evidence(theme_evidence_objects)
-            
+            # CRITICAL: Ensure themes have BOTH evidence_references AND evidence objects for database compatibility
             enhanced_theme_dict = {
                 "theme_id": theme_id,
                 "name": safe_get(theme_data, "name"),
@@ -1775,34 +1770,34 @@ class EnhancedThemeAnalysisTool:
                 "confidence_breakdown": safe_get(theme_data, "confidence_breakdown"),
                 "last_validated": datetime.now().isoformat(),
                 
-                # CRITICAL: Always include evidence_references
+                # CRITICAL: Always include evidence_references for JSON export
                 "evidence_references": theme_evidence_references,
                 
-                # Also include evidence objects for backward compatibility if needed
-                # Proper type checking for evidence
-            "evidence": [
-                ev if isinstance(ev, dict)
-                else ev.to_dict() if hasattr(ev, 'to_dict') and callable(getattr(ev, 'to_dict'))
-                else {"error": "unexpected_evidence_type", "type": str(type(ev))}
-                for ev in theme_evidence_objects
-            ],
+                # CRITICAL: Always include evidence objects for database manager compatibility
+                "evidence": [
+                    ev if isinstance(ev, dict)
+                    else ev.to_dict() if hasattr(ev, 'to_dict') and callable(getattr(ev, 'to_dict'))
+                    else {"id": getattr(ev, 'id', 'unknown'), "text_snippet": getattr(ev, 'text_snippet', ''), "source_url": getattr(ev, 'source_url', '')}
+                    for ev in theme_evidence_objects
+                ],
                 
                 # Add enhanced fields
                 "factors": self._calculate_theme_factors_from_refs(theme_evidence_references),
                 "cultural_summary": self._generate_cultural_summary_from_refs(theme_evidence_references),
                 "sentiment_analysis": self._analyze_theme_sentiment_from_refs(theme_evidence_references),
                 "temporal_analysis": self._analyze_theme_temporal_aspects_from_refs(theme_evidence_references),
-                "traveler_relevance_factor": safe_get(theme_data, "traveler_relevance_factor"),
+                "traveler_relevance_factor": safe_get(theme_data, "traveler_relevance_factor", 0.7),
                 "adjusted_overall_confidence": safe_get(theme_data, "adjusted_overall_confidence"),
                 
                 # Properly populated fields
-                "authentic_insights": authentic_insights,
-                "local_authorities": local_authorities,
+                "authentic_insights": [],
+                "local_authorities": self._extract_local_authorities_from_evidence(theme_evidence_objects),
                 "seasonal_relevance": {},
                 "regional_uniqueness": 0.0,
                 "insider_tips": []
             }
 
+            self.logger.info(f"✅ FIXED THEME: '{enhanced_theme_dict['name']}' with {len(theme_evidence_references)} evidence references and {len(theme_evidence_objects)} evidence objects")
             enhanced_themes.append(enhanced_theme_dict)
 
         return enhanced_themes
