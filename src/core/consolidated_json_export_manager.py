@@ -85,7 +85,7 @@ class ConsolidatedJsonExportManager:
             # Generate safe destination ID for filename
             # Handle both objects and dictionaries for destination ID
             if hasattr(destination, 'id'):
-                destination_id = destination.id
+                destination_id = getattr(destination, "id", "dest_" + destination.names[0].replace(" ", "_").replace(",", "").lower() if destination.names else "unknown_destination")
             elif isinstance(destination, dict):
                 destination_id = destination.get('id', 'unknown_destination')
             else:
@@ -203,9 +203,17 @@ class ConsolidatedJsonExportManager:
         max_themes = adaptive_settings.get("max_themes", 35)
         confidence_threshold = adaptive_settings.get("confidence_threshold", 0.55)
         
+        # Safe access to themes - handle both objects and dictionaries
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
         # Filter and limit themes
         filtered_themes = []
-        for theme in destination.themes:
+        for theme in themes:
             # Calculate confidence
             if theme.confidence_breakdown:
                 # Handle ConfidenceBreakdown objects, dictionaries, and JSON strings
@@ -254,8 +262,12 @@ class ConsolidatedJsonExportManager:
             filtered_themes = filtered_themes[:max_themes]
             self.logger.info(f"Limited themes to top {max_themes} based on adaptive settings")
         
-        # Create new destination with filtered themes
-        destination.themes = filtered_themes
+        # Update destination themes safely
+        if hasattr(destination, 'themes'):
+            destination.themes = filtered_themes
+        elif isinstance(destination, dict):
+            destination['themes'] = filtered_themes
+        
         return destination
     
     def _apply_adaptive_filters(
@@ -298,16 +310,41 @@ class ConsolidatedJsonExportManager:
         """Build evidence registry from destination themes"""
         
         evidence_registry = {}
-        for theme in destination.themes:
-            for evidence in theme.evidence:
-                if evidence.id not in evidence_registry:
+        
+        # Safe access to themes - handle both objects and dictionaries
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
+        for theme in themes:
+            # Safe access to evidence - handle both objects and dictionaries
+            if hasattr(theme, 'evidence'):
+                evidence_list = theme.evidence
+            elif isinstance(theme, dict):
+                evidence_list = theme.get('evidence', [])
+            else:
+                evidence_list = []
+                
+            for evidence in evidence_list:
+                # Safe access to evidence ID
+                if hasattr(evidence, 'id'):
+                    evidence_id = evidence.id
+                elif isinstance(evidence, dict):
+                    evidence_id = evidence.get('id', f'ev_{len(evidence_registry)}')
+                else:
+                    evidence_id = f'ev_{len(evidence_registry)}'
+                
+                if evidence_id not in evidence_registry:
                     # Proper type checking for evidence
                     if isinstance(evidence, dict):
-                        evidence_registry[evidence.id] = evidence
+                        evidence_registry[evidence_id] = evidence
                     elif hasattr(evidence, 'to_dict') and callable(getattr(evidence, 'to_dict')):
-                        evidence_registry[evidence.id] = evidence.to_dict()
+                        evidence_registry[evidence_id] = evidence.to_dict()
                     else:
-                        evidence_registry[evidence.id] = {"error": "unexpected_evidence_type", "type": str(type(evidence))}
+                        evidence_registry[evidence_id] = {"error": "unexpected_evidence_type", "type": str(type(evidence))}
         
         return evidence_registry
     
@@ -337,8 +374,16 @@ class ConsolidatedJsonExportManager:
         self.insights_deduplicator.clear_registry()  # Clear previous state
         deduplicated_insights, insights_cross_refs = deduplicate_authentic_insights_for_export(destination)
         
+        # Safe access to themes
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
         # Format themes and get data
-        themes_data = self._format_themes_with_references(destination.themes)
+        themes_data = self._format_themes_with_references(themes)
         destination_data = self._format_destination_data(destination)
 
         # Build evidence_registry if not provided or empty
@@ -346,16 +391,32 @@ class ConsolidatedJsonExportManager:
         if not current_evidence_registry:
             self.logger.info("Evidence registry not provided or empty, building from destination themes.")
             temp_registry = {}
-            for theme in destination.themes:
-                for ev in theme.evidence:
-                    if ev.id not in temp_registry:
+            for theme in themes:
+                # Safe access to evidence
+                if hasattr(theme, 'evidence'):
+                    evidence_list = theme.evidence
+                elif isinstance(theme, dict):
+                    evidence_list = theme.get('evidence', [])
+                else:
+                    evidence_list = []
+                    
+                for ev in evidence_list:
+                    # Safe access to evidence ID
+                    if hasattr(ev, 'id'):
+                        ev_id = ev.id
+                    elif isinstance(ev, dict):
+                        ev_id = ev.get('id', f'ev_{len(temp_registry)}')
+                    else:
+                        ev_id = f'ev_{len(temp_registry)}'
+                        
+                    if ev_id not in temp_registry:
                         # Proper type checking for evidence
                         if isinstance(ev, dict):
-                            temp_registry[ev.id] = ev
+                            temp_registry[ev_id] = ev
                         elif hasattr(ev, 'to_dict') and callable(getattr(ev, 'to_dict')):
-                            temp_registry[ev.id] = ev.to_dict()
+                            temp_registry[ev_id] = ev.to_dict()
                         else:
-                            temp_registry[ev.id] = {"error": "unexpected_evidence_type", "type": str(type(ev))}
+                            temp_registry[ev_id] = {"error": "unexpected_evidence_type", "type": str(type(ev))}
             current_evidence_registry = temp_registry
             self.logger.info(f"Built evidence registry with {len(current_evidence_registry)} items.")
         
@@ -366,12 +427,21 @@ class ConsolidatedJsonExportManager:
             themes_data
         )
         
+        # Safe access to destination attributes
+        def safe_get_dest_attr(obj, attr, default=None):
+            if hasattr(obj, attr):
+                return getattr(obj, attr, default)
+            elif isinstance(obj, dict):
+                return obj.get(attr, default)
+            else:
+                return default
+        
         export = {
             "export_metadata": {
                 "version": self.export_config.version,
                 "export_timestamp": datetime.now().isoformat(),
                 "destination_id": destination_id,
-                "destination_revision": destination.destination_revision,
+                "destination_revision": safe_get_dest_attr(destination, 'destination_revision', 1),
                 "export_type": "comprehensive_consolidated",
                 "export_mode": self.export_config.mode.value,
                 "format": "reference_based_configurable",
@@ -390,20 +460,20 @@ class ConsolidatedJsonExportManager:
                 "evidence": current_evidence_registry, # Use current_evidence_registry
                 "themes": themes_data,
                 "insights": deduplicated_insights,  # Now deduplicated with no cross-reference issues
-                "authorities": self._format_local_authorities(destination.local_authorities),
-                "temporal_slices": self._format_temporal_slices(destination.temporal_slices),
-                "dimensions": self._format_dimensions(destination.dimensions),
-                "points_of_interest": self._format_pois(destination.pois)
+                "authorities": self._format_local_authorities(safe_get_dest_attr(destination, 'local_authorities', [])),
+                "temporal_slices": self._format_temporal_slices(safe_get_dest_attr(destination, 'temporal_slices', [])),
+                "dimensions": self._format_dimensions(safe_get_dest_attr(destination, 'dimensions', {})),
+                "points_of_interest": self._format_pois(safe_get_dest_attr(destination, 'pois', []))
             },
             
             # Relationship mappings for references (now includes deduplicated insights)
             "relationships": {
-                "theme_evidence": self._build_theme_evidence_relationships(destination.themes),
+                "theme_evidence": self._build_theme_evidence_relationships(themes),
                 "theme_insights": insights_cross_refs.get("theme_insights", {}),  # From deduplicator
                 "insight_themes": insights_cross_refs.get("insight_themes", {}),  # Reverse mapping
                 "destination_insights": insights_cross_refs.get("destination_insights", {}),  # From deduplicator
                 "insight_authorities": self._build_insight_authority_relationships_deduplicated(deduplicated_insights),
-                "temporal_themes": self._build_temporal_theme_relationships(destination.temporal_slices)
+                "temporal_themes": self._build_temporal_theme_relationships(safe_get_dest_attr(destination, 'temporal_slices', []))
             },
             
             # Smart generated views
@@ -412,8 +482,8 @@ class ConsolidatedJsonExportManager:
             # Analysis metadata and lineage
             "metadata": {
                 "analysis_metadata": analysis_metadata or {},
-                "lineage": destination.lineage,
-                "processing_metadata": destination.meta,
+                "lineage": safe_get_dest_attr(destination, 'lineage', {}),
+                "processing_metadata": safe_get_dest_attr(destination, 'meta', {}),
                 "data_quality": self._calculate_comprehensive_quality_metrics(destination, current_evidence_registry), # Use current_evidence_registry
                 "export_configuration": self.export_config.dict(),
                 "deduplication_statistics": {
@@ -545,7 +615,16 @@ class ConsolidatedJsonExportManager:
         deduplicated_insights, insights_cross_refs = deduplicate_authentic_insights_for_export(destination)
         
         destination_data = self._format_destination_data(destination)
-        themes_data = self._format_themes_with_references(destination.themes)
+        
+        # Safe access to themes
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
+        themes_data = self._format_themes_with_references(themes)
         
         # Generate theme-focused views
         theme_views = {
@@ -575,31 +654,53 @@ class ConsolidatedJsonExportManager:
     
     def _format_destination_data(self, destination: Destination) -> Dict[str, Any]:
         """Formats the main destination object for export, including all new enrichment fields."""
+        # Safe access to destination ID - handle both objects and dictionaries
+        if hasattr(destination, 'id'):
+            destination_id = destination.id
+        elif isinstance(destination, dict) and 'id' in destination:
+            destination_id = destination['id']
+        else:
+            # Generate fallback ID from names
+            names = getattr(destination, 'names', destination.get('names', []) if isinstance(destination, dict) else [])
+            if names:
+                destination_id = f"dest_{names[0].replace(' ', '_').replace(',', '').lower()}"
+            else:
+                destination_id = "unknown_destination"
+        
+        # Safe attribute access for all fields
+        def safe_get_attr(obj, attr, default=None):
+            if hasattr(obj, attr):
+                return getattr(obj, attr, default)
+            elif isinstance(obj, dict):
+                return obj.get(attr, default)
+            else:
+                return default
+        
         return {
-            "id": destination.id,
-            "names": destination.names,
-            "admin_levels": destination.admin_levels,
-            "timezone": destination.timezone,
-            "population": destination.population,
-            "country_code": destination.country_code,
-            "core_geo": destination.core_geo,
+            "id": destination_id,
+            "names": safe_get_attr(destination, 'names', []),
+            "admin_levels": safe_get_attr(destination, 'admin_levels', {}),
+            "timezone": safe_get_attr(destination, 'timezone', 'UTC'),
+            "population": safe_get_attr(destination, 'population', None),
+            "country_code": safe_get_attr(destination, 'country_code', 'US'),
+            "core_geo": safe_get_attr(destination, 'core_geo', {}),
             # New heuristic-driven enrichment fields
-            "vibe_descriptors": destination.vibe_descriptors,
-            "area_km2": destination.area_km2,
-            "primary_language": destination.primary_language,
-            "dominant_religions": destination.dominant_religions,
-            "unesco_sites": destination.unesco_sites,
-            "historical_summary": destination.historical_summary,
-            "annual_tourist_arrivals": destination.annual_tourist_arrivals,
-            "popularity_stage": destination.popularity_stage,
-            "visa_info_url": destination.visa_info_url,
-            "gdp_per_capita_usd": destination.gdp_per_capita_usd,
-            "hdi": destination.hdi,
+            "vibe_descriptors": safe_get_attr(destination, 'vibe_descriptors', []),
+            "area_km2": safe_get_attr(destination, 'area_km2', None),
+            "primary_language": safe_get_attr(destination, 'primary_language', None),
+            "dominant_religions": safe_get_attr(destination, 'dominant_religions', []),
+            "unesco_sites": safe_get_attr(destination, 'unesco_sites', []),
+            "historical_summary": safe_get_attr(destination, 'historical_summary', None),
+            "annual_tourist_arrivals": safe_get_attr(destination, 'annual_tourist_arrivals', None),
+            "popularity_stage": safe_get_attr(destination, 'popularity_stage', None),
+            "visa_info_url": safe_get_attr(destination, 'visa_info_url', None),
+            "gdp_per_capita_usd": safe_get_attr(destination, 'gdp_per_capita_usd', None),
+            "hdi": safe_get_attr(destination, 'hdi', None),
             # Metadata
-            "last_updated": destination.last_updated.isoformat(),
-            "destination_revision": destination.destination_revision,
-            "lineage": destination.lineage,
-            "meta": destination.meta
+            "last_updated": safe_get_attr(destination, 'last_updated', datetime.now()).isoformat() if hasattr(safe_get_attr(destination, 'last_updated', datetime.now()), 'isoformat') else str(safe_get_attr(destination, 'last_updated', datetime.now())),
+            "destination_revision": safe_get_attr(destination, 'destination_revision', 1),
+            "lineage": safe_get_attr(destination, 'lineage', {}),
+            "meta": safe_get_attr(destination, 'meta', {})
         }
 
     def _format_single_theme(self, theme: Theme) -> Dict[str, Any]:
@@ -833,9 +934,17 @@ class ConsolidatedJsonExportManager:
         """Calculate comprehensive quality metrics"""
         total_evidence = len(evidence_registry)
         
+        # Safe access to themes
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
         confidence_scores = []
-        for t in destination.themes:
-            if t.confidence_breakdown:
+        for t in themes:
+            if hasattr(t, 'confidence_breakdown') and t.confidence_breakdown:
                 # Handle ConfidenceBreakdown objects, dictionaries, and JSON strings
                 if hasattr(t.confidence_breakdown, 'overall_confidence'):
                     confidence_scores.append(t.confidence_breakdown.overall_confidence)
@@ -853,18 +962,31 @@ class ConsolidatedJsonExportManager:
                 else:
                     confidence_scores.append(0)
         
+        # Safe access to destination attributes
+        def safe_get_dest_attr(obj, attr, default=None):
+            if hasattr(obj, attr):
+                return getattr(obj, attr, default)
+            elif isinstance(obj, dict):
+                return obj.get(attr, default)
+            else:
+                return default
+        
+        dimensions = safe_get_dest_attr(destination, 'dimensions', {})
+        temporal_slices = safe_get_dest_attr(destination, 'temporal_slices', [])
+        pois = safe_get_dest_attr(destination, 'pois', [])
+        
         return {
-            "total_themes": len(destination.themes),
+            "total_themes": len(themes),
             "total_evidence": total_evidence,
             "unique_evidence_ratio": 1.0,  # Already deduplicated
             "average_confidence": sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0,
             "high_confidence_themes": len([
-                t for t in destination.themes 
-                if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]
+                t for t in themes 
+                if hasattr(t, 'get_confidence_level') and callable(getattr(t, 'get_confidence_level')) and t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]
             ]),
-            "dimensions_populated": len([d for d in destination.dimensions.values() if d.value is not None]),
-            "temporal_coverage": len(destination.temporal_slices),
-            "poi_count": len(destination.pois),
+            "dimensions_populated": len([d for d in dimensions.values() if hasattr(d, 'value') and d.value is not None]) if isinstance(dimensions, dict) else 0,
+            "temporal_coverage": len(temporal_slices),
+            "poi_count": len(pois),
             "data_completeness_score": self._calculate_overall_quality_score(destination),
             "export_efficiency_score": self._calculate_export_efficiency_score(destination, evidence_registry)
         }
@@ -878,10 +1000,18 @@ class ConsolidatedJsonExportManager:
             # Assume all evidence is deduplicated in registry
             scores.append(1.0)
         
+        # Safe access to themes
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
         # Reference-based architecture efficiency
         reference_usage = 0
         total_relationships = 0
-        for theme in destination.themes:
+        for theme in themes:
             if hasattr(theme, 'evidence_references'):
                 reference_usage += 1
             total_relationships += 1
@@ -896,15 +1026,37 @@ class ConsolidatedJsonExportManager:
         """Calculate overall data quality score (0-1)"""
         scores = []
         
+        # Safe access to destination attributes
+        def safe_get_dest_attr(obj, attr, default=None):
+            if hasattr(obj, attr):
+                return getattr(obj, attr, default)
+            elif isinstance(obj, dict):
+                return obj.get(attr, default)
+            else:
+                return default
+        
+        themes = safe_get_dest_attr(destination, 'themes', [])
+        temporal_slices = safe_get_dest_attr(destination, 'temporal_slices', [])
+        dimensions = safe_get_dest_attr(destination, 'dimensions', {})
+        pois = safe_get_dest_attr(destination, 'pois', [])
+        
         # Theme quality
-        if destination.themes:
-            high_conf_ratio = len([t for t in destination.themes if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]]) / len(destination.themes)
+        if themes:
+            high_conf_count = 0
+            for t in themes:
+                if hasattr(t, 'get_confidence_level') and callable(getattr(t, 'get_confidence_level')):
+                    try:
+                        if t.get_confidence_level() in [ConfidenceLevel.HIGH, ConfidenceLevel.VERY_HIGH]:
+                            high_conf_count += 1
+                    except:
+                        pass
+            high_conf_ratio = high_conf_count / len(themes)
             scores.append(high_conf_ratio)
         
         # Data completeness
-        has_temporal = 1.0 if destination.temporal_slices else 0.0
-        has_dimensions = 1.0 if any(d.value is not None for d in destination.dimensions.values()) else 0.0
-        has_pois = 1.0 if destination.pois else 0.0
+        has_temporal = 1.0 if temporal_slices else 0.0
+        has_dimensions = 1.0 if (isinstance(dimensions, dict) and any(hasattr(d, 'value') and d.value is not None for d in dimensions.values())) else 0.0
+        has_pois = 1.0 if pois else 0.0
         
         completeness = (has_temporal + has_dimensions + has_pois) / 3.0
         scores.append(completeness)
@@ -968,11 +1120,12 @@ class ConsolidatedJsonExportManager:
         """Archive exports older than specified days"""
         archive_date = datetime.now().timestamp() - (days_to_keep * 24 * 60 * 60)
         
+        # Ensure archive directory exists
+        archive_dir = self.base_path / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        
         for filepath in self.consolidated_path.glob(f"dest_{destination_id}_*_*.json"):
             if filepath.stat().st_mtime < archive_date:
-                # Ensure archive directory exists
-                archive_dir = self.base_path / "archive"
-                archive_dir.mkdir(parents=True, exist_ok=True)
                 archive_file = archive_dir / filepath.name
                 filepath.rename(archive_file)
                 self.logger.info(f"Archived old export: {filepath.name}") 

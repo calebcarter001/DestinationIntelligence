@@ -14,7 +14,8 @@ CATEGORY_PROCESSING_RULES = {
     "cultural": {
         "categories": [
             "Cultural Identity & Atmosphere", "Authentic Experiences", "Distinctive Features",
-            "Local Character & Vibe", "Artistic & Creative Scene"
+            "Local Character & Vibe", "Artistic & Creative Scene",
+            "Cultural", "Local Culture", "Heritage", "Arts", "Music", "Festivals"
         ],
         "color": "#9C27B0",
         "icon": "🎭",
@@ -32,7 +33,8 @@ CATEGORY_PROCESSING_RULES = {
     "hybrid": {
         "categories": [
             "Food & Dining", "Entertainment & Nightlife", "Nature & Outdoor",
-            "Shopping & Local Craft", "Family & Education", "Health & Wellness"
+            "Shopping & Local Craft", "Family & Education", "Health & Wellness",
+            "Popular", "POI", "Entertainment", "Food", "Dining", "Shopping"
         ],
         "color": "#4CAF50",
         "icon": "⚖️",

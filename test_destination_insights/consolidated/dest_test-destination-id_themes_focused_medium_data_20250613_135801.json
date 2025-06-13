@@ -1,7 +1,7 @@
 {
   "export_metadata": {
     "version": "3.1",
-    "export_timestamp": "2025-06-12T18:41:02.824794",
+    "export_timestamp": "2025-06-13T13:58:01.108790",
     "destination_id": "test-destination-id",
     "export_type": "themes_focused",
     "export_mode": "themes_focused"
@@ -30,7 +30,7 @@
     "visa_info_url": null,
     "gdp_per_capita_usd": null,
     "hdi": null,
-    "last_updated": "2025-06-12T18:41:02.824394",
+    "last_updated": "2025-06-13T13:58:01.108391",
     "destination_revision": 1,
     "lineage": {},
     "meta": {}
@@ -62,7 +62,7 @@
           "test",
           "enhanced"
         ],
-        "created": "2025-06-12T18:41:02.824380",
+        "created": "2025-06-13T13:58:01.108376",
         "last_validated": null,
         "factors": {
           "source_diversity": 3,

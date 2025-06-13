@@ -394,20 +394,20 @@ class EnhancedThemeAnalysisTool:
         """
         try:
             print(f"DEBUG_ETA: Starting enhanced theme analysis for {input_data.destination_name}", file=sys.stderr)
-        
+            
             # STEP 1: Extract Evidence from raw content
             all_evidence = await self._extract_evidence(
                 input_data.text_content_list,
                 input_data.country_code
             )
             print(f"DEBUG_ETA: STEP 1 (extract_evidence) COMPLETED. Found {len(all_evidence)} evidence pieces.", file=sys.stderr)
-
+            
             # ARCHITECTURAL FIX: If no evidence found, return empty result immediately
             if not all_evidence or len(all_evidence) == 0:
                 self.logger.warning("🚨 ARCHITECTURAL FIX: No evidence extracted - returning empty theme analysis")
                 return {
                     "destination_name": input_data.destination_name,
-            "country_code": input_data.country_code,
+                    "country_code": input_data.country_code,
                     "themes": [],
                     "evidence": [],
                     "evidence_summary": {"total_evidence": 0, "evidence_sources": 0, "evidence_quality": 0.0},  # ADD MISSING FIELD
@@ -608,7 +608,7 @@ class EnhancedThemeAnalysisTool:
                 "themes": [ThemeWrapper(theme) for theme in enhanced_themes],
                 "evidence": [ev.to_dict() for ev in all_evidence],
                 "evidence_summary": {
-                    "total_evidence": len(all_evidence),
+                    "total_evidence": len(all_evidence), 
                     "evidence_sources": len(set(ev.source_url for ev in all_evidence)), 
                     "evidence_quality": sum(ev.confidence for ev in all_evidence) / len(all_evidence) if all_evidence else 0.0
                 },
@@ -653,7 +653,7 @@ class EnhancedThemeAnalysisTool:
                     "evidence_per_theme_avg": 0,
                     "processing_note": f"Error during analysis: {str(e)}"
                 }
-        }
+            }
     
     async def _extract_evidence(
         self, content_list: List[Dict[str, Any]], country_code: str
@@ -1345,463 +1345,6 @@ class EnhancedThemeAnalysisTool:
                             'actionability_score': 0.0
                         }
                     
-                    poi_candidates[poi_name]['evidence'].append(evidence)
-                    
-                    # Calculate inspiration score based on context
-                    inspiration_keywords = ['must see', 'famous', 'iconic', 'beautiful', 'stunning', 'amazing', 'incredible', 'spectacular', 'breathtaking', 'popular', 'top attraction']
-                    inspiration_score = sum(1 for keyword in inspiration_keywords if keyword in context) * 0.2
-                    poi_candidates[poi_name]['inspiration_score'] = max(poi_candidates[poi_name]['inspiration_score'], inspiration_score)
-                    
-                    # Calculate actionability score
-                    actionable_keywords = ['visit', 'open', 'hours', 'location', 'address', 'website', 'phone', 'book', 'reserve', 'admission', 'ticket']
-                    actionability_score = sum(1 for keyword in actionable_keywords if keyword in context) * 0.1
-                    poi_candidates[poi_name]['actionability_score'] = max(poi_candidates[poi_name]['actionability_score'], actionability_score)
-        
-        # Create POI themes from candidates with STRICT QUALITY REQUIREMENTS
-        for poi_name, poi_data in poi_candidates.items():
-            # Require at least 1 evidence and some inspiration/actionability score
-            if (len(poi_data['evidence']) >= 1 and 
-                (poi_data['inspiration_score'] > 0 or poi_data['actionability_score'] > 0)):
-                
-                # Calculate confidence using safe_get_confidence_value
-                confidence_scores = []
-                for evidence in poi_data['evidence']:
-                    conf = safe_get_confidence_value(evidence, 'confidence', 0.0)
-                    confidence_scores.append(conf)
-                
-                avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.5
-                
-                theme = Theme(
-                    theme_id=hashlib.md5(poi_name.encode()).hexdigest()[:12],
-                    macro_category="POI",
-                    micro_category=poi_name,
-                    name=poi_name,
-                    description=f"Visit {poi_name} in {destination_name} - a specific point of interest for travelers",
-                    fit_score=min(1.0, poi_data['inspiration_score'] + poi_data['actionability_score'] + 0.3),
-                    evidence=poi_data['evidence'],
-                    tags=[poi_name.lower().replace(' ', '_'), 'poi', 'specific_location'],
-                    created_date=datetime.now(),
-                    metadata={
-                        'category_type': 'poi',
-                        'inspiration_score': poi_data['inspiration_score'],
-                        'specificity_score': poi_data['specificity_score'],
-                        'actionability_score': poi_data['actionability_score'],
-                        'evidence_count': len(poi_data['evidence'])
-                    }
-                )
-                
-                # Set confidence breakdown using safe access
-                if hasattr(theme, 'confidence_breakdown'):
-                    theme.confidence_breakdown = type('ConfidenceBreakdown', (), {
-                        'overall_confidence': avg_confidence,
-                        'evidence_quality': avg_confidence,
-                        'source_diversity': min(1.0, len(set(safe_get(ev, 'source_url', '') if isinstance(ev, dict) else getattr(ev, 'source_url', '') for ev in poi_data['evidence'])) / 3.0),
-                        'temporal_coverage': 0.7,
-                        'content_completeness': 0.8
-                    })()
-                
-                poi_themes.append(theme)
-        
-        # Sort by inspiration + actionability score
-        poi_themes.sort(key=lambda t: safe_get(t.metadata, 'inspiration_score', 0.0) + safe_get(t.metadata, 'actionability_score', 0.0), reverse=True)
-        
-        self.logger.info(f"📍 Extracted {len(poi_themes)} high-quality POI themes: {[t.name for t in poi_themes[:5]]}")
-        return poi_themes
-
-    def _extract_popular_themes(self, evidence_list: List[Evidence], destination_name: str) -> List[Theme]:
-        """Extract popular/trending themes that inspire travel - FIXED VERSION"""
-        popular_themes = []
-        attraction_indicators = {}
-        
-        # REAL TOURIST ATTRACTION PATTERNS - Focus on actual places and activities
-        attraction_patterns = [
-            # Specific attraction names with context
-            r'(?:visit|see|explore|experience|check out|don\'t miss)\s+(?:the\s+)?([A-Z][a-zA-Z\s&\-\']{3,40}?)(?:\s+(?:museum|center|park|market|building|tower|bridge|waterfront|pier|garden|gallery|theater|stadium|arena|aquarium|zoo|observatory|lighthouse|monument|memorial|plaza|square))?',
-            
-            # Popular activities and experiences
-            r'(?:popular|famous|must-see|iconic|trending|top|best)\s+(?:attraction|destination|experience|activity|place|spot|location|site)\s*:?\s*([A-Z][a-zA-Z\s&\-\']{3,40})',
-            
-            # Social media and review mentions
-            r'(?:everyone|people|tourists|visitors)\s+(?:love|loves|recommend|recommends|talk about|mention|visit|visits)\s+([A-Z][a-zA-Z\s&\-\']{3,40})',
-            
-            # Superlative descriptions
-            r'(?:most|best|top|greatest|finest|premier)\s+([A-Z][a-zA-Z\s&\-\']{3,40}?)\s+(?:in|of|for)\s+(?:the\s+)?(?:city|area|region|state|country)',
-            
-            # Specific known popular attractions
-            r'\b(Space Needle|Pike Place Market|Seattle Center|Chihuly Garden|Underground Tour|Great Wheel|Kerry Park|Gas Works Park|Discovery Park|Fremont Troll|Ballard Locks)\b',
-            r'\b(Grand Canyon|Lowell Observatory|Flagstaff Historic Downtown|Route 66|San Francisco Peaks|Sunset Crater|Oak Creek Canyon|Slide Rock|Bell Rock|Cathedral Rock)\b'
-        ]
-        
-        # POPULARITY INDICATORS - What makes something "popular"
-        popularity_keywords = [
-            'popular', 'famous', 'iconic', 'must-see', 'must-visit', 'trending', 'viral',
-            'everyone goes', 'everyone visits', 'top attraction', 'main attraction',
-            'signature', 'landmark', 'symbol', 'representative', 'quintessential',
-            'bucket list', 'once in a lifetime', 'unforgettable', 'unmissable',
-            'instagram', 'photo opportunity', 'selfie spot', 'picture perfect'
-        ]
-        
-        # BLACKLIST - Filter out non-attractions
-        attraction_blacklist = {
-            'airport', 'station', 'terminal', 'parking', 'garage', 'lot',
-            'hotel', 'motel', 'inn', 'lodge', 'resort', 'accommodation',
-            'restaurant', 'cafe', 'bar', 'pub', 'diner', 'eatery',
-            'shop', 'store', 'mall', 'outlet', 'boutique', 'market',
-            'office', 'building', 'tower', 'complex', 'center', 'facility'
-        }
-        
-        for evidence in evidence_list:
-            text = safe_get(evidence, 'text_snippet', '') if isinstance(evidence, dict) else getattr(evidence, 'text_snippet', '')
-            
-            # Extract popular attractions using patterns
-            for pattern in attraction_patterns:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
-                for match in matches:
-                    attraction_name = match.group(1).strip() if len(match.groups()) > 0 else match.group(0).strip()
-                    
-                    # Skip if it's just the destination name
-                    if destination_name.lower() in attraction_name.lower():
-                        continue
-                    
-                    # STRICT FILTERING - Check against blacklist
-                    attraction_lower = attraction_name.lower()
-                    if any(blacklisted in attraction_lower for blacklisted in attraction_blacklist):
-                        continue
-                    
-                    # Additional filtering for quality
-                    if (len(attraction_name) < 4 or len(attraction_name) > 60 or
-                        attraction_name.count(' ') > 5 or  # Too many words
-                        not re.match(r'^[A-Za-z\s&\-\'\.]+$', attraction_name)):  # Only valid characters
-                        continue
-                    
-                    # Clean up attraction name
-                    attraction_name = self._clean_poi_name(attraction_name)
-                    
-                    # Calculate popularity score based on context
-                    context_start = max(0, text.lower().find(attraction_name.lower()) - 100)
-                    context_end = min(len(text), text.lower().find(attraction_name.lower()) + len(attraction_name) + 100)
-                    context = text[context_start:context_end].lower()
-                    
-                    # Check for popularity indicators
-                    popularity_score = sum(1 for keyword in popularity_keywords if keyword in context) * 0.3
-                    
-                    # Require some popularity indicators
-                    if popularity_score == 0:
-                        continue
-                    
-                    if attraction_name not in attraction_indicators:
-                        attraction_indicators[attraction_name] = {
-                            'evidence': [],
-                            'popularity_score': 0.0,
-                            'inspiration_score': 0.0,
-                            'social_mentions': 0
-                        }
-                    
-                    attraction_indicators[attraction_name]['evidence'].append(evidence)
-                    attraction_indicators[attraction_name]['popularity_score'] = max(
-                        attraction_indicators[attraction_name]['popularity_score'], 
-                        popularity_score
-                    )
-                    
-                    # Check for social media mentions
-                    social_keywords = ['instagram', 'facebook', 'twitter', 'tiktok', 'social media', 'viral', 'trending']
-                    if any(keyword in context for keyword in social_keywords):
-                        attraction_indicators[attraction_name]['social_mentions'] += 1
-                    
-                    # Calculate inspiration score
-                    inspiration_keywords = ['beautiful', 'stunning', 'amazing', 'incredible', 'spectacular', 'breathtaking', 'gorgeous', 'magnificent']
-                    inspiration_score = sum(1 for keyword in inspiration_keywords if keyword in context) * 0.2
-                    attraction_indicators[attraction_name]['inspiration_score'] = max(
-                        attraction_indicators[attraction_name]['inspiration_score'], 
-                        inspiration_score
-                    )
-        
-        # Create popular themes from candidates with STRICT QUALITY REQUIREMENTS
-        for attraction_name, attraction_data in attraction_indicators.items():
-            # Require high popularity score and multiple evidence pieces
-            if (len(attraction_data['evidence']) >= 1 and 
-                attraction_data['popularity_score'] >= 0.3):
-                
-                # Calculate confidence using safe_get_confidence_value
-                confidence_scores = []
-                for evidence in attraction_data['evidence']:
-                    conf = safe_get_confidence_value(evidence, 'confidence', 0.0)
-                    confidence_scores.append(conf)
-                
-                avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.5
-                
-                # Calculate overall fit score
-                fit_score = min(1.0, 
-                    attraction_data['popularity_score'] + 
-                    attraction_data['inspiration_score'] + 
-                    (attraction_data['social_mentions'] * 0.1) + 
-                    0.2  # Base score for being mentioned
-                )
-                
-                theme = Theme(
-                    theme_id=hashlib.md5(attraction_name.encode()).hexdigest()[:12],
-                    macro_category="Popular",
-                    micro_category=attraction_name,
-                    name=attraction_name,
-                    description=f"Experience {attraction_name} in {destination_name} - a popular attraction that inspires travelers",
-                    fit_score=fit_score,
-                    evidence=attraction_data['evidence'],
-                    tags=[attraction_name.lower().replace(' ', '_'), 'popular', 'trending', 'must_see'],
-                    created_date=datetime.now(),
-                    metadata={
-                        'category_type': 'popular',
-                        'popularity_score': attraction_data['popularity_score'],
-                        'inspiration_score': attraction_data['inspiration_score'],
-                        'social_mentions': attraction_data['social_mentions'],
-                        'evidence_count': len(attraction_data['evidence'])
-                    }
-                )
-                
-                # Set confidence breakdown using safe access
-                if hasattr(theme, 'confidence_breakdown'):
-                    theme.confidence_breakdown = type('ConfidenceBreakdown', (), {
-                        'overall_confidence': avg_confidence,
-                        'evidence_quality': avg_confidence,
-                        'source_diversity': min(1.0, len(set(safe_get(ev, 'source_url', '') if isinstance(ev, dict) else getattr(ev, 'source_url', '') for ev in attraction_data['evidence'])) / 3.0),
-                        'temporal_coverage': 0.8,
-                        'content_completeness': 0.9
-                    })()
-                
-                popular_themes.append(theme)
-        
-        # Sort by popularity + inspiration score
-        popular_themes.sort(key=lambda t: safe_get(t.metadata, 'popularity_score', 0.0) + safe_get(t.metadata, 'inspiration_score', 0.0), reverse=True)
-        
-        self.logger.info(f"🔥 Extracted {len(popular_themes)} high-quality popular themes: {[t.name for t in popular_themes[:5]]}")
-        return popular_themes
-
-    def _extract_cultural_themes(self, evidence_list: List[Evidence], destination_name: str) -> List[Theme]:
-        """Extract cultural and authentic experience themes"""
-        cultural_themes = []
-        cultural_indicators = {}
-        
-        # CULTURAL EXPERIENCE PATTERNS
-        cultural_patterns = [
-            r'(?:local|authentic|traditional|cultural|heritage|historic)\s+([A-Z][a-zA-Z\s&\-\']{3,40}?)(?:\s+(?:experience|tradition|culture|festival|event|celebration|ceremony|practice|art|craft|food|cuisine))?',
-            r'(?:experience|discover|explore)\s+(?:the\s+)?(?:local|authentic|traditional|cultural)\s+([A-Z][a-zA-Z\s&\-\']{3,40})',
-            r'(?:immerse|dive into|learn about)\s+(?:the\s+)?([A-Z][a-zA-Z\s&\-\']{3,40}?)\s+(?:culture|tradition|heritage|history|way of life)'
-        ]
-        
-        cultural_keywords = [
-            'authentic', 'traditional', 'cultural', 'heritage', 'historic', 'local',
-            'indigenous', 'native', 'folk', 'artisan', 'craft', 'handmade',
-            'festival', 'celebration', 'ceremony', 'ritual', 'custom', 'tradition',
-            'art', 'music', 'dance', 'performance', 'theater', 'gallery',
-            'cuisine', 'food', 'cooking', 'recipe', 'dish', 'specialty'
-        ]
-        
-        for evidence in evidence_list:
-            text = safe_get(evidence, 'text_snippet', '') if isinstance(evidence, dict) else getattr(evidence, 'text_snippet', '')
-            
-            # Extract cultural experiences using patterns
-            for pattern in cultural_patterns:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
-                for match in matches:
-                    cultural_name = match.group(1).strip() if len(match.groups()) > 0 else match.group(0).strip()
-                    
-                    # Skip if it's just the destination name
-                    if destination_name.lower() in cultural_name.lower():
-                        continue
-                    
-                    # Additional filtering for quality
-                    if (len(cultural_name) < 4 or len(cultural_name) > 60 or
-                        cultural_name.count(' ') > 5):
-                        continue
-                    
-                    # Calculate cultural authenticity score
-                    context_start = max(0, text.lower().find(cultural_name.lower()) - 100)
-                    context_end = min(len(text), text.lower().find(cultural_name.lower()) + len(cultural_name) + 100)
-                    context = text[context_start:context_end].lower()
-                    
-                    cultural_score = sum(1 for keyword in cultural_keywords if keyword in context) * 0.2
-                    
-                    # Require some cultural indicators
-                    if cultural_score == 0:
-                        continue
-                    
-                    if cultural_name not in cultural_indicators:
-                        cultural_indicators[cultural_name] = {
-                            'evidence': [],
-                            'cultural_score': 0.0,
-                            'authenticity_score': 0.0
-                        }
-                    
-                    cultural_indicators[cultural_name]['evidence'].append(evidence)
-                    cultural_indicators[cultural_name]['cultural_score'] = max(
-                        cultural_indicators[cultural_name]['cultural_score'], 
-                        cultural_score
-                    )
-        
-        # Create cultural themes from candidates
-        for cultural_name, cultural_data in cultural_indicators.items():
-            if (len(cultural_data['evidence']) >= 1 and 
-                cultural_data['cultural_score'] >= 0.2):
-                
-                confidence_scores = []
-                for evidence in cultural_data['evidence']:
-                    conf = safe_get_confidence_value(evidence, 'confidence', 0.0)
-                    confidence_scores.append(conf)
-                
-                avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.5
-                
-                theme = Theme(
-                    theme_id=hashlib.md5(cultural_name.encode()).hexdigest()[:12],
-                    macro_category="Cultural",
-                    micro_category=cultural_name,
-                    name=cultural_name,
-                    description=f"Experience {cultural_name} in {destination_name} - an authentic cultural experience",
-                    fit_score=min(1.0, cultural_data['cultural_score'] + 0.3),
-                    evidence=cultural_data['evidence'],
-                    tags=[cultural_name.lower().replace(' ', '_'), 'cultural', 'authentic', 'local'],
-                    created_date=datetime.now(),
-                    metadata={
-                        'category_type': 'cultural',
-                        'cultural_score': cultural_data['cultural_score'],
-                        'evidence_count': len(cultural_data['evidence'])
-                    }
-                )
-                
-                # Set confidence breakdown
-                if hasattr(theme, 'confidence_breakdown'):
-                    theme.confidence_breakdown = type('ConfidenceBreakdown', (), {
-                        'overall_confidence': avg_confidence,
-                        'evidence_quality': avg_confidence,
-                        'source_diversity': min(1.0, len(set(safe_get(ev, 'source_url', '') if isinstance(ev, dict) else getattr(ev, 'source_url', '') for ev in cultural_data['evidence'])) / 3.0),
-                        'temporal_coverage': 0.6,
-                        'content_completeness': 0.7
-                    })()
-                
-                cultural_themes.append(theme)
-        
-        # Sort by cultural score
-        cultural_themes.sort(key=lambda t: safe_get(t.metadata, 'cultural_score', 0.0), reverse=True)
-        
-        self.logger.info(f"🎭 Extracted {len(cultural_themes)} cultural themes: {[t.name for t in cultural_themes[:3]]}")
-        return cultural_themes
-
-    def _extract_practical_themes(self, evidence_list: List[Evidence], destination_name: str) -> List[Theme]:
-        """Extract essential practical travel information themes"""
-        practical_themes = []
-        practical_indicators = {}
-        
-        # PRACTICAL TRAVEL PATTERNS
-        practical_patterns = [
-            r'(?:travel|transportation|getting|safety|budget|cost|weather|climate|best time|when to visit)\s+(?:to|around|in|for)\s+([A-Z][a-zA-Z\s&\-\']{3,40})',
-            r'(?:essential|important|need to know|should know|tips|advice)\s+(?:for|about)\s+(?:visiting|traveling to)\s+([A-Z][a-zA-Z\s&\-\']{3,40})',
-            r'([A-Z][a-zA-Z\s&\-\']{3,40}?)\s+(?:travel guide|visitor information|tourist information|travel tips|safety tips|budget guide)'
-        ]
-        
-        practical_keywords = [
-            'transportation', 'getting around', 'public transport', 'taxi', 'uber', 'bus', 'train',
-            'safety', 'security', 'crime', 'safe areas', 'avoid', 'dangerous',
-            'budget', 'cost', 'price', 'expensive', 'cheap', 'affordable', 'money',
-            'weather', 'climate', 'temperature', 'rain', 'snow', 'season',
-            'visa', 'passport', 'requirements', 'documents', 'customs', 'immigration',
-            'health', 'medical', 'hospital', 'pharmacy', 'insurance', 'vaccination'
-        ]
-        
-        for evidence in evidence_list:
-            text = safe_get(evidence, 'text_snippet', '') if isinstance(evidence, dict) else getattr(evidence, 'text_snippet', '')
-            
-            # Look for practical information
-            for pattern in practical_patterns:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
-                for match in matches:
-                    practical_name = match.group(1).strip() if len(match.groups()) > 0 else "Travel Essentials"
-                    
-                    # Calculate practical relevance score
-                    context_start = max(0, text.lower().find(practical_name.lower()) - 100)
-                    context_end = min(len(text), text.lower().find(practical_name.lower()) + len(practical_name) + 100)
-                    context = text[context_start:context_end].lower()
-                    
-                    practical_score = sum(1 for keyword in practical_keywords if keyword in context) * 0.3
-                    
-                    # Require high practical relevance
-                    if practical_score < 0.3:
-                        continue
-                    
-                    practical_name = f"Travel Essentials for {destination_name}"
-                    
-                    if practical_name not in practical_indicators:
-                        practical_indicators[practical_name] = {
-                            'evidence': [],
-                            'practical_score': 0.0
-                        }
-                    
-                    practical_indicators[practical_name]['evidence'].append(evidence)
-                    practical_indicators[practical_name]['practical_score'] = max(
-                        practical_indicators[practical_name]['practical_score'], 
-                        practical_score
-                    )
-        
-        # Create practical themes from candidates
-        for practical_name, practical_data in practical_indicators.items():
-            if (len(practical_data['evidence']) >= 1 and 
-                practical_data['practical_score'] >= 0.3):
-                
-                confidence_scores = []
-                for evidence in practical_data['evidence']:
-                    conf = safe_get_confidence_value(evidence, 'confidence', 0.0)
-                    confidence_scores.append(conf)
-                
-                avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.5
-                
-                theme = Theme(
-                    theme_id=hashlib.md5(practical_name.encode()).hexdigest()[:12],
-                    macro_category="Practical",
-                    micro_category="Travel Information",
-                    name=practical_name,
-                    description=f"Essential travel information for visiting {destination_name}",
-                    fit_score=min(1.0, practical_data['practical_score'] + 0.2),
-                    evidence=practical_data['evidence'],
-                    tags=['practical', 'travel_info', 'essential', 'planning'],
-                    created_date=datetime.now(),
-                    metadata={
-                        'category_type': 'practical',
-                        'practical_score': practical_data['practical_score'],
-                        'evidence_count': len(practical_data['evidence'])
-                    }
-                )
-                
-                # Set confidence breakdown
-                if hasattr(theme, 'confidence_breakdown'):
-                    theme.confidence_breakdown = type('ConfidenceBreakdown', (), {
-                        'overall_confidence': avg_confidence,
-                        'evidence_quality': avg_confidence,
-                        'source_diversity': min(1.0, len(set(safe_get(ev, 'source_url', '') if isinstance(ev, dict) else getattr(ev, 'source_url', '') for ev in practical_data['evidence'])) / 3.0),
-                        'temporal_coverage': 0.9,
-                        'content_completeness': 0.8
-                    })()
-                
-                practical_themes.append(theme)
-        
-        # Sort by practical score
-        practical_themes.sort(key=lambda t: safe_get(t.metadata, 'practical_score', 0.0), reverse=True)
-        
-        self.logger.info(f"🗺️ Extracted {len(practical_themes)} practical themes: {[t.name for t in practical_themes[:2]]}")
-        return practical_themes
-
-    def _extract_insider_tips(self, content: str, actionable_details: List[str] = None) -> List[str]:
-        """Extract insider tips and local advice from content"""
-        tips = []
-        
-        # Split content into sentences for analysis
-        sentences = content.split('.')
-        
-        # Check for advice patterns
-        advice_indicators = [
-            "make sure to", "don't forget to", "be sure to", "remember to",
-            "avoid", "watch out for", "best time to", "ideal time",
-            "locals recommend", "locals suggest", "word of advice",
-            "you should", "it's worth", "don't miss"
-        ]
-        
-        for sentence in sentences:
             if any(indicator in sentence.lower() for indicator in advice_indicators):
                 # Clean up the sentence and add as tip
                 clean_tip = sentence.strip()
@@ -1876,37 +1419,6 @@ class EnhancedThemeAnalysisTool:
         sentiment = (positive_score - negative_score) / (positive_score + negative_score + 0.1)
         return max(-1.0, min(1.0, sentiment))
     
-    def _clean_poi_name(self, poi_name: str) -> str:
-        """Clean and normalize POI names"""
-        if not poi_name:
-            return ""
-        
-        # Remove common prefixes/suffixes that aren't part of the actual name
-        poi_name = poi_name.strip()
-        
-        # Remove leading articles
-        for article in ['the ', 'The ', 'a ', 'A ', 'an ', 'An ']:
-            if poi_name.startswith(article):
-                poi_name = poi_name[len(article):]
-        
-        # Remove trailing location indicators
-        location_suffixes = [
-            ' - Seattle', ' - Flagstaff', ' in Seattle', ' in Flagstaff',
-            ', Seattle', ', Flagstaff', ' (Seattle)', ' (Flagstaff)'
-        ]
-        for suffix in location_suffixes:
-            if poi_name.endswith(suffix):
-                poi_name = poi_name[:-len(suffix)]
-        
-        # Clean up extra whitespace
-        poi_name = ' '.join(poi_name.split())
-        
-        # Capitalize properly
-        if poi_name and not poi_name[0].isupper():
-            poi_name = poi_name[0].upper() + poi_name[1:]
-        
-        return poi_name
-
     def _extract_published_date(self, content: str, url: str) -> Optional[datetime]:
         """Extract published date from content or URL"""
         import re
@@ -1935,6 +1447,151 @@ class EnhancedThemeAnalysisTool:
         
         # If no date found, return None
         return None
+    
+    def _build_evidence_relationships(
+        self, chunk_idx: int, chunk_relationships: Dict, content_idx: int, chunks: List
+    ) -> List[Dict[str, str]]:
+        """Build relationships between evidence pieces"""
+        relationships = []
+        
+        # Add relationships to related chunks in same content
+        for related_chunk_idx in chunk_relationships.get(chunk_idx, []):
+            relationships.append({
+                "target_id": f"{content_idx}-{related_chunk_idx}",
+                "relationship_type": "content_sequence",
+                "strength": "high"
+            })
+        
+        # Add relationship to source content
+        relationships.append({
+            "target_id": f"content_{content_idx}",
+            "relationship_type": "source_document", 
+            "strength": "direct"
+        })
+        
+        # Add thematic relationships based on chunk context
+        current_chunk = chunks[chunk_idx]
+        current_topics = safe_get_nested(current_chunk, ["context", "topics"], [])
+        
+        for other_idx, other_chunk in enumerate(chunks):
+            if other_idx != chunk_idx:
+                other_topics = safe_get_nested(other_chunk, ["context", "topics"], [])
+                shared_topics = set(current_topics) & set(other_topics)
+                if shared_topics:
+                    relationships.append({
+                        "target_id": f"{content_idx}-{other_idx}",
+                        "relationship_type": "thematic_similarity",
+                        "strength": "medium",
+                        "shared_topics": list(shared_topics)
+                    })
+        
+        return relationships
+    
+    def _extract_title_from_content(self, text: str) -> str:
+        """Extract potential title from content text"""
+        lines = text.split('\n')
+        # Look for first substantial line that could be a title
+        for line in lines[:3]:  # Check first 3 lines
+            line = line.strip()
+            if len(line) > 10 and len(line) < 100:  # Reasonable title length
+                return line
+        
+        # Fallback: use first sentence
+        sentences = text.split('.')
+        if sentences:
+            first_sentence = sentences[0].strip()
+            if len(first_sentence) < 150:  # Not too long for a title
+                return first_sentence
+        
+        return "Content Extract"
+    
+    def _detect_language_indicators(self, text: str, url: str) -> List[str]:
+        """Detect language indicators in text and URL"""
+        indicators = []
+        
+        # URL-based indicators
+        url_lower = url.lower()
+        if '.fr' in url_lower or '/fr/' in url_lower:
+            indicators.append("french")
+        if '.es' in url_lower or '/es/' in url_lower:
+            indicators.append("spanish")
+        if '.de' in url_lower or '/de/' in url_lower:
+            indicators.append("german")
+        if '.it' in url_lower or '/it/' in url_lower:
+            indicators.append("italian")
+        
+        # Text-based indicators (simple character pattern detection)
+        text_sample = text.lower()[:500]  # First 500 chars
+        
+        # Common non-English words/patterns
+        if any(word in text_sample for word in ['le ', 'la ', 'des ', 'une ', 'avec']):
+            indicators.append("french_content")
+        if any(word in text_sample for word in ['el ', 'la ', 'los ', 'las ', 'con ']):
+            indicators.append("spanish_content")
+        if any(word in text_sample for word in ['der ', 'die ', 'das ', 'und ', 'mit ']):
+            indicators.append("german_content")
+        
+        # Default to English if no other indicators
+        if not indicators:
+            indicators.append("english")
+        
+        return indicators
+    
+    def _assess_content_quality(self, text: str) -> float:
+        """Assess the quality of content based on various factors"""
+        score = 0.0
+        
+        # Length factor (not too short, not too long)
+        word_count = len(text.split())
+        if 50 <= word_count <= 500:
+            score += 0.3
+        elif 20 <= word_count < 50 or 500 < word_count <= 1000:
+            score += 0.2
+        elif word_count > 1000:
+            score += 0.1
+        
+        # Sentence structure (variety in sentence length)
+        sentences = text.split('.')
+        if len(sentences) > 1:
+            sentence_lengths = [len(s.split()) for s in sentences if s.strip()]
+            if sentence_lengths:
+                avg_length = sum(sentence_lengths) / len(sentence_lengths)
+                if 8 <= avg_length <= 20:  # Good average sentence length
+                    score += 0.2
+        
+        # Information density (specific terms, numbers, names)
+        specific_indicators = len([
+            word for word in text.split()
+            if word[0].isupper() or word.isdigit() or '$' in word or '%' in word
+        ])
+        density = specific_indicators / max(len(text.split()), 1)
+        if 0.1 <= density <= 0.3:
+            score += 0.3
+        
+        # Grammar indicators (proper punctuation)
+        punctuation_count = sum(1 for char in text if char in '.!?:;')
+        if punctuation_count > len(text.split()) * 0.05:  # Reasonable punctuation
+            score += 0.2
+        
+        return min(score, 1.0)
+    
+    def _assess_geographic_specificity(self, text: str, local_entities: List[str]) -> float:
+        """Assess how geographically specific the content is"""
+        # Base score from local entities
+        entity_score = min(len(local_entities) * 0.2, 0.6)
+        
+        # Look for geographic terms
+        geographic_terms = [
+            'located', 'address', 'street', 'avenue', 'road', 'near', 'downtown',
+            'neighborhood', 'district', 'area', 'region', 'north', 'south', 'east', 'west',
+            'miles', 'kilometers', 'km', 'minutes', 'walk', 'drive', 'direction'
+        ]
+        
+        text_lower = text.lower()
+        geo_term_count = sum(1 for term in geographic_terms if term in text_lower)
+        geo_score = min(geo_term_count * 0.1, 0.4)
+        
+        return min(entity_score + geo_score, 1.0)
 
     def _classify_source_category(self, url: str, title: str, content: str) -> SourceCategory:
         """Classify the source category based on URL, title, and content"""
@@ -2015,274 +1672,438 @@ class EnhancedThemeAnalysisTool:
             # Unknown sources get the URL weight
             return url_weight
 
-    def _extract_authentic_insights_from_evidence(self, evidence_list: List[Evidence]) -> List[Dict[str, Any]]:
-        """Extract authentic insights from evidence pieces"""
-        insights = []
-        
-        if not evidence_list:
-            return insights
-        
-        # Group evidence by type for different insight extraction strategies
-        evidence_by_type = {}
-        for evidence in evidence_list:
-            evidence_type = getattr(evidence, 'evidence_type', 'general')
-            if evidence_type not in evidence_by_type:
-                evidence_by_type[evidence_type] = []
-            evidence_by_type[evidence_type].append(evidence)
-        
-        # Extract insights based on evidence patterns
-        for evidence_type, type_evidence in evidence_by_type.items():
-            if len(type_evidence) >= 2:  # Need at least 2 pieces for pattern recognition
-                
-                # Look for recurring themes in the evidence
-                common_terms = self._find_common_terms_in_evidence(type_evidence)
-                
-                if common_terms:
-                    insight = {
-                        "insight_type": "practical",
-                        "content": f"Multiple sources mention {', '.join(common_terms[:3])}",
-                        "authenticity_score": 0.7,
-                        "uniqueness_score": 0.6,
-                        "actionability_score": 0.8,
-                        "temporal_relevance": 0.7,
-                        "location_exclusivity": "common",
-                        "local_validation_count": len(type_evidence),
-                        "supporting_evidence_ids": [ev.id for ev in type_evidence[:3]]
-                    }
-                    insights.append(insight)
-        
-        # Extract location-specific insights
-        local_evidence = [ev for ev in evidence_list if getattr(ev, 'cultural_context', {}).get('is_local_source', False)]
-        if local_evidence:
-            insight = {
-                "insight_type": "cultural",
-                "content": "Local perspectives available",
-                "authenticity_score": 0.9,
-                "uniqueness_score": 0.8,
-                "actionability_score": 0.7,
-                "temporal_relevance": 0.8,
-                "location_exclusivity": "destination_specific",
-                "local_validation_count": len(local_evidence),
-                "supporting_evidence_ids": [ev.id for ev in local_evidence[:2]]
-            }
-            insights.append(insight)
-        
-        # Limit to top 3 insights to avoid overwhelming
-        return insights[:3]
+    # =============================================================================
+    # CULTURAL INTELLIGENCE: DUAL-TRACK PROCESSING METHODS
+    # =============================================================================
     
-    def _find_common_terms_in_evidence(self, evidence_list: List[Evidence]) -> List[str]:
-        """Find terms that appear in multiple evidence pieces"""
-        from collections import Counter
-        
-        all_terms = []
-        for evidence in evidence_list:
-            text = getattr(evidence, 'text_snippet', '')
-            # Extract key terms (simplified)
-            terms = [word.lower() for word in text.split() 
-                    if len(word) > 3 and word.isalpha()]
-            all_terms.extend(terms)
-        
-        # Find terms that appear in multiple pieces
-        term_counts = Counter(all_terms)
-        common_terms = [term for term, count in term_counts.items() 
-                       if count >= 2 and term not in ['this', 'that', 'with', 'from', 'they', 'have', 'been', 'were', 'will']]
-        
-        return common_terms[:5]  # Return top 5 common terms
-    
-    def _extract_local_authorities_from_theme_evidence(self, evidence_list: List[Evidence]) -> List[Dict[str, Any]]:
-        """Extract local authorities from theme evidence"""
-        authorities = []
-        
-        # Look for evidence from local sources
-        for evidence in evidence_list:
-            cultural_context = getattr(evidence, 'cultural_context', {})
-            if cultural_context.get('is_local_source', False):
-                authority = {
-                    "authority_type": "resident",
-                    "local_tenure": "unknown",
-                    "expertise_domain": "local_knowledge",
-                    "community_validation": 0.7,
-                    "source_evidence_id": evidence.id
-                }
-                authorities.append(authority)
-        
-        # Limit to 2 authorities per theme
-        return authorities[:2]
-    
-    def _extract_seasonal_relevance_from_theme_evidence(self, evidence_list: List[Evidence]) -> Dict[str, Any]:
-        """Extract seasonal relevance from theme evidence"""
-        seasonal_relevance = {
-            "spring": 0.5,
-            "summer": 0.5,
-            "fall": 0.5,
-            "winter": 0.5,
-            "peak_season": "unknown",
-            "seasonal_notes": []
-        }
-        
-        # Look for seasonal indicators in evidence
-        seasonal_terms = {
-            "spring": ["spring", "march", "april", "may", "bloom", "flowers"],
-            "summer": ["summer", "june", "july", "august", "hot", "beach", "festival"],
-            "fall": ["fall", "autumn", "september", "october", "november", "leaves"],
-            "winter": ["winter", "december", "january", "february", "cold", "snow", "holiday"]
-        }
-        
-        season_mentions = {"spring": 0, "summer": 0, "fall": 0, "winter": 0}
-        
-        for evidence in evidence_list:
-            text = getattr(evidence, 'text_snippet', '').lower()
-            for season, terms in seasonal_terms.items():
-                if any(term in text for term in terms):
-                    season_mentions[season] += 1
-        
-        # Calculate seasonal relevance based on mentions
-        total_mentions = sum(season_mentions.values())
-        if total_mentions > 0:
-            for season in season_mentions:
-                seasonal_relevance[season] = season_mentions[season] / total_mentions
+    def _get_processing_type(self, macro_category: str) -> str:
+        """Determine if theme should use cultural, practical, or hybrid processing"""
+        if not macro_category:
+            return "hybrid"
             
-            # Determine peak season
-            peak_season = max(season_mentions, key=season_mentions.get)
-            if season_mentions[peak_season] > 0:
-                seasonal_relevance["peak_season"] = peak_season
+        # Check which processing category this theme belongs to
+        for proc_type, rules in self.category_processing_rules.items():
+            if macro_category in rules["categories"]:
+                return proc_type
+                
+        return "hybrid"  # Default fallback
+    
+    def _calculate_cultural_enhanced_confidence(
+        self,
+        evidence_list: List[Evidence],
+        content_types: Set[str],
+        local_context: Set[str],
+        temporal_aspects: Set[str],
+        theme_category: str = None
+    ) -> Dict[str, float]:
+        """Calculate confidence with cultural intelligence and category-specific rules"""
+        
+        processing_type = self._get_processing_type(theme_category)
+        rules = self.category_processing_rules.get(processing_type, self.category_processing_rules.get("cultural", {}))
+        
+        if processing_type == "cultural":
+            # Cultural themes: Emphasize authenticity over authority
+            components = {
+                "authenticity_score": self._calculate_authenticity_score(evidence_list),
+                "local_relevance": self._calculate_local_relevance(evidence_list, local_context),
+                "distinctiveness": self._calculate_distinctiveness_score(evidence_list),
+                "authority_score": self._calculate_authority_score(evidence_list),
+                "processing_type": processing_type
+            }
+            
+            # Cultural weighting
+            confidence_score = (
+                components["authenticity_score"] * 0.4 +      # High weight on authenticity
+                components["local_relevance"] * 0.3 +         # High weight on local relevance
+                components["distinctiveness"] * 0.2 +         # Distinctiveness matters
+                components["authority_score"] * 0.1           # Authority less important
+            )
+            
+            # Apply authenticity boost
+            if self._has_authentic_indicators(evidence_list):
+                confidence_score += rules.get("authenticity_boost", 0)
+                
+        elif processing_type == "practical":
+            # Practical themes: Emphasize authority and reliability
+            components = {
+                "authority_score": self._calculate_authority_score(evidence_list),
+                "recency_score": self._calculate_recency_score(evidence_list),
+                "consistency_score": self._calculate_consistency_score(evidence_list),
+                "completeness_score": self._calculate_completeness_score(evidence_list, content_types),
+                "local_relevance": self._calculate_local_relevance(evidence_list, local_context),  # Add missing key
+                "processing_type": processing_type
+            }
+            
+            # Practical weighting
+            confidence_score = (
+                components["authority_score"] * 0.5 +         # High weight on authority
+                components["recency_score"] * 0.3 +           # Recency important for practical info
+                components["consistency_score"] * 0.2         # Consistency critical
+            )
+            
+            # Apply authority boost
+            if self._has_authoritative_sources(evidence_list):
+                confidence_score += rules.get("authority_boost", 0)
+                
+        else:  # hybrid
+            # Balanced approach for food, entertainment, etc.
+            components = {
+                "authority_score": self._calculate_authority_score(evidence_list),
+                "authenticity_score": self._calculate_authenticity_score(evidence_list),
+                "local_relevance": self._calculate_local_relevance(evidence_list, local_context),
+                "recency_score": self._calculate_recency_score(evidence_list),
+                "processing_type": processing_type
+            }
+            
+            # Hybrid weighting
+            confidence_score = (
+                components["authority_score"] * 0.3 +
+                components["authenticity_score"] * 0.3 +
+                components["local_relevance"] * 0.2 +
+                components["recency_score"] * 0.2
+            )
+        
+        components["overall_confidence"] = min(max(confidence_score, 0.0), 1.0)
+        components["category_rules_applied"] = rules
+        
+        # CULTURAL INTELLIGENCE: Add compatibility keys for existing confidence calculation
+        # Map new cultural intelligence metrics to expected keys
+        components["evidence_quality"] = components.get("authority_score", 0.0)
+        components["source_diversity"] = min(len(evidence_list) / 3.0, 1.0)  # Simple diversity measure
+        components["temporal_coverage"] = 0.5  # Default temporal coverage
+        components["content_completeness"] = components.get("completeness_score", 0.5)
+        components["total_score"] = components["overall_confidence"]
+        
+        return components
+    
+    def _calculate_authenticity_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate authenticity score based on source characteristics and content indicators"""
+        if not evidence_list:
+            return 0.0
+            
+        authentic_indicators = self.cultural_config.get("authentic_source_indicators", {})
+        high_auth_sources = authentic_indicators.get("high_authenticity", [])
+        auth_phrases = authentic_indicators.get("authenticity_phrases", [])
+        
+        authentic_score = 0.0
+        total_weight = 0.0
+        
+        for evidence in evidence_list:
+            weight = 1.0
+            url = evidence.source_url.lower()
+            text = evidence.text_snippet.lower()
+            
+            # Reddit communities get high authenticity score
+            if any(indicator in url for indicator in high_auth_sources):
+                authentic_score += 0.8 * weight
+                
+            # Personal experience phrases
+            elif any(phrase in text for phrase in auth_phrases):
+                authentic_score += 0.9 * weight
+                
+            # Local authority indicators in content
+            elif any(indicator in text for indicator in ["local tip", "insider secret", "authentic", "genuine"]):
+                authentic_score += 0.7 * weight
+                
+            # Government/official sources get lower authenticity for cultural themes
+            elif any(domain in url for domain in [".gov", ".edu", "tripadvisor", "booking"]):
+                authentic_score += 0.3 * weight
+            else:
+                authentic_score += 0.5 * weight  # Neutral score
+                
+            total_weight += weight
+        
+        return authentic_score / total_weight if total_weight > 0 else 0.0
+    
+    def _calculate_distinctiveness_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate how distinctive/unique this theme is vs generic"""
+        if not evidence_list:
+            return 0.0
+            
+        distinct_indicators = self.cultural_config.get("distinctiveness_indicators", {})
+        unique_keywords = distinct_indicators.get("unique_keywords", [])
+        generic_keywords = distinct_indicators.get("generic_keywords", [])
+        
+        distinctive_count = 0
+        generic_count = 0
+        
+        for evidence in evidence_list:
+            text = evidence.text_snippet.lower()
+            distinctive_count += sum(1 for keyword in unique_keywords if keyword in text)
+            generic_count += sum(1 for keyword in generic_keywords if keyword in text)
+        
+        if distinctive_count + generic_count == 0:
+            return 0.5  # Neutral if no indicators
+        
+        return distinctive_count / (distinctive_count + generic_count)
+    
+    def _calculate_authority_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate authority score based on source credibility"""
+        if not evidence_list:
+            return 0.0
+            
+        authority_scores = [ev.authority_weight for ev in evidence_list]
+        
+        # Use max and average authority for balanced score
+        max_authority = max(authority_scores)
+        avg_authority = sum(authority_scores) / len(authority_scores)
+        
+        return (max_authority * 0.7 + avg_authority * 0.3)
+    
+    def _calculate_local_relevance(self, evidence_list: List[Evidence], local_context: Set[str]) -> float:
+        """Calculate local relevance score"""
+        if not evidence_list:
+            return 0.0
+            
+        local_score = 0.0
+        
+        # Score based on local context mentions
+        if local_context:
+            local_score += min(len(local_context) * 0.25, 1.0)
+            
+        # Score based on local indicators in evidence
+        local_indicators = ["local", "neighborhood", "community", "resident", "native"]
+        for evidence in evidence_list:
+            text = evidence.text_snippet.lower()
+            local_mentions = sum(1 for indicator in local_indicators if indicator in text)
+            local_score += min(local_mentions * 0.1, 0.3)
+            
+        return min(local_score, 1.0)
+    
+    def _calculate_recency_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate recency score for practical information"""
+        if not evidence_list:
+            return 0.0
+            
+        now = datetime.now()
+        recency_scores = []
+        
+        for evidence in evidence_list:
+            if evidence.published_date:
+                days_old = (now - evidence.published_date).days
+                # More recent is better, decay over time
+                if days_old <= 30:
+                    recency_scores.append(1.0)
+                elif days_old <= 90:
+                    recency_scores.append(0.8)
+                elif days_old <= 365:
+                    recency_scores.append(0.6)
+                elif days_old <= 730:
+                    recency_scores.append(0.4)
+                else:
+                    recency_scores.append(0.2)
+            else:
+                recency_scores.append(0.5)  # Unknown date
+                
+        return sum(recency_scores) / len(recency_scores) if recency_scores else 0.5
+    
+    def _calculate_consistency_score(self, evidence_list: List[Evidence]) -> float:
+        """Calculate consistency score across evidence"""
+        if len(evidence_list) < 2:
+            return 1.0  # Single piece of evidence is consistent with itself
+            
+        # Simple consistency based on sentiment alignment
+        sentiments = [ev.sentiment for ev in evidence_list if ev.sentiment is not None]
+        
+        if not sentiments:
+            return 0.5
+            
+        # Check if sentiments are generally aligned
+        positive_count = sum(1 for s in sentiments if s > 0.1)
+        negative_count = sum(1 for s in sentiments if s < -0.1)
+        neutral_count = len(sentiments) - positive_count - negative_count
+        
+        # High consistency if most evidence has similar sentiment
+        max_sentiment_type = max(positive_count, negative_count, neutral_count)
+        consistency = max_sentiment_type / len(sentiments)
+        
+        return consistency
+    
+    def _calculate_completeness_score(self, evidence_list: List[Evidence], content_types: Set[str]) -> float:
+        """Calculate completeness score based on content variety"""
+        if not evidence_list:
+            return 0.0
+            
+        # Score based on content type diversity
+        content_type_bonus = min(len(content_types) * 0.2, 1.0)
+        
+        # Score based on evidence count
+        evidence_count_bonus = min(len(evidence_list) * 0.1, 0.5)
+        
+        return min(content_type_bonus + evidence_count_bonus, 1.0)
+    
+    def _has_authentic_indicators(self, evidence_list: List[Evidence]) -> bool:
+        """Check if evidence has authentic local indicators"""
+        authentic_phrases = ["as a local", "i live here", "local tip", "insider secret", "hidden gem"]
+        
+        for evidence in evidence_list:
+            text = evidence.text_snippet.lower()
+            if any(phrase in text for phrase in authentic_phrases):
+                return True
+                
+        return False
+    
+    def _has_authoritative_sources(self, evidence_list: List[Evidence]) -> bool:
+        """Check if evidence has authoritative sources"""
+        auth_indicators = self.cultural_config.get("authoritative_source_indicators", {})
+        high_auth = auth_indicators.get("high_authority", [])
+        
+        for evidence in evidence_list:
+            url = evidence.source_url.lower()
+            if any(indicator in url for indicator in high_auth):
+                return True
+                
+        return False
+    
+    def filter_themes_by_cultural_intelligence(
+        self, 
+        themes: List[Theme], 
+        destination_data_quality: str = "medium_data"
+    ) -> List[Theme]:
+        """Apply cultural intelligence filtering with category-specific rules"""
+        
+        if not self.enable_dual_track:
+            return themes  # Fall back to original filtering
+            
+        filtered_themes = []
+        
+        for theme in themes:
+            processing_type = self._get_processing_type(theme.macro_category)
+            rules = self.category_processing_rules[processing_type]
+            
+            # Get category-specific confidence threshold
+            base_threshold = rules["confidence_threshold"]
+            
+            # Adjust for data quality (existing adaptive logic integration)
+            if destination_data_quality == "poor_data":
+                confidence_threshold = base_threshold * 0.7  # Lower bar for sparse data
+            elif destination_data_quality == "rich_data":
+                if processing_type == "practical":
+                    confidence_threshold = base_threshold * 1.1  # Raise bar for practical info
+                elif processing_type == "cultural":
+                    confidence_threshold = base_threshold * 0.9  # Slightly lower for cultural
+                else:
+                    confidence_threshold = base_threshold
+            else:
+                confidence_threshold = base_threshold
+                
+            # Get theme confidence
+            theme_confidence = 0.0
+            if theme.confidence_breakdown:
+                if hasattr(theme.confidence_breakdown, 'overall_confidence'):
+                    theme_confidence = theme.confidence_breakdown.overall_confidence
+                elif isinstance(theme.confidence_breakdown, dict):
+                    theme_confidence = safe_get_confidence_value(theme.confidence_breakdown, "overall_confidence", 0.0)
+                elif isinstance(theme.confidence_breakdown, str):
+                    # Handle JSON string case - SAFETY CHECK: Ensure json.loads returns dict
+                    try:
+                        import json
+                        conf_dict = json.loads(theme.confidence_breakdown)
+                        if isinstance(conf_dict, dict):
+                            theme_confidence = conf_dict.get('overall_confidence', 0.0)
+                        else:
+                            theme_confidence = 0.0  # Fallback if not dict
+                    except (json.JSONDecodeError, AttributeError):
+                        theme_confidence = 0.0
+            
+            # Apply distinctiveness filtering for cultural themes
+            if processing_type == "cultural" and self.enable_distinctiveness:
+                distinctiveness = self._calculate_distinctiveness_score(theme.evidence)
+                if distinctiveness < 0.3:  # Filter out generic cultural themes
+                    self.logger.info(f"Filtered cultural theme '{theme.name}' for low distinctiveness: {distinctiveness:.2f}")
+                    continue
+                    
+            # Apply the confidence threshold
+            if theme_confidence >= confidence_threshold:
+                # Apply evidence limits
+                max_evidence = rules.get("evidence_limit", 6)
+                if len(theme.evidence) > max_evidence:
+                    # Keep the highest authority evidence
+                    sorted_evidence = sorted(theme.evidence, key=lambda e: e.authority_weight, reverse=True)
+                    theme.evidence = sorted_evidence[:max_evidence]
+                    
+                filtered_themes.append(theme)
+                self.logger.debug(f"Theme '{theme.name}' ({processing_type}) passed filtering: {theme_confidence:.2f} >= {confidence_threshold:.2f}")
+            else:
+                self.logger.info(f"Filtered theme '{theme.name}' ({processing_type}): {theme_confidence:.2f} < {confidence_threshold:.2f}")
+                
+        self.logger.info(f"Cultural intelligence filtering: {len(themes)} -> {len(filtered_themes)} themes")
+        return filtered_themes
+
+    def _extract_seasonal_relevance_from_theme_evidence(self, evidence_objects: List[Evidence]) -> Dict[str, float]:
+        """Extract seasonal relevance from evidence data"""
+        import re
+        
+        # Initialize all months to 0
+        seasonal_relevance = {
+            "january": 0.0, "february": 0.0, "march": 0.0, "april": 0.0,
+            "may": 0.0, "june": 0.0, "july": 0.0, "august": 0.0,
+            "september": 0.0, "october": 0.0, "november": 0.0, "december": 0.0
+        }
+        
+        # Seasonal patterns to look for
+        seasonal_patterns = {
+            "fall": ["september", "october", "november"],
+            "autumn": ["september", "october", "november"],
+            "winter": ["december", "january", "february"],
+            "spring": ["march", "april", "may"],
+            "summer": ["june", "july", "august"]
+        }
+        
+        # Month patterns
+        month_patterns = {
+            "january": ["january", "jan"],
+            "february": ["february", "feb"],
+            "march": ["march", "mar"],
+            "april": ["april", "apr"],
+            "may": ["may"],
+            "june": ["june", "jun"],
+            "july": ["july", "jul"],
+            "august": ["august", "aug"],
+            "september": ["september", "sept", "sep"],
+            "october": ["october", "oct"],
+            "november": ["november", "nov"],
+            "december": ["december", "dec"]
+        }
+        
+        for evidence in evidence_objects:
+            text = evidence.text_snippet.lower() if hasattr(evidence, 'text_snippet') else ""
+            
+            # Look for seasonal mentions
+            for season, months in seasonal_patterns.items():
+                if season in text:
+                    for month in months:
+                        seasonal_relevance[month] += 0.3
+            
+            # Look for specific month mentions
+            for month, patterns in month_patterns.items():
+                for pattern in patterns:
+                    if pattern in text:
+                        seasonal_relevance[month] += 0.5
+            
+            # Look for specific seasonal activities
+            if any(term in text for term in ["foliage", "fall colors", "autumn leaves"]):
+                seasonal_relevance["october"] += 0.7
+                seasonal_relevance["september"] += 0.5
+                seasonal_relevance["november"] += 0.4
+            
+            if any(term in text for term in ["skiing", "snow", "winter sports"]):
+                for month in ["december", "january", "february", "march"]:
+                    seasonal_relevance[month] += 0.6
+            
+            if any(term in text for term in ["hiking", "camping", "outdoor festivals"]):
+                for month in ["june", "july", "august"]:
+                    seasonal_relevance[month] += 0.5
+            
+            if any(term in text for term in ["maple syrup", "spring season"]):
+                for month in ["february", "march", "april"]:
+                    seasonal_relevance[month] += 0.6
+        
+        # Normalize scores to 0-1 range
+        for month in seasonal_relevance:
+            seasonal_relevance[month] = min(seasonal_relevance[month], 1.0)
         
         return seasonal_relevance
-
-    def _analyze_temporal_aspects(self, themes: List[Dict[str, Any]], evidence: List[Evidence]) -> List[Dict[str, Any]]:
-        """Analyze temporal aspects of themes and evidence"""
-        temporal_slices = []
-        
-        if not themes or not evidence:
-            return temporal_slices
-        
-        # Create seasonal temporal slices
-        seasons = ["spring", "summer", "fall", "winter"]
-        
-        for i, season in enumerate(seasons):
-            temporal_slice = {
-                "slice_id": f"temporal_{i}",
-                "season": season,
-                "valid_from": f"2024-{(i*3)+1:02d}-01",
-                "valid_to": f"2024-{((i+1)*3):02d}-28",
-                "theme_relevance": {},
-                "evidence_count": 0,
-                "seasonal_highlights": [],
-                "weather_patterns": {
-                    "temperature_range": "varies",
-                    "precipitation": "varies",
-                    "conditions": f"typical {season} weather"
-                },
-                "visitor_patterns": {
-                    "crowd_level": "moderate",
-                    "peak_times": [],
-                    "recommended_activities": []
-                }
-            }
-            
-            # Analyze theme relevance for this season
-            for theme in themes:
-                theme_name = theme.get('name', 'Unknown Theme')
-                
-                # Simple seasonal relevance scoring
-                seasonal_score = 0.5  # Default neutral
-                
-                # Boost certain themes for specific seasons
-                if season == "summer":
-                    if any(keyword in theme_name.lower() for keyword in ["beach", "outdoor", "hiking", "festival", "park"]):
-                        seasonal_score = 0.8
-                elif season == "winter":
-                    if any(keyword in theme_name.lower() for keyword in ["indoor", "museum", "shopping", "cozy", "warm"]):
-                        seasonal_score = 0.8
-                elif season == "spring":
-                    if any(keyword in theme_name.lower() for keyword in ["garden", "flower", "nature", "fresh"]):
-                        seasonal_score = 0.8
-                elif season == "fall":
-                    if any(keyword in theme_name.lower() for keyword in ["harvest", "autumn", "scenic", "foliage"]):
-                        seasonal_score = 0.8
-                
-                temporal_slice["theme_relevance"][theme.get('theme_id', f'theme_{len(temporal_slice["theme_relevance"])}')] = seasonal_score
-            
-            # Count relevant evidence for this season
-            seasonal_evidence_count = 0
-            for ev in evidence:
-                # Simple heuristic: check if evidence mentions seasonal terms
-                text = ev.text_snippet.lower() if hasattr(ev, 'text_snippet') else ''
-                if season in text or any(month in text for month in self._get_season_months(season)):
-                    seasonal_evidence_count += 1
-            
-            temporal_slice["evidence_count"] = seasonal_evidence_count
-            temporal_slices.append(temporal_slice)
-        
-        return temporal_slices
-    
-    def _get_season_months(self, season: str) -> List[str]:
-        """Get month names for a given season"""
-        season_months = {
-            "spring": ["march", "april", "may"],
-            "summer": ["june", "july", "august"],
-            "fall": ["september", "october", "november"],
-            "winter": ["december", "january", "february"]
-        }
-        return season_months.get(season, [])
-    
-    def _calculate_dimensions(self, themes: List[Dict[str, Any]], evidence: List[Evidence]) -> Dict[str, Any]:
-        """Calculate destination dimensions from themes and evidence"""
-        dimensions = {}
-        
-        if not themes and not evidence:
-            return dimensions
-        
-        # Calculate basic dimensions
-        dimensions["cultural_richness"] = {
-            "value": len([t for t in themes if t.get('macro_category') == 'Cultural']) / max(len(themes), 1),
-            "confidence": 0.7,
-            "source": "theme_analysis"
-        }
-        
-        dimensions["activity_diversity"] = {
-            "value": len(set(t.get('macro_category', 'Unknown') for t in themes)) / 10.0,  # Normalize to 0-1
-            "confidence": 0.6,
-            "source": "theme_categorization"
-        }
-        
-        dimensions["evidence_quality"] = {
-            "value": sum(ev.confidence for ev in evidence) / max(len(evidence), 1) if evidence else 0.0,
-            "confidence": 0.8,
-            "source": "evidence_analysis"
-        }
-        
-        dimensions["tourist_appeal"] = {
-            "value": len([t for t in themes if t.get('macro_category') in ['Popular', 'POI']]) / max(len(themes), 1),
-            "confidence": 0.7,
-            "source": "theme_analysis"
-        }
-        
-        dimensions["information_coverage"] = {
-            "value": min(len(evidence) / 100.0, 1.0),  # Normalize evidence count
-            "confidence": 0.9,
-            "source": "evidence_count"
-        }
-        
-        dimensions["theme_confidence"] = {
-            "value": sum(t.get('fit_score', 0) for t in themes) / max(len(themes), 1),
-            "confidence": 0.8,
-            "source": "theme_scoring"
-        }
-        
-        dimensions["content_freshness"] = {
-            "value": 0.7,  # Default moderate freshness
-            "confidence": 0.5,
-            "source": "temporal_analysis"
-        }
-        
-        dimensions["local_perspective"] = {
-            "value": len([ev for ev in evidence if ev.cultural_context.get('is_local_source', False)]) / max(len(evidence), 1) if evidence else 0.0,
-            "confidence": 0.6,
-            "source": "cultural_context_analysis"
-        }
-        
-        return dimensions
 
 def create_enhanced_theme_analysis_tool() -> Tool:
     """Factory function to create the tool for LangChain"""

@@ -210,45 +210,70 @@ class AuthenticInsightsDeduplicator:
         self.logger = logging.getLogger(__name__)
     
     def process_destination(self, destination: Destination) -> Tuple[Dict[str, AuthenticInsight], Dict[str, Any]]:
-        """
-        Process a destination and all its themes to deduplicate authentic insights
+        """Process all authentic insights for a destination with deduplication"""
         
-        Args:
-            destination: Destination to process
+        # Safe access to destination ID
+        if hasattr(destination, 'id'):
+            destination_id = destination.id
+        elif isinstance(destination, dict):
+            destination_id = destination.get('id', 'unknown_destination')
+        else:
+            destination_id = 'unknown_destination'
+        
+        self.logger.info(f"Processing authentic insights for destination: {destination_id}")
+        
+        # Safe access to themes
+        if hasattr(destination, 'themes'):
+            themes = destination.themes
+        elif isinstance(destination, dict):
+            themes = destination.get('themes', [])
+        else:
+            themes = []
+        
+        # Process insights from themes
+        for theme in themes:
+            # Safe access to theme attributes
+            if hasattr(theme, 'authentic_insights'):
+                insights = theme.authentic_insights
+            elif isinstance(theme, dict):
+                insights = theme.get('authentic_insights', [])
+            else:
+                insights = []
+                
+            for insight in insights:
+                # Safe access to theme_id
+                if hasattr(theme, 'theme_id'):
+                    theme_id = theme.theme_id
+                elif isinstance(theme, dict):
+                    theme_id = theme.get('theme_id', 'unknown_theme')
+                else:
+                    theme_id = 'unknown_theme'
+                    
+                self.registry.add_insight(insight, theme_id=theme_id, destination_id=destination_id)
+        
+        # Process destination-level insights if they exist
+        if hasattr(destination, 'authentic_insights'):
+            dest_insights = destination.authentic_insights
+        elif isinstance(destination, dict):
+            dest_insights = destination.get('authentic_insights', [])
+        else:
+            dest_insights = []
             
-        Returns:
-            Tuple of (insights_registry, cross_reference_mappings)
-        """
-        self.logger.info(f"Processing authentic insights for destination: {destination.id}")
+        for insight in dest_insights:
+            self.registry.add_insight(insight, destination_id=destination_id)
         
-        # Process destination-level insights
-        for insight in destination.authentic_insights:
-            self.registry.add_insight(insight, destination_id=destination.id)
+        # Get deduplicated insights and cross-references
+        deduplicated_insights = self.registry.get_all_insights()
+        cross_references = self.registry.get_cross_reference_statistics()
         
-        # Process theme-level insights
-        for theme in destination.themes:
-            theme_id = getattr(theme, 'theme_id', None) if hasattr(theme, 'theme_id') else safe_get(theme, 'theme_id', None) if isinstance(theme, dict) else None
-            
-            # Process insights associated with this theme - safe access
-            authentic_insights = getattr(theme, 'authentic_insights', []) if hasattr(theme, 'authentic_insights') else safe_get(theme, 'authentic_insights', []) if isinstance(theme, dict) else []
-            for insight in authentic_insights:
-                self.registry.add_insight(insight, theme_id=theme_id, destination_id=destination.id)
+        # Calculate efficiency
+        total_processed = self.registry.get_cross_reference_statistics()["total_unique_insights"]
+        unique_insights = len(deduplicated_insights)
+        efficiency = (unique_insights / total_processed * 100) if total_processed > 0 else 100.0
         
-        # Get all unique insights
-        insights_registry = self.registry.get_all_insights()
+        self.logger.info(f"Processed {unique_insights} unique insights with {efficiency:.2f}% efficiency")
         
-        # Build cross-reference mappings
-        cross_reference_mappings = {
-            "theme_insights": self.registry.theme_insight_mappings.copy(),
-            "insight_themes": self.registry.insight_theme_mappings.copy(),
-            "destination_insights": self.registry.destination_insight_mappings.copy()
-        }
-        
-        stats = self.registry.get_cross_reference_statistics()
-        self.logger.info(f"Processed {stats['total_unique_insights']} unique insights with "
-                        f"{stats['deduplication_efficiency']:.2%} efficiency")
-        
-        return insights_registry, cross_reference_mappings
+        return deduplicated_insights, cross_references
     
     def apply_deduplication_to_destination(self, destination: Destination) -> Destination:
         """

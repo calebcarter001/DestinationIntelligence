@@ -12,31 +12,33 @@ DB_PATH = os.path.join(PROJECT_ROOT, DB_NAME)
 OUTPUTS_DIR = os.path.join(PROJECT_ROOT, "outputs", "theme_reports")
 os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
-# CULTURAL INTELLIGENCE: Define category processing rules
+# TOURIST-FOCUSED: Define categories that actually matter to travelers
 CATEGORY_PROCESSING_RULES = {
-    "cultural": {
+    "must_see": {
         "categories": [
-            "Cultural Identity & Atmosphere", "Authentic Experiences", "Distinctive Features",
-            "Local Character & Vibe", "Artistic & Creative Scene"
+            # Specific attractions and landmarks tourists actually visit
+            "POI", "Popular", "Attractions", "Landmarks", "Museums", "Parks",
+            "Scenic Views", "Historic Sites", "Iconic Places", "Photo Spots"
         ],
-        "color": "#9C27B0",  # Purple for cultural
+        "color": "#FF6B35",  # Orange for must-see attractions
+        "icon": "📸"
+    },
+    "experiences": {
+        "categories": [
+            # Things tourists actually do and experience
+            "Cultural", "Local Culture", "Entertainment", "Activities", "Adventures",
+            "Tours", "Events", "Festivals", "Nightlife", "Music", "Arts"
+        ],
+        "color": "#9C27B0",  # Purple for experiences
         "icon": "🎭"
     },
-    "practical": {
+    "essentials": {
         "categories": [
-            "Safety & Security", "Transportation & Access", "Budget & Costs", 
-            "Health & Medical", "Logistics & Planning", "Visa & Documentation"
+            # Only the most essential travel info tourists need
+            "Practical", "Travel Essentials", "Transportation", "Safety"
         ],
-        "color": "#2196F3",  # Blue for practical
-        "icon": "📋"
-    },
-    "hybrid": {
-        "categories": [
-            "Food & Dining", "Entertainment & Nightlife", "Nature & Outdoor",
-            "Shopping & Local Craft", "Family & Education", "Health & Wellness"
-        ],
-        "color": "#4CAF50",  # Green for hybrid
-        "icon": "⚖️"
+        "color": "#2196F3",  # Blue for essentials
+        "icon": "🗺️"
     }
 }
 
@@ -123,8 +125,8 @@ def calculate_cultural_intelligence_metrics(themes_data):
     """Calculate cultural intelligence specific metrics"""
     metrics = {
         "total_themes": len(themes_data),
-        "category_breakdown": {"cultural": 0, "practical": 0, "hybrid": 0, "unknown": 0},
-        "theme_distribution": {"cultural": 0, "practical": 0, "hybrid": 0, "unknown": 0},  # Add alias for tests
+        "category_breakdown": {"cultural": 0, "practical": 0, "popular": 0, "poi": 0, "unknown": 0, "must_see": 0, "experiences": 0, "essentials": 0},
+        "theme_distribution": {"cultural": 0, "practical": 0, "popular": 0, "poi": 0, "unknown": 0, "must_see": 0, "experiences": 0, "essentials": 0},  # Add alias for tests
         "avg_confidence_by_type": {"cultural": 0, "practical": 0, "hybrid": 0},
         "high_confidence_themes": {"cultural": 0, "practical": 0, "hybrid": 0},
         "distinctiveness_analysis": {},
@@ -223,15 +225,17 @@ def generate_cultural_report(destination_name, themes_data=None, cultural_metric
         
         # Summary metrics
         total_themes = len(themes_data) if isinstance(themes_data, list) else cultural_metrics.get("total_themes", 0)
+        popular_count = cultural_metrics.get("category_breakdown", {}).get("popular", 0)
+        poi_count = cultural_metrics.get("category_breakdown", {}).get("poi", 0)
         cultural_count = cultural_metrics.get("category_breakdown", {}).get("cultural", 0)
         practical_count = cultural_metrics.get("category_breakdown", {}).get("practical", 0)
-        hybrid_count = cultural_metrics.get("category_breakdown", {}).get("hybrid", 0)
         
         report_lines.append("📊 THEME DISTRIBUTION:")
         report_lines.append(f"  Total Themes: {total_themes}")
+        report_lines.append(f"  🔥 Popular: {popular_count} ({popular_count/max(total_themes,1)*100:.1f}%)")
+        report_lines.append(f"  📍 POI: {poi_count} ({poi_count/max(total_themes,1)*100:.1f}%)")
         report_lines.append(f"  🎭 Cultural: {cultural_count} ({cultural_count/max(total_themes,1)*100:.1f}%)")
-        report_lines.append(f"  📋 Practical: {practical_count} ({practical_count/max(total_themes,1)*100:.1f}%)")
-        report_lines.append(f"  ⚖️ Hybrid: {hybrid_count} ({hybrid_count/max(total_themes,1)*100:.1f}%)")
+        report_lines.append(f"  🗺️ Practical: {practical_count} ({practical_count/max(total_themes,1)*100:.1f}%)")
         report_lines.append("")
         
         # Cultural vs Practical ratio
@@ -401,7 +405,7 @@ def fetch_and_save_comprehensive_report(destination_id: str):
 
         # CULTURAL INTELLIGENCE: Calculate enhanced metrics
         cultural_metrics = calculate_cultural_intelligence_metrics(processed_themes)
-        
+
         # Sort by the new primary confidence (adjusted), then fit_score
         sorted_themes = sorted(processed_themes, key=lambda x: (x['overall_confidence'], x['fit_score']), reverse=True)
         
@@ -428,8 +432,9 @@ def fetch_and_save_comprehensive_report(destination_id: str):
             # Print summary statistics
             print(f"\n📊 CULTURAL INTELLIGENCE ANALYSIS SUMMARY:")
             print(f"   🎭 Cultural themes: {cultural_metrics['category_breakdown']['cultural']}")
-            print(f"   📋 Practical themes: {cultural_metrics['category_breakdown']['practical']}")
-            print(f"   ⚖️ Hybrid themes: {cultural_metrics['category_breakdown']['hybrid']}")
+            print(f"   🗺️ Practical themes: {cultural_metrics['category_breakdown']['practical']}")
+            print(f"   ⚖️ POI themes: {cultural_metrics['category_breakdown']['poi']}")
+            print(f"   🔥 Popular themes: {cultural_metrics['category_breakdown']['popular']}")
             print(f"   🎯 Cultural vs Practical ratio: {comprehensive_report['summary']['cultural_vs_practical_ratio']:.2f}")
             print(f"   🏆 High confidence themes: {sum(cultural_metrics['high_confidence_themes'].values())}/{len(sorted_themes)}")
             

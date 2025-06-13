@@ -251,7 +251,16 @@ class StoreEnhancedDestinationInsightsTool(Tool):
                                                 traveler_relevance_factor=final_relevance_factor, # Use processed value
                                                 adjusted_overall_confidence=final_adj_confidence # Use processed value
                                             )
-                                            destination.themes.append(theme)
+                                            
+                                            # Safe access to themes
+                                            if hasattr(destination, 'themes'):
+                                                themes = destination.themes
+                                            elif isinstance(destination, dict):
+                                                themes = destination.get('themes', [])
+                                            else:
+                                                themes = []
+                                                
+                                            themes.append(theme)
                                             themes_added += 1
                                             logger.info(f"DEBUG: Successfully added theme {i}: {theme.name}")
                                         elif hasattr(theme_data, 'insight_name'):  # DestinationInsight object

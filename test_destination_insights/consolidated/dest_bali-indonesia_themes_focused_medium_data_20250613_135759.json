@@ -1,7 +1,7 @@
 {
   "export_metadata": {
     "version": "3.1",
-    "export_timestamp": "2025-06-12T18:41:00.895920",
+    "export_timestamp": "2025-06-13T13:57:59.104904",
     "destination_id": "bali-indonesia",
     "export_type": "themes_focused",
     "export_mode": "themes_focused"
@@ -30,7 +30,7 @@
     "visa_info_url": null,
     "gdp_per_capita_usd": null,
     "hdi": null,
-    "last_updated": "2025-06-12T18:41:00.876203",
+    "last_updated": "2025-06-13T13:57:59.086238",
     "destination_revision": 1,
     "lineage": {},
     "meta": {}
@@ -67,7 +67,7 @@
           "tradition",
           "ceremony"
         ],
-        "created": "2025-06-12T18:41:00.876187",
+        "created": "2025-06-13T13:57:59.086222",
         "last_validated": null,
         "factors": {
           "source_diversity": 2,
@@ -109,7 +109,7 @@
       }
     },
     "insights": {
-      "55293ae1-9216-4f5e-ae68-70c574264b81": {
+      "5bc08f4c-90cb-403e-8e16-51355cf12525": {
         "insight_type": "insider",
         "authenticity_score": 0.9,
         "uniqueness_score": 0.7,

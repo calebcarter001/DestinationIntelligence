@@ -33,8 +33,13 @@ class BaseEnrichmentAgent:
         self.enrichment_config = self.app_config.get('data_enrichment', {})
         self.llm = llm
         self.logger = logging.getLogger(f"app.enrichment.{self.__class__.__name__}")
-        self.is_enabled = self.enrichment_config.get('enabled', False) and \
-                          safe_get_nested(self.enrichment_config, ["enrichment_modules", self.module_name], False)
+        
+        # FIXED: Proper configuration path checking
+        enrichment_enabled = self.enrichment_config.get('enabled', False)
+        module_enabled = self.enrichment_config.get('enrichment_modules', {}).get(self.module_name, False)
+        self.is_enabled = enrichment_enabled and module_enabled
+        
+        self.logger.debug(f"Enrichment enabled: {enrichment_enabled}, Module '{self.module_name}' enabled: {module_enabled}, Final enabled: {self.is_enabled}")
 
     def run(self, destination: Destination):
         """
