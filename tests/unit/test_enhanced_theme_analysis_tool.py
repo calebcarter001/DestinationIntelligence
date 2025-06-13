@@ -316,7 +316,8 @@ class TestEnhancedThemeAnalysisTool:
                     "content": "Beautiful beach with great swimming and surfing opportunities. Perfect for summer activities.",
                     "title": "Beach Guide"
                 }
-            ]
+            ],
+            config={"use_validation_agent": True}  # Explicitly request validation agent for this test
         )
         
         # This should not raise an error and should process the theme

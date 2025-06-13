@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""
+Unit tests for the new travel-focused theme discovery system
+Tests the specific POI extraction and travel inspiration prioritization
+"""
+
+import pytest
+import sys
+import os
+from datetime import datetime
+from unittest.mock import Mock, patch
+from typing import List, Dict, Any
+
+# Add src to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+
+from tools.enhanced_theme_analysis_tool import EnhancedThemeAnalysisTool
+from core.enhanced_data_models import Evidence, Theme
+from core.evidence_hierarchy import SourceCategory, EvidenceType
+
+class TestTravelFocusedThemeDiscovery:
+    """Test suite for travel-focused theme discovery"""
+    
+    @pytest.fixture
+    def theme_tool(self):
+        """Create a theme analysis tool instance"""
+        config = {
+            "theme_taxonomy": {
+                # Travel-focused taxonomy
+                "Must-See Attractions": ["iconic landmarks", "famous attractions", "bucket list"],
+                "Instagram-Worthy Spots": ["photo opportunities", "scenic viewpoints", "panoramic views"],
+                "Landmarks & Monuments": ["observatory", "monument", "tower", "bridge"],
+                "Natural Attractions": ["national park", "state park", "canyon", "mountain"],
+                "Venues & Establishments": ["brewery", "restaurant", "museum", "gallery"],
+                "Local Traditions": ["authentic experiences", "traditional practices"],
+                "Travel Essentials": ["transportation", "getting around", "safety tips"]
+            }
+        }
+        return EnhancedThemeAnalysisTool(config=config)
+    
+    @pytest.fixture
+    def sample_evidence_list(self):
+        """Create sample evidence for testing"""
+        evidence_list = []
+        
+        # POI Evidence
+        evidence_list.append(Evidence(
+            evidence_id="ev_001",
+            text_snippet="Visit the famous Lowell Observatory in Flagstaff, where Pluto was discovered. This iconic landmark offers stunning views of the night sky and is a must-see attraction for astronomy enthusiasts.",
+            source_url="https://example.com/lowell-observatory",
+            source_category=SourceCategory.TRAVEL_GUIDE,
+            evidence_type=EvidenceType.ATTRACTION_INFO,
+            confidence=0.9,
+            cultural_context={"content_type": "attraction", "semantic_topics": ["astronomy", "science"]},
+            timestamp=datetime.now()
+        ))
+        
+        # Popular/Trending Evidence
+        evidence_list.append(Evidence(
+            evidence_id="ev_002", 
+            text_snippet="Flagstaff's Historic Downtown is trending on Instagram for its picture-perfect Victorian architecture and scenic mountain views. This hot spot is buzzing with visitors taking photos.",
+            source_url="https://example.com/downtown-flagstaff",
+            source_category=SourceCategory.SOCIAL_MEDIA,
+            evidence_type=EvidenceType.SOCIAL_CONTENT,
+            confidence=0.8,
+            cultural_context={"content_type": "social", "semantic_topics": ["photography", "architecture"]},
+            timestamp=datetime.now()
+        ))
+        
+        # Cultural Evidence
+        evidence_list.append(Evidence(
+            evidence_id="ev_003",
+            text_snippet="Experience authentic Native American heritage at the Museum of Northern Arizona, where traditional pottery and weaving demonstrations showcase local artisan crafts.",
+            source_url="https://example.com/museum-northern-arizona", 
+            source_category=SourceCategory.CULTURAL_SITE,
+            evidence_type=EvidenceType.CULTURAL_INFO,
+            confidence=0.85,
+            cultural_context={"content_type": "cultural", "semantic_topics": ["heritage", "crafts"]},
+            timestamp=datetime.now()
+        ))
+        
+        # Practical Evidence
+        evidence_list.append(Evidence(
+            evidence_id="ev_004",
+            text_snippet="Getting around Flagstaff is easy with the Mountain Line bus system. Transportation options include rental cars, and the city is very walkable for downtown attractions.",
+            source_url="https://example.com/flagstaff-transportation",
+            source_category=SourceCategory.OFFICIAL_TOURISM,
+            evidence_type=EvidenceType.PRACTICAL_INFO,
+            confidence=0.7,
+            cultural_context={"content_type": "practical", "semantic_topics": ["transportation"]},
+            timestamp=datetime.now()
+        ))
+        
+        return evidence_list
+
+    def test_poi_theme_extraction_basic(self, theme_tool, sample_evidence_list):
+        """Test basic POI theme extraction functionality"""
+        poi_themes = theme_tool._extract_poi_themes(sample_evidence_list, "Flagstaff, Arizona")
+        
+        # Should extract specific POI names
+        assert len(poi_themes) > 0, "Should extract at least one POI theme"
+        
+        # Check for Lowell Observatory
+        lowell_theme = next((t for t in poi_themes if "Lowell Observatory" in t.name), None)
+        assert lowell_theme is not None, "Should extract Lowell Observatory as a POI theme"
+        assert lowell_theme.macro_category == "POI", "POI themes should have POI macro category"
+
+    def test_popular_theme_extraction_basic(self, theme_tool, sample_evidence_list):
+        """Test basic popular/trending theme extraction"""
+        popular_themes = theme_tool._extract_popular_themes(sample_evidence_list, "Flagstaff, Arizona")
+        
+        # Should extract trending content
+        if popular_themes:  # May not always find popular themes depending on evidence
+            popular_theme = popular_themes[0]
+            assert popular_theme.macro_category == "Popular", "Popular themes should have Popular macro category"
+
+    def test_cultural_theme_extraction_basic(self, theme_tool, sample_evidence_list):
+        """Test basic cultural theme extraction"""
+        cultural_themes = theme_tool._extract_cultural_themes(sample_evidence_list, "Flagstaff, Arizona")
+        
+        # Should extract cultural experiences
+        assert len(cultural_themes) > 0, "Should extract at least one cultural theme"
+        
+        cultural_theme = cultural_themes[0]
+        assert cultural_theme.macro_category == "Cultural", "Cultural themes should have Cultural macro category"
+
+    def test_practical_theme_extraction_basic(self, theme_tool, sample_evidence_list):
+        """Test basic practical theme extraction (should be minimal)"""
+        practical_themes = theme_tool._extract_practical_themes(sample_evidence_list, "Flagstaff, Arizona")
+        
+        # Should extract only essential practical info
+        assert len(practical_themes) <= 1, "Should extract at most 1 practical theme"
+        
+        if practical_themes:
+            practical_theme = practical_themes[0]
+            assert practical_theme.macro_category == "Practical", "Practical themes should have Practical macro category"
+
+    @pytest.mark.asyncio
+    async def test_theme_limits_enforced(self, theme_tool):
+        """Test that theme limits are properly enforced"""
+        # Create evidence that would generate many themes
+        evidence_list = []
+        for i in range(10):
+            evidence_list.append(Evidence(
+                evidence_id=f"ev_{i}",
+                text_snippet=f"Visit the Test Museum {i} in Flagstaff, a must-see attraction.",
+                source_url=f"https://example.com/museum-{i}",
+                source_category=SourceCategory.TRAVEL_GUIDE,
+                evidence_type=EvidenceType.ATTRACTION_INFO,
+                confidence=0.8,
+                cultural_context={"content_type": "attraction"},
+                timestamp=datetime.now()
+            ))
+        
+        # Test the main discovery method
+        all_themes = await theme_tool._discover_themes(evidence_list, "Flagstaff, Arizona")
+        
+        # Check total theme count is reasonable (should be limited)
+        assert len(all_themes) <= 10, f"Should have at most 10 themes total, got {len(all_themes)}"
+
+    def test_poi_name_cleaning_basic(self, theme_tool):
+        """Test basic POI name cleaning functionality"""
+        # Test various POI name formats
+        test_cases = [
+            ("lowell   observatory", "Lowell Observatory"),
+            ("main st brewery", "Main Street Brewery"),
+        ]
+        
+        for input_name, expected_output in test_cases:
+            cleaned = theme_tool._clean_poi_name(input_name)
+            assert cleaned == expected_output, f"Expected '{expected_output}', got '{cleaned}'"
+
+    @pytest.mark.asyncio
+    async def test_safe_data_access_basic(self, theme_tool, sample_evidence_list):
+        """Test that all data access uses safe methods"""
+        # Test with mixed evidence types (objects and dicts)
+        mixed_evidence = sample_evidence_list.copy()
+        
+        # Add dictionary-style evidence
+        mixed_evidence.append({
+            'text_snippet': 'Visit the amazing Flagstaff Brewing Company for craft beer',
+            'source_url': 'https://example.com/brewery',
+            'confidence': 0.8
+        })
+        
+        # Should not crash with mixed evidence types
+        try:
+            themes = await theme_tool._discover_themes(mixed_evidence, "Flagstaff, Arizona")
+            assert isinstance(themes, list), "Should return a list of themes"
+        except Exception as e:
+            pytest.fail(f"Should handle mixed evidence types safely, but got error: {e}")
+
+    @pytest.mark.asyncio
+    async def test_confidence_scoring_integration_basic(self, theme_tool, sample_evidence_list):
+        """Test that confidence scoring works with new theme system"""
+        themes = await theme_tool._discover_themes(sample_evidence_list, "Flagstaff, Arizona")
+        
+        for theme in themes:
+            # Check that confidence is properly calculated
+            assert hasattr(theme, 'fit_score'), "Theme should have fit_score"
+            assert 0.0 <= theme.fit_score <= 1.0, f"Fit score should be between 0 and 1, got {theme.fit_score}"
+            
+            # Check metadata has required fields
+            if hasattr(theme, 'metadata') and theme.metadata:
+                assert 'evidence_count' in theme.metadata, "Should have evidence count in metadata"
+                assert theme.metadata['evidence_count'] > 0, "Should have at least 1 evidence piece"
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

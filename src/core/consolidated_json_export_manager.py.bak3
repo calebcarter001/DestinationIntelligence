@@ -99,13 +99,7 @@ class ConsolidatedJsonExportManager:
                 evidence_registry = self._build_evidence_registry(destination)
             
             # Classify data quality for adaptive processing
-            # Handle both objects and dictionaries for themes
-            if hasattr(destination, 'themes'):
-                discovered_themes_count = len(destination.themes)
-            elif isinstance(destination, dict):
-                discovered_themes_count = len(destination.get('themes', []))
-            else:
-                discovered_themes_count = 0
+            discovered_themes_count = len(destination.themes)
             content_list = self._extract_content_from_evidence(evidence_registry)
             
             data_quality_result = self.quality_classifier.classify_data_quality(
@@ -134,18 +128,30 @@ class ConsolidatedJsonExportManager:
             export_mode = adaptive_settings.get("export_mode", "themes_focused")
             
             if export_mode == "comprehensive":
-                export_data = self._create_comprehensive_export(destination, destination_id, analysis_metadata, evidence_registry)
+                export_data = self._create_comprehensive_export(
+                    destination, analysis_metadata, evidence_registry
+                )
             elif export_mode == "minimal":
-                export_data = self._create_minimal_export(destination, destination_id, evidence_registry)
+                export_data = self._create_minimal_export(
+                    destination, evidence_registry
+                )
             elif export_mode == "summary_only":
-                export_data = self._create_summary_export(destination, destination_id, evidence_registry)
+                export_data = self._create_summary_export(
+                    destination, evidence_registry
+                )
             elif export_mode == "evidence_focused":
-                export_data = self._create_evidence_focused_export(destination, destination_id, evidence_registry)
+                export_data = self._create_evidence_focused_export(
+                    destination, evidence_registry
+                )
             elif export_mode == "themes_focused":
-                export_data = self._create_themes_focused_export(destination, destination_id, evidence_registry)
+                export_data = self._create_themes_focused_export(
+                    destination, evidence_registry
+                )
             else:
                 # Fallback to themes_focused
-                export_data = self._create_themes_focused_export(destination, destination_id, evidence_registry)
+                export_data = self._create_themes_focused_export(
+                    destination, evidence_registry
+                )
             
             # Add data quality analysis to export metadata
             if "metadata" not in export_data:
@@ -327,7 +333,6 @@ class ConsolidatedJsonExportManager:
     def _create_comprehensive_export(
         self, 
         destination: Destination,
-        destination_id: str,
         analysis_metadata: Optional[Dict[str, Any]] = None,
         evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
@@ -370,7 +375,7 @@ class ConsolidatedJsonExportManager:
             "export_metadata": {
                 "version": self.export_config.version,
                 "export_timestamp": datetime.now().isoformat(),
-                "destination_id": destination_id,
+                "destination_id": destination.id,
                 "destination_revision": destination.destination_revision,
                 "export_type": "comprehensive_consolidated",
                 "export_mode": self.export_config.mode.value,
@@ -427,7 +432,6 @@ class ConsolidatedJsonExportManager:
     def _create_minimal_export(
         self, 
         destination: Destination,
-        destination_id: str,
         evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Create minimal export with essential data only"""
@@ -452,7 +456,7 @@ class ConsolidatedJsonExportManager:
             "export_metadata": {
                 "version": self.export_config.version,
                 "export_timestamp": datetime.now().isoformat(),
-                "destination_id": destination_id,
+                "destination_id": destination.id,
                 "export_type": "minimal_export",
                 "export_mode": "minimal"
             },
@@ -466,7 +470,6 @@ class ConsolidatedJsonExportManager:
     def _create_summary_export(
         self, 
         destination: Destination,
-        destination_id: str,
         evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Create summary-only export"""
@@ -483,7 +486,7 @@ class ConsolidatedJsonExportManager:
             "export_metadata": {
                 "version": self.export_config.version,
                 "export_timestamp": datetime.now().isoformat(),
-                "destination_id": destination_id,
+                "destination_id": destination.id,
                 "export_type": "summary_only",
                 "export_mode": "summary_only"
             },
@@ -499,7 +502,6 @@ class ConsolidatedJsonExportManager:
     def _create_evidence_focused_export(
         self, 
         destination: Destination,
-        destination_id: str,
         evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Create evidence-focused export"""
@@ -518,7 +520,7 @@ class ConsolidatedJsonExportManager:
             "export_metadata": {
                 "version": self.export_config.version,
                 "export_timestamp": datetime.now().isoformat(),
-                "destination_id": destination_id,
+                "destination_id": destination.id,
                 "export_type": "evidence_focused",
                 "export_mode": "evidence_focused"
             },
@@ -535,7 +537,6 @@ class ConsolidatedJsonExportManager:
     def _create_themes_focused_export(
         self, 
         destination: Destination,
-        destination_id: str,
         evidence_registry: Optional[Dict[str, Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """Create themes-focused export"""
@@ -557,7 +558,7 @@ class ConsolidatedJsonExportManager:
             "export_metadata": {
                 "version": self.export_config.version,
                 "export_timestamp": datetime.now().isoformat(),
-                "destination_id": destination_id,
+                "destination_id": destination.id,
                 "export_type": "themes_focused",
                 "export_mode": "themes_focused"
             },
@@ -968,11 +969,8 @@ class ConsolidatedJsonExportManager:
         """Archive exports older than specified days"""
         archive_date = datetime.now().timestamp() - (days_to_keep * 24 * 60 * 60)
         
-        for filepath in self.consolidated_path.glob(f"dest_{destination_id}_*_*.json"):
+        for filepath in self.consolidated_path.glob(f"{destination_id}_*_*.json"):
             if filepath.stat().st_mtime < archive_date:
-                # Ensure archive directory exists
-                archive_dir = self.base_path / "archive"
-                archive_dir.mkdir(parents=True, exist_ok=True)
-                archive_file = archive_dir / filepath.name
+                archive_file = self.base_path / "archive" / filepath.name
                 filepath.rename(archive_file)
                 self.logger.info(f"Archived old export: {filepath.name}") 

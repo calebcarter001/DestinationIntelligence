@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""
+Integration tests for travel-focused theme discovery system
+Tests end-to-end functionality with the enhanced agent app
+"""
+
+import pytest
+import sys
+import os
+import asyncio
+from datetime import datetime
+from typing import List, Dict, Any
+
+# Add src to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+
+# Import with absolute paths to avoid relative import issues
+from tools.enhanced_theme_analysis_tool import EnhancedThemeAnalysisTool, EnhancedThemeAnalysisInput
+from core.enhanced_data_models import Evidence, Theme
+from core.evidence_hierarchy import SourceCategory, EvidenceType
+
+class TestTravelThemeIntegration:
+    """Integration tests for travel-focused theme system"""
+    
+    @pytest.fixture
+    def sample_content_list(self):
+        """Sample content list for integration testing"""
+        return [
+            {
+                "url": "https://example.com/flagstaff-attractions",
+                "text": "Flagstaff is home to the famous Lowell Observatory where Pluto was discovered. This iconic landmark offers stunning views and is a must-see attraction for visitors. The observatory features state-of-the-art telescopes and educational programs.",
+                "title": "Top Attractions in Flagstaff"
+            },
+            {
+                "url": "https://example.com/downtown-flagstaff", 
+                "text": "Historic Downtown Flagstaff is trending on Instagram for its picture-perfect Victorian architecture and scenic mountain views. This hot spot is buzzing with visitors taking photos of the beautiful buildings and enjoying local breweries.",
+                "title": "Downtown Flagstaff Guide"
+            },
+            {
+                "url": "https://example.com/cultural-experiences",
+                "text": "Experience authentic Native American heritage at the Museum of Northern Arizona, where traditional pottery and weaving demonstrations showcase local artisan crafts. The museum offers hands-on workshops and cultural events.",
+                "title": "Cultural Experiences in Flagstaff"
+            },
+            {
+                "url": "https://example.com/transportation",
+                "text": "Getting around Flagstaff is easy with the Mountain Line bus system. Transportation options include rental cars, and the city is very walkable for downtown attractions. Parking is available throughout the city.",
+                "title": "Flagstaff Transportation Guide"
+            },
+            {
+                "url": "https://example.com/outdoor-activities",
+                "text": "Arizona Snowbowl offers world-class skiing in winter and scenic chairlift rides in summer. The mountain provides breathtaking panoramic views of the surrounding landscape and is perfect for outdoor enthusiasts.",
+                "title": "Outdoor Activities Near Flagstaff"
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_end_to_end_theme_analysis(self, sample_content_list):
+        """Test complete theme analysis workflow"""
+        # Initialize theme analysis tool
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        # Create input for theme analysis
+        input_data = EnhancedThemeAnalysisInput(
+            destination_name="Flagstaff, Arizona",
+            country_code="US",
+            text_content_list=sample_content_list,
+            analyze_temporal=True,
+            min_confidence=0.5
+        )
+        
+        # Run complete theme analysis
+        result = await theme_tool.analyze_themes(input_data)
+        
+        # Verify result structure
+        assert isinstance(result, dict), "Result should be a dictionary"
+        assert "themes" in result, "Result should contain themes"
+        assert "destination_name" in result, "Result should contain destination name"
+        assert result["destination_name"] == "Flagstaff, Arizona", "Destination name should match"
+        
+        # Verify themes are travel-focused
+        themes = result["themes"]
+        assert len(themes) > 0, "Should generate at least some themes"
+        assert len(themes) <= 10, "Should not generate too many themes (max 10)"
+        
+        # Check theme categories
+        theme_categories = [theme.get("macro_category") for theme in themes if isinstance(theme, dict)]
+        if not theme_categories:  # Handle Theme objects
+            theme_categories = [getattr(theme, "macro_category", None) for theme in themes]
+        
+        # Should prioritize travel-inspiring categories
+        expected_categories = ["Popular", "POI", "Cultural", "Practical"]
+        found_categories = [cat for cat in theme_categories if cat in expected_categories]
+        assert len(found_categories) > 0, f"Should find travel-focused categories, got: {theme_categories}"
+
+    @pytest.mark.asyncio 
+    async def test_poi_extraction_integration(self, sample_content_list):
+        """Test POI extraction in full integration"""
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        input_data = EnhancedThemeAnalysisInput(
+            destination_name="Flagstaff, Arizona",
+            country_code="US", 
+            text_content_list=sample_content_list
+        )
+        
+        result = await theme_tool.analyze_themes(input_data)
+        themes = result["themes"]
+        
+        # Look for specific POIs mentioned in content
+        poi_names = []
+        for theme in themes:
+            if isinstance(theme, dict):
+                name = theme.get("name", "")
+            else:
+                name = getattr(theme, "name", "")
+            poi_names.append(name)
+        
+        # Should extract specific POIs like Lowell Observatory
+        poi_found = any("Lowell Observatory" in name or "Arizona Snowbowl" in name or "Museum" in name 
+                       for name in poi_names)
+        assert poi_found, f"Should extract specific POIs from content, found themes: {poi_names}"
+
+    @pytest.mark.asyncio
+    async def test_theme_prioritization_integration(self, sample_content_list):
+        """Test that themes are properly prioritized in integration"""
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        input_data = EnhancedThemeAnalysisInput(
+            destination_name="Flagstaff, Arizona",
+            country_code="US",
+            text_content_list=sample_content_list
+        )
+        
+        result = await theme_tool.analyze_themes(input_data)
+        themes = result["themes"]
+        
+        # Count themes by category
+        category_counts = {}
+        for theme in themes:
+            if isinstance(theme, dict):
+                category = theme.get("macro_category", "Unknown")
+            else:
+                category = getattr(theme, "macro_category", "Unknown")
+            
+            category_counts[category] = category_counts.get(category, 0) + 1
+        
+        # Verify limits are enforced
+        assert category_counts.get("Popular", 0) <= 3, f"Too many Popular themes: {category_counts.get('Popular', 0)}"
+        assert category_counts.get("POI", 0) <= 4, f"Too many POI themes: {category_counts.get('POI', 0)}"
+        assert category_counts.get("Cultural", 0) <= 2, f"Too many Cultural themes: {category_counts.get('Cultural', 0)}"
+        assert category_counts.get("Practical", 0) <= 1, f"Too many Practical themes: {category_counts.get('Practical', 0)}"
+
+    @pytest.mark.asyncio
+    async def test_confidence_scoring_integration(self, sample_content_list):
+        """Test confidence scoring in full integration"""
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        input_data = EnhancedThemeAnalysisInput(
+            destination_name="Flagstaff, Arizona",
+            country_code="US",
+            text_content_list=sample_content_list,
+            min_confidence=0.3  # Lower threshold for testing
+        )
+        
+        result = await theme_tool.analyze_themes(input_data)
+        themes = result["themes"]
+        
+        # Check confidence scores
+        for theme in themes:
+            if isinstance(theme, dict):
+                fit_score = theme.get("fit_score", 0)
+                confidence_breakdown = theme.get("confidence_breakdown", {})
+            else:
+                fit_score = getattr(theme, "fit_score", 0)
+                confidence_breakdown = getattr(theme, "confidence_breakdown", {})
+            
+            assert 0.0 <= fit_score <= 1.0, f"Fit score should be between 0 and 1, got {fit_score}"
+            
+            # Check that confidence breakdown exists
+            if hasattr(confidence_breakdown, 'overall_confidence'):
+                overall_conf = confidence_breakdown.overall_confidence
+                assert 0.0 <= overall_conf <= 1.0, f"Overall confidence should be between 0 and 1, got {overall_conf}"
+
+    def test_safe_data_access_integration(self, sample_content_list):
+        """Test that safe data access works in integration"""
+        # Add malformed content to test robustness
+        malformed_content = sample_content_list.copy()
+        malformed_content.append({
+            "url": None,  # Missing URL
+            "text": "",   # Empty text
+            "title": None # Missing title
+        })
+        malformed_content.append({
+            # Missing required fields entirely
+        })
+        
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        # Should not crash with malformed content
+        try:
+            input_data = EnhancedThemeAnalysisInput(
+                destination_name="Flagstaff, Arizona",
+                country_code="US",
+                text_content_list=malformed_content
+            )
+            
+            # This should not raise an exception
+            result = asyncio.run(theme_tool.analyze_themes(input_data))
+            assert isinstance(result, dict), "Should return valid result even with malformed content"
+            
+        except Exception as e:
+            pytest.fail(f"Should handle malformed content gracefully, but got error: {e}")
+
+    @pytest.mark.asyncio
+    async def test_no_generic_themes_generated(self, sample_content_list):
+        """Test that generic themes like 'Music Heritage' are not generated"""
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        input_data = EnhancedThemeAnalysisInput(
+            destination_name="Flagstaff, Arizona",
+            country_code="US",
+            text_content_list=sample_content_list
+        )
+        
+        result = await theme_tool.analyze_themes(input_data)
+        themes = result["themes"]
+        
+        # Check that no generic themes are generated
+        generic_theme_names = [
+            "Music Heritage", "Music Scene", "Local Character", "City Vibe",
+            "Cultural Heritage", "Historical Identity", "Artistic Scene"
+        ]
+        
+        theme_names = []
+        for theme in themes:
+            if isinstance(theme, dict):
+                name = theme.get("name", "")
+            else:
+                name = getattr(theme, "name", "")
+            theme_names.append(name)
+        
+        for generic_name in generic_theme_names:
+            assert not any(generic_name in theme_name for theme_name in theme_names), \
+                f"Should not generate generic theme '{generic_name}', but found in: {theme_names}"
+
+    @pytest.mark.asyncio
+    async def test_specific_poi_themes_generated(self, sample_content_list):
+        """Test that specific POI themes are generated instead of generic ones"""
+        theme_tool = EnhancedThemeAnalysisTool()
+        
+        input_data = EnhancedThemeAnalysisInput(
+            destination_name="Flagstaff, Arizona", 
+            country_code="US",
+            text_content_list=sample_content_list
+        )
+        
+        result = await theme_tool.analyze_themes(input_data)
+        themes = result["themes"]
+        
+        # Look for specific POI names
+        specific_pois = [
+            "Lowell Observatory", "Arizona Snowbowl", "Museum of Northern Arizona",
+            "Historic Downtown", "Mountain Line"
+        ]
+        
+        theme_names = []
+        for theme in themes:
+            if isinstance(theme, dict):
+                name = theme.get("name", "")
+            else:
+                name = getattr(theme, "name", "")
+            theme_names.append(name)
+        
+        # Should find at least some specific POIs
+        found_specific = any(
+            any(poi in theme_name for poi in specific_pois)
+            for theme_name in theme_names
+        )
+        
+        assert found_specific, f"Should generate specific POI themes, but got: {theme_names}"
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"]) 

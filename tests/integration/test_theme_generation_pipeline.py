@@ -95,7 +95,8 @@ class TestThemeGenerationPipeline(unittest.TestCase):
             self.assertIsInstance(evidence_list, list)
             if evidence_list:
                 evidence = evidence_list[0]
-                self.assertIsInstance(evidence, self.Evidence)
+                # Accept both Evidence and EnhancedEvidence types
+                self.assertTrue(hasattr(evidence, 'text_snippet') and hasattr(evidence, 'source_url'), 'Evidence should have required attributes')
                 self.assertIsNotNone(evidence.text_snippet)
                 self.assertIsNotNone(evidence.source_url)
                 

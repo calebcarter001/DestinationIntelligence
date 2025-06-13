@@ -135,7 +135,11 @@ class AuthenticityScorer:
             return 0.0
         
         # Extract source URLs
-        source_urls = [evidence.source_url for evidence in evidence_list]
+        # SAFETY: Handle both Evidence objects and dictionaries
+        source_urls = [
+            getattr(evidence, 'source_url', None) or evidence.get('source_url', '') if isinstance(evidence, dict) else evidence.source_url if hasattr(evidence, 'source_url') else ''
+            for evidence in evidence_list
+        ]
         
         # Calculate diversity using EvidenceHierarchy
         diversity = EvidenceHierarchy.calculate_evidence_diversity(source_urls)
@@ -403,7 +407,12 @@ class ConfidenceScorer:
         evidence_score = min(1.0, evidence_count / 10)  # Cap at 10 pieces of evidence
         
         # Source diversity
-        sources = set(ev.source_url for ev in evidence_list if ev.source_url)
+        # SAFETY: Handle both Evidence objects and dictionaries for source_url
+        sources = set()
+        for ev in evidence_list:
+            source_url = getattr(ev, 'source_url', None) or ev.get('source_url', '') if isinstance(ev, dict) else ev.source_url if hasattr(ev, 'source_url') else ''
+            if source_url:
+                sources.add(source_url)
         source_diversity = min(1.0, len(sources) / 5)  # Cap at 5 unique sources
         
         # Authority scoring
@@ -418,15 +427,17 @@ class ConfidenceScorer:
         current_date = datetime.now()
         recency_scores = []
         for ev in evidence_list:
-            if ev.timestamp:
+            # SAFETY: Handle both Evidence objects and dictionaries for timestamp
+            timestamp_value = getattr(ev, 'timestamp', None) or ev.get('timestamp', None) if isinstance(ev, dict) else ev.timestamp if hasattr(ev, 'timestamp') else None
+            if timestamp_value:
                 # Handle both datetime objects and string timestamps
-                if isinstance(ev.timestamp, str):
+                if isinstance(timestamp_value, str):
                     try:
-                        timestamp = datetime.fromisoformat(ev.timestamp.replace('Z', '+00:00'))
+                        timestamp = datetime.fromisoformat(timestamp_value.replace('Z', '+00:00'))
                     except (ValueError, AttributeError):
                         timestamp = current_date  # Default to current date if parsing fails
                 else:
-                    timestamp = ev.timestamp
+                    timestamp = timestamp_value
                 
                 age_days = (current_date - timestamp).days
                 recency_score = max(0.0, min(1.0, 1.0 - (age_days / 365)))
@@ -492,7 +503,9 @@ class ConfidenceScorer:
         
         locality_scores = []
         for evidence in evidence_list:
-            text = evidence.text_snippet.lower()
+            # SAFETY: Handle both Evidence objects and dictionaries for text_snippet
+            text_snippet = getattr(evidence, 'text_snippet', None) or evidence.get('text_snippet', '') if isinstance(evidence, dict) else evidence.text_snippet if hasattr(evidence, 'text_snippet') else ''
+            text = text_snippet.lower()
             # Count matches of locality indicators
             matches = sum(1 for pattern in locality_indicators if re.search(pattern, text))
             # Score based on number of matches, cap at 3 matches
@@ -514,7 +527,9 @@ class ConfidenceScorer:
         sentiments = []
         
         for evidence in evidence_list:
-            text = evidence.text_snippet.lower()
+            # SAFETY: Handle both Evidence objects and dictionaries for text_snippet
+            text_snippet = getattr(evidence, 'text_snippet', None) or evidence.get('text_snippet', '') if isinstance(evidence, dict) else evidence.text_snippet if hasattr(evidence, 'text_snippet') else ''
+            text = text_snippet.lower()
             
             # Extract numerical facts
             numbers = re.findall(r'\d+(?:\.\d+)?', text)
@@ -564,8 +579,12 @@ class ConfidenceScorer:
     # @profile
     def _evidence_quality_score(self, evidence: Any) -> float:
         """Calculate quality score for individual evidence"""
-        base_score = evidence.confidence 
-        category_str = evidence.source_category.name if hasattr(evidence.source_category, 'name') else str(evidence.source_category)
+        # SAFETY: Handle both Evidence objects and dictionaries for confidence
+        base_score = getattr(evidence, 'confidence', 0.0) or evidence.get('confidence', 0.0) if isinstance(evidence, dict) else evidence.confidence if hasattr(evidence, 'confidence') else 0.0
+        
+        # SAFETY: Handle both Evidence objects and dictionaries for source_category
+        source_category = getattr(evidence, 'source_category', None) or evidence.get('source_category', None) if isinstance(evidence, dict) else evidence.source_category if hasattr(evidence, 'source_category') else None
+        category_str = source_category.name if hasattr(source_category, 'name') else str(source_category) if source_category else 'UNKNOWN'
         
         # REINSTATED: category_multipliers dictionary
         category_multipliers = {

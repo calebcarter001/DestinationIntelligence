@@ -1871,26 +1871,40 @@ class WebDiscoveryLogic:
     def _load_tourist_gateway_keywords(self, poi_config):
         """Get tourist gateway keywords from external config or return defaults."""
         if poi_config.get("tourist_gateway_keywords"):
-            # Combine all categories from the external config
-            all_keywords = []
-            for category_keywords in poi_config["tourist_gateway_keywords"].values():
-                all_keywords.extend(category_keywords)
-            return all_keywords
+            # Handle both dictionary and list formats
+            tourist_keywords = poi_config["tourist_gateway_keywords"]
+            if isinstance(tourist_keywords, dict):
+                # Combine all categories from the external config
+                all_keywords = []
+                for category_keywords in tourist_keywords.values():
+                    all_keywords.extend(category_keywords)
+                return all_keywords
+            elif isinstance(tourist_keywords, list):
+                # Already a list, return as-is
+                return tourist_keywords
+            else:
+                # Unexpected format, fall back to defaults
+                self.logger.warning(f"Unexpected tourist_gateway_keywords format: {type(tourist_keywords)}")
+                return self._get_default_tourist_keywords()
         else:
             # Fallback to hardcoded defaults if external config not available
-            return [
-                # National Park Gateway Cities
-                "flagstaff", "sedona", "moab", "aspen", "jackson", "estes park", "mammoth lakes",
-                "springdale", "gatlinburg", "bar harbor", "yosemite village", "glacier village",
-                
-                # Tourist Destination Cities
-                "napa", "carmel", "sausalito", "mendocino", "capitola", "pacific grove",
-                "big sur", "half moon bay", "sonoma", "healdsburg", "calistoga",
-                
-                # Adventure Tourism Centers
-                "whistler", "banff", "jasper", "lake tahoe", "steamboat springs", "vail",
-                "breckenridge", "park city", "sun valley", "taos", "santa fe"
-            ]
+            return self._get_default_tourist_keywords()
+    
+    def _get_default_tourist_keywords(self):
+        """Get default tourist gateway keywords."""
+        return [
+            # National Park Gateway Cities
+            "flagstaff", "sedona", "moab", "aspen", "jackson", "estes park", "mammoth lakes",
+            "springdale", "gatlinburg", "bar harbor", "yosemite village", "glacier village",
+            
+            # Tourist Destination Cities
+            "napa", "carmel", "sausalito", "mendocino", "capitola", "pacific grove",
+            "big sur", "half moon bay", "sonoma", "healdsburg", "calistoga",
+            
+            # Adventure Tourism Centers
+            "whistler", "banff", "jasper", "lake tahoe", "steamboat springs", "vail",
+            "breckenridge", "park city", "sun valley", "taos", "santa fe"
+        ]
 
     def _get_authority_domains(self):
         """Get authority domains from external config or return defaults."""

@@ -812,6 +812,20 @@ class EnhancedDatabaseManager:
             else:
                 return str(timestamp)  # fallback to string
         
+        # SAFETY: Handle both Evidence objects and dictionaries
+        evidence_id = getattr(evidence, 'id', None) or evidence.get('id', '') if isinstance(evidence, dict) else evidence.id if hasattr(evidence, 'id') else None
+        text_snippet = getattr(evidence, 'text_snippet', None) or evidence.get('text_snippet', '') if isinstance(evidence, dict) else evidence.text_snippet if hasattr(evidence, 'text_snippet') else None
+        source_url = getattr(evidence, 'source_url', None) or evidence.get('source_url', '') if isinstance(evidence, dict) else evidence.source_url if hasattr(evidence, 'source_url') else None
+        timestamp = getattr(evidence, 'timestamp', None) or evidence.get('timestamp', None) if isinstance(evidence, dict) else evidence.timestamp if hasattr(evidence, 'timestamp') else None
+        confidence = getattr(evidence, 'confidence', 0.0) or evidence.get('confidence', 0.0) if isinstance(evidence, dict) else evidence.confidence if hasattr(evidence, 'confidence') else 0.0
+        
+        # Handle source_category - could be enum or string
+        source_category = None
+        if isinstance(evidence, dict):
+            source_category = evidence.get('source_category', None)
+        elif hasattr(evidence, 'source_category'):
+            source_category = getattr(evidence.source_category, 'value', str(evidence.source_category)) if hasattr(evidence, 'source_category') else None
+        
         cursor.execute("""
             INSERT OR REPLACE INTO evidence 
             (id, destination_id, content, source_url, source_type, publication_date,
@@ -819,24 +833,24 @@ class EnhancedDatabaseManager:
              sentiment, cultural_context, relationships, agent_id, published_date)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            evidence.id,
+            evidence_id,
             destination_id,
-            evidence.text_snippet,  # Map text_snippet to content
-            evidence.source_url,
-            getattr(evidence.source_category, 'value', str(evidence.source_category)) if hasattr(evidence, 'source_category') else None,
-            format_timestamp(getattr(evidence, 'published_date', None)),  # publication_date
-            format_timestamp(evidence.timestamp),
-            getattr(evidence, 'relevance_score', 0.0),
-            evidence.confidence,
-            getattr(evidence, 'author', None),
-            getattr(evidence, 'title', None),
-            getattr(evidence, 'language', 'en'),
-            len(evidence.text_snippet.split()) if evidence.text_snippet else 0,
-            getattr(evidence, 'sentiment', 0.0),
-            json.dumps(getattr(evidence, 'cultural_context', {})) if getattr(evidence, 'cultural_context', None) else None,
-            json.dumps(getattr(evidence, 'relationships', [])) if getattr(evidence, 'relationships', None) else None,
-            getattr(evidence, 'agent_id', None),
-            format_timestamp(getattr(evidence, 'published_date', None))  # published_date (duplicate)
+            text_snippet,  # Map text_snippet to content
+            source_url,
+            source_category,
+            format_timestamp(getattr(evidence, 'published_date', None) or evidence.get('published_date', None) if isinstance(evidence, dict) else None),  # publication_date
+            format_timestamp(timestamp),
+            getattr(evidence, 'relevance_score', 0.0) or evidence.get('relevance_score', 0.0) if isinstance(evidence, dict) else 0.0,
+            confidence,
+            getattr(evidence, 'author', None) or evidence.get('author', None) if isinstance(evidence, dict) else None,
+            getattr(evidence, 'title', None) or evidence.get('title', None) if isinstance(evidence, dict) else None,
+            getattr(evidence, 'language', 'en') or evidence.get('language', 'en') if isinstance(evidence, dict) else 'en',
+            len(text_snippet.split()) if text_snippet else 0,
+            getattr(evidence, 'sentiment', 0.0) or evidence.get('sentiment', 0.0) if isinstance(evidence, dict) else 0.0,
+            json.dumps(getattr(evidence, 'cultural_context', {}) or evidence.get('cultural_context', {}) if isinstance(evidence, dict) else {}),
+            json.dumps(getattr(evidence, 'relationships', []) or evidence.get('relationships', []) if isinstance(evidence, dict) else []),
+            getattr(evidence, 'agent_id', None) if hasattr(evidence, 'agent_id') else (evidence.get('agent_id', None) if isinstance(evidence, dict) else None),
+            format_timestamp(getattr(evidence, 'published_date', None) or evidence.get('published_date', None) if isinstance(evidence, dict) else None)  # published_date (duplicate)
         ))
 
     def _store_dimension(self, cursor, destination_id: str, name: str, value: DimensionValue):

@@ -45,7 +45,7 @@ class PriorityAggregationTool(StructuredTool):
         if config:
             try:
                 llm = LLMFactory.create_llm(
-                    provider=safe_get_nested(config, ["llm_settings", "provider"], "gemini"),
+                    provider=config.get("llm_settings", {}).get("provider", "gemini"),
                     config=config
                 )
             except Exception as e:

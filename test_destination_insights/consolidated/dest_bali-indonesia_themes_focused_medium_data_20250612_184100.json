@@ -1,0 +1,171 @@
+{
+  "export_metadata": {
+    "version": "3.1",
+    "export_timestamp": "2025-06-12T18:41:00.895920",
+    "destination_id": "bali-indonesia",
+    "export_type": "themes_focused",
+    "export_mode": "themes_focused"
+  },
+  "destination": {
+    "id": "bali-indonesia",
+    "names": [
+      "Bali"
+    ],
+    "admin_levels": {
+      "country": "Indonesia",
+      "state": "Bali"
+    },
+    "timezone": "Asia/Makassar",
+    "population": null,
+    "country_code": "ID",
+    "core_geo": {},
+    "vibe_descriptors": [],
+    "area_km2": null,
+    "primary_language": null,
+    "dominant_religions": [],
+    "unesco_sites": [],
+    "historical_summary": null,
+    "annual_tourist_arrivals": null,
+    "popularity_stage": null,
+    "visa_info_url": null,
+    "gdp_per_capita_usd": null,
+    "hdi": null,
+    "last_updated": "2025-06-12T18:41:00.876203",
+    "destination_revision": 1,
+    "lineage": {},
+    "meta": {}
+  },
+  "data": {
+    "themes": {
+      "test-theme-1": {
+        "theme_id": "test-theme-1",
+        "name": "Cultural Experiences",
+        "macro_category": "Culture & Heritage",
+        "micro_category": "Local Traditions",
+        "description": "Rich cultural experiences and traditional ceremonies",
+        "fit_score": 0.9,
+        "confidence_level": "insufficient",
+        "confidence_breakdown": {
+          "overall_confidence": 0.9,
+          "evidence_count": 2,
+          "source_diversity": 0.8,
+          "authority_score": 0.85,
+          "confidence_level": "HIGH"
+        },
+        "evidence_references": [
+          {
+            "evidence_id": "ev_0",
+            "relevance_score": 1.0
+          },
+          {
+            "evidence_id": "ev_1",
+            "relevance_score": 1.0
+          }
+        ],
+        "tags": [
+          "culture",
+          "tradition",
+          "ceremony"
+        ],
+        "created": "2025-06-12T18:41:00.876187",
+        "last_validated": null,
+        "factors": {
+          "source_diversity": 2,
+          "authority_distribution": {
+            "high_authority_ratio": 0.85
+          },
+          "temporal_relevance": 0.9
+        },
+        "cultural_summary": {
+          "total_sources": 2,
+          "local_sources": 2,
+          "cultural_balance": "local-heavy",
+          "key_cultural_elements": [
+            "ceremonies",
+            "temples",
+            "traditions"
+          ]
+        },
+        "sentiment_analysis": {
+          "overall": "very positive",
+          "average_score": 0.75,
+          "confidence": 0.87,
+          "distribution": {
+            "positive": 0.8,
+            "neutral": 0.2,
+            "negative": 0
+          }
+        },
+        "temporal_analysis": {
+          "evidence_span_days": 30,
+          "seasonal_indicators": [
+            "year-round"
+          ],
+          "temporal_confidence": 0.8
+        },
+        "seasonal_relevance": {},
+        "regional_uniqueness": 0.0,
+        "insider_tips": []
+      }
+    },
+    "insights": {
+      "55293ae1-9216-4f5e-ae68-70c574264b81": {
+        "insight_type": "insider",
+        "authenticity_score": 0.9,
+        "uniqueness_score": 0.7,
+        "actionability_score": 0.9,
+        "temporal_relevance": 0.8,
+        "location_exclusivity": "regional",
+        "seasonal_window": {
+          "start_month": 1,
+          "end_month": 12,
+          "peak_weeks": [],
+          "booking_lead_time": null,
+          "specific_dates": null
+        },
+        "local_validation_count": 1
+      }
+    }
+  },
+  "relationships": {
+    "theme_insights": {},
+    "insight_themes": {}
+  },
+  "views": {
+    "themes_by_category": {
+      "Culture & Heritage": [
+        "test-theme-1"
+      ]
+    },
+    "seasonal_overview": {
+      "seasonal_themes": {},
+      "current_season_highlights": [],
+      "seasons_covered": []
+    }
+  },
+  "metadata": {
+    "data_quality_analysis": {
+      "classification": "medium_data",
+      "confidence": 0.3755555555555556,
+      "metrics": {
+        "evidence_count": 2,
+        "source_diversity": 1,
+        "unique_sources": 1,
+        "high_authority_ratio": 0.0,
+        "content_volume": 86,
+        "theme_discovery_rate": 1,
+        "classification_confidence": 0.3755555555555556
+      },
+      "reasoning": "Medium data classification: • Metrics fall between rich and poor thresholds • Evidence: 2, Sources: 1",
+      "adaptive_settings": {
+        "export_mode": "themes_focused",
+        "confidence_threshold": 0.55,
+        "max_evidence_per_theme": 5,
+        "max_themes": 35,
+        "min_authority": 0.5,
+        "semantic_intensive": true,
+        "output_priority": false
+      }
+    }
+  }
+}
